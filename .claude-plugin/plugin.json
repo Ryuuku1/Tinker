@@ -1,0 +1,6 @@
+{
+  "name": "tinker",
+  "version": "0.2.0",
+  "description": "Software-team workflows using canonical skills and native Claude Code execution.",
+  "skills": ["./.agents/skills/"]
+}
