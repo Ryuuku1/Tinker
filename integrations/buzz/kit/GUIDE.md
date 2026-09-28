@@ -1,9 +1,9 @@
 # Tinker's team in Buzz on your own Windows PC
 
-This kit sets up a private Buzz relay on your PC and runs Tinker's team as three Buzz agents that answer
-only you: **Tinker** (the Lead), **Tinker Reviewer** and **Tinker Researcher**. You chat with them from Buzz
-Desktop in four channels whose canvases show how to work with each one; [EXAMPLES.md](EXAMPLES.md) has
-worked examples. Everything runs in Docker on your machine; nothing is published beyond `127.0.0.1`. The
+This kit sets up a private Buzz relay on your PC and runs Tinker's team as five Buzz agents that answer
+only you: **Tinker** (the Lead), **Tinker Planner**, **Tinker Tester**, **Tinker Reviewer** and **Tinker
+Researcher**. You chat with them from Buzz Desktop in six channels whose canvases show how to work with each
+one; [EXAMPLES.md](EXAMPLES.md) has worked examples. Everything runs in Docker on your machine; nothing is published beyond `127.0.0.1`. The
 relay and the agents' safety settings match the lab setup the kit was built from (see the
 [integration README](../README.md) and the [Buzz protocol](../protocol.md) every agent follows).
 
@@ -29,7 +29,7 @@ with `git archive` from this clone, so your working tree's own changes never rea
 ## 3. Your own Claude token
 
 The agents use **your** Claude subscription through a long-lived token from `claude setup-token`. You create it
-and store it yourself; setup only passes the file's path to Docker and never reads it. All three agents share it.
+and store it yourself; setup only passes the file's path to Docker and never reads it. All the agents share it.
 
 1. Open a **new PowerShell window of your own**: never an agent's shell or a terminal panel an agent can read.
 2. Run `claude setup-token` and approve in the browser with the account you intend to use. It prints the token once.
@@ -74,6 +74,7 @@ creates the channels, then stops and tells you to join from Buzz Desktop (sectio
 
 - `-Repository <folder>`: a folder every agent reads at `/repo`, **mounted read-only**. It is kept for later runs;
   `-Repository ''` removes it. Every agent can read everything in it, including `.git` and untracked files.
+  Pass a main clone: a git worktree's `.git` file points to a Windows path that git inside Linux cannot follow.
 - `-Port 3100` if 3000 is taken; `-Project <name>` for a second, separate setup.
 - `-StateRoot <folder>` to keep setup's state somewhere other than `%LOCALAPPDATA%\TinkerBuzz` (pass it to
   `kit.ps1` and `teardown.ps1` too).
@@ -86,7 +87,7 @@ builds `buzz-acp` and `buzz` (its three Cargo Git dependencies locked), and buil
 installed in the image only, all from pinned base images and `claude-agent-acp` 0.81.2; verifies those pins, the
 compose file's SHA-256 and each role's prompt; generates the admin key, one key per agent and the relay secrets
 inside containers; starts the relay on `127.0.0.1:<port>`; checks the bootstrap and routing; adds members; sets
-each agent's profile; creates the channels with a purpose and a canvas; starts the three agents and checks their
+each agent's profile; creates the channels with a purpose and a canvas; starts the agents and checks their
 startup, deny rules and mounts; scans the kit folder and the setup logs for secrets. The only folder from your PC
 a container mounts is `-Repository`, read-only; everything else goes in and out through `docker build` and
 `docker cp`. Setup's own state (logs, relay secrets, `kit.json`) lives in `%LOCALAPPDATA%\TinkerBuzz\<project>`,
@@ -117,7 +118,7 @@ whether you may install it. Launch it from the Start menu, not from a terminal.
    ```
 
    Repeat any `-Port`, `-Project` or `-StateRoot` you used in section 4. This adds you to the relay and the
-   channels, and starts the three agents with you as their owner. Then press **Try again**. (If you already
+   channels, and starts the agents with you as their owner. Then press **Try again**. (If you already
    know your npub, pass `-OwnerNpub` in section 4; without `-CredentialFile`, setup stops before the agents.)
 4. Leave the **Welcome** channel at once when it opens.
 5. Never start, add or @mention **Fizz**, **Honey** or **Pollen** (Desktop's built-in agents). They would share your
@@ -128,33 +129,46 @@ whether you may install it. Launch it from the Start menu, not from a terminal.
 Open `#tinker-lab`: its canvas lists the team. Mention an agent by its name in the mention picker (setup also
 prints each npub, and so does `Get-KitStatus`). Try `@Tinker Read-only: what can you do here, and what are your
 limits?` The agent answers in the thread. Then read [EXAMPLES.md](EXAMPLES.md) and the canvases of #requests,
-#reviews and #research.
+#planning, #testing, #reviews and #research.
 
 ## 8. What to expect
 
-- **Tinker** (the Lead) answers in any channel, usually #requests. It reads `/repo`, changes code only in its
-  own clone under `/work` and runs the tests there. **Tinker Reviewer** and **Tinker Researcher** are read-only:
-  `/repo` and `/work` are mounted read-only for them and their edit tools are denied. Only the Researcher may use
-  the web (WebSearch and WebFetch); `curl`, `wget`, `env` and `printenv` are denied for all three.
-- All three run **unattended**: commits, pushes, branch deletions, remote changes and Buzz workspace changes are
-  denied, and Buzz messages (including your "I approve") never authorize them. They post the exact command so
-  you can run it yourself.
+| Agent | Home channel | `/work` | Web tools | Does |
+|---|---|---|---|---|
+| **Tinker** (the Lead) | #requests | writes its own clones | no | explains, plans and changes code, runs the tests |
+| **Tinker Planner** | #planning | read-only | no | shapes ideas: outcome, scope, acceptance criteria |
+| **Tinker Tester** | #testing | writes its own `test-<topic>` copies | no | writes and runs tests, reports counts and gaps |
+| **Tinker Reviewer** | #reviews | read-only | no | reviews a branch, commit or folder with `file:line` |
+| **Tinker Researcher** | #research | read-only | **yes** | answers from the code and the web, with sources |
+
+- `/repo` is read-only for every agent. The read-only agents also have their edit tools denied. `curl`, `wget`,
+  `env` and `printenv` are denied for all of them. These denies stop tools, not the network or the shell: Bash
+  can still reach the internet, and every agent can write its own home folder. The hard write barriers are the
+  read-only mounts.
+- Each chat session starts in the agent's own folder, never in `/work`, so files one agent writes there are not
+  loaded as another agent's settings or instructions.
+- All of them run **unattended**: commits, pushes, branch deletions, remote changes and Buzz workspace changes
+  are denied, and Buzz messages (including your "I approve") never authorize them. They post the exact command
+  so you can run it yourself.
 - Each answers only your messages, and only when you mention it; everything else it sees is data, including the
-  other agents. It replies in the thread. Agents never hand work to each other: you pick who is next.
+  other agents. It replies in the thread. Agents never hand work to each other: you pick who is next, and agents
+  in different threads work at the same time. A full loop: #planning, #requests, #testing, #reviews.
 - One Buzz session writes a checkout at a time; another thread may be told `workspace.owned`.
-- To take the Lead's work out of `/work`, copy it: `docker cp <project>-lead:/work/<folder> <destination>`.
+- To take work out of `/work`, copy the folder to your PC with `Copy-AgentWork` (section 9).
 
 ## 9. Stop and start
 
 ```powershell
 . .\kit.ps1 -Project tinker-buzz      # in PowerShell 7, from the kit folder (add -StateRoot if you used one)
 Get-KitStatus                         # containers, npubs, channels, each agent's log summary and run outcomes
-Stop-Agent                            # stops and removes all three agents, and verifies they are gone
+Stop-Agent                            # stops and removes every agent, and verifies they are gone
 Start-Agent                           # starts them again with the saved owner, channels and credential file
-Stop-Agent reviewer; Start-Agent reviewer   # one agent: lead, reviewer or researcher
+Stop-Agent tester; Start-Agent tester # one agent: lead, planner, tester, reviewer or researcher
+Copy-AgentWork docs-typos "$HOME\Downloads"   # copies /work/docs-typos to your PC, agents running or not
 ```
 
-The relay comes back with Docker Desktop on its own. The agents do not: after a reboot, run `Start-Agent`.
+The relay comes back with Docker Desktop on its own. The agents do not: after a reboot, run `Start-Agent`. When a
+new kit version adds an agent, run setup again: it creates only the new agent's key and keeps every other one.
 
 ## 10. Troubleshooting
 
@@ -195,8 +209,13 @@ Console.
   ignoring them is model behavior.
 - **The Researcher reads the web.** A page can carry instructions aimed at agents. It treats them as data, but
   it still has your token and its key in its environment, can read `/repo`, and can reach the internet, so an
-  injected page could try to make it leak them. It cannot write files. Point it only at sources you trust.
-- **The mounted repository is fully readable** by all three agents: history, untracked files, anything secret
+  injected page could try to make it leak them. It cannot write `/repo` or `/work`. Point it only at sources you
+  trust.
+- **A writer's folders are not trusted by the others.** The Lead or the Tester could leave a hostile git config or
+  instructions in `/work`. The kit forces `core.fsmonitor=false` and `core.hooksPath=/dev/null` for every git
+  command, and the Reviewer reads diffs with `--no-ext-diff --no-textconv`; git filter drivers and a `CLAUDE.md`
+  inside such a folder are still read if an agent works there.
+- **The mounted repository is fully readable** by every agent: history, untracked files, anything secret
   in it. Mount only what you would show them, never a folder that holds credentials.
 - **Agents with the same owner pass the owner-only gate** (section 6, step 5).
 - **Secrets are in each agent's environment.** Each can read its own agent key and your Claude token, and the
@@ -204,7 +223,7 @@ Console.
 - **The harness publishes on its own**: presence, typing indicators and seen or working reactions.
 - **Claims linger**: see section 10.
 - **No media uploads**: MinIO is off.
-- **Usage limits are shared** by the three agents and your own Claude use.
+- **Usage limits are shared** by all the agents and your own Claude use.
 - **Policy is partly unclear** (section 3).
 
 ## 13. Owner registration later (Phase 2)

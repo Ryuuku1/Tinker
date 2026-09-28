@@ -24,14 +24,14 @@ if (Test-Path -LiteralPath "$STATE\compose.yml") {
 'The agents and the relay are stopped.'
 
 $existing = @(docker volume ls -q)
-$ours = @($VOL.Values | Where-Object { $existing -contains $_ })
+$ours = @(@($VOL.Values) + "$Project-agentkey" | Where-Object { $existing -contains $_ })   # + the one-Lead kit's key
 $composeVolumes = @($existing | Where-Object { $_ -in "${Project}_buzz-postgres-data", "${Project}_buzz-redis-data", "${Project}_buzz-git-data" })
 if (($ours + $composeVolumes) -and $PSCmdlet.ShouldProcess((($ours + $composeVolumes) -join ', '),
     'Delete the relay data, the admin and agent keys, the work folder and the build caches')) {
   if (Test-Path -LiteralPath "$STATE\compose.yml") { Invoke-Compose down -v; if ($LASTEXITCODE) { throw 'compose down -v failed' } }
   foreach ($v in $ours) { docker volume rm $v | Out-Null; if ($LASTEXITCODE) { throw "could not delete volume $v" } }
   Remove-Item -LiteralPath "$STATE\.env" -Force -ErrorAction SilentlyContinue   # the relay secrets
-  foreach ($k in 'admin', 'agents', 'owner', 'channels', 'agentMembership', 'agentConfig') { $s.Remove($k) }
+  foreach ($k in 'admin', 'agents', 'owner', 'channels', 'agentMembership', 'agentConfig', 'agent', 'leadConfig') { $s.Remove($k) }
   Save-KitState $s
   'Deleted the volumes and the relay secrets; setup.ps1 will generate new identities.'
 }
@@ -40,7 +40,7 @@ if ($Images -and $s.image -and (docker images -q $s.image) -and $PSCmdlet.Should
   $s.Remove('image'); Save-KitState $s
 }
 if ($StateFolder -and (Test-Path -LiteralPath $STATE) -and $PSCmdlet.ShouldProcess($STATE, 'Delete the state folder (sources, logs, kit.json)')) {
-  if (@(docker volume ls -q | Where-Object { $_ -in @($VOL.Values) })) { throw 'Delete the volumes first: the state folder holds their .env' }
+  if (@(docker volume ls -q | Where-Object { $_ -in @(@($VOL.Values) + "$Project-agentkey") })) { throw 'Delete the volumes first: the state folder holds their .env' }
   Remove-Item -LiteralPath $STATE -Recurse -Force
   "Deleted $STATE"
 }

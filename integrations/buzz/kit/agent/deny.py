@@ -11,7 +11,8 @@ from pathlib import Path
 BASE = ["Bash(curl:*)", "Bash(wget:*)", "Bash(env)", "Bash(env:*)", "Bash(printenv)", "Bash(printenv:*)"]
 WEB = ["WebFetch", "WebSearch"]
 EDITS = ["Write", "Edit", "MultiEdit", "NotebookEdit"]
-ROLES = {"lead": WEB, "reviewer": WEB + EDITS, "researcher": EDITS}   # only the Researcher uses the web
+ROLES = {"lead": WEB, "planner": WEB + EDITS, "tester": WEB,   # kit.ps1 $AGENTS: writes = lead, tester
+         "reviewer": WEB + EDITS, "researcher": EDITS}           # only the Researcher uses the web
 path, role = Path(sys.argv[1]), sys.argv[2]
 rules = BASE + ROLES[role]
 data = json.loads(path.read_text(encoding="utf-8"))

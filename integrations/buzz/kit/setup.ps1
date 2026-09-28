@@ -31,6 +31,9 @@ if ($OwnerNpub -and $OwnerNpub -notmatch '^(npub1[02-9ac-hj-np-z]{58}|[0-9a-f]{6
 if ($Repository) {
   if (-not (Test-Path -LiteralPath $Repository -PathType Container)) { throw "Repository folder not found: $Repository" }
   $Repository = (Resolve-Path -LiteralPath $Repository).Path
+  if (Test-Path -LiteralPath (Join-Path $Repository '.git') -PathType Leaf) {   # its .git names a Windows gitdir path
+    throw "A git worktree cannot be mounted, since git inside Linux cannot follow its .git file: pass the main clone ($Repository)"
+  }
 }
 $LOGS = "$STATE\logs"; $ENVFILE = "$STATE\.env"; $CTX = "$STATE\agent"; $ROLES = @($AGENTS.Keys)
 $KITARGS = "-Project $Project" + $(if ($StateRoot) { " -StateRoot '$StateRoot'" } else { '' })   # for the hints below
@@ -135,29 +138,35 @@ if ($ok.Values -contains $false) { throw 'The agent image check failed' }
 $s.image = $image; Save-KitState $s
 
 Step 'Keys and relay secrets, generated inside containers and never printed'
-if (Test-Path -LiteralPath $ENVFILE) {
-  if (-not $s.admin -or @($ROLES | Where-Object { -not ($s.agents -and $s.agents[$_]) })) {
-    throw ".env exists but kit.json lacks public keys: run teardown.ps1, then setup again"
-  }
-  '  Keys exist; never regenerated over a relay'
-} else {
-  if (@(docker volume ls -q) -contains "${Project}_buzz-postgres-data") { throw 'The relay database exists but .env is gone: run teardown.ps1 to start over' }
+$first = -not (Test-Path -LiteralPath $ENVFILE)
+if (-not $first -and -not $s.admin) { throw '.env exists but kit.json lacks the admin key: run teardown.ps1, then setup again' }
+if (-not $s.agents) { $s.agents = @{} }
+$missing = @($ROLES | Where-Object { -not $s.agents[$_] })
+if (-not $first -and -not $missing) { '  Keys exist; never regenerated over a relay' } else {
+  if ($first -and @(docker volume ls -q) -contains "${Project}_buzz-postgres-data") { throw 'The relay database exists but .env is gone: run teardown.ps1 to start over' }
   $mounts = @('-v', "$($VOL.humankeys):/humankeys") + @($ROLES | ForEach-Object { '-v', "$($VOL["$_-key"]):/keys/$_" })
   $c = docker create --label "tinker.kit=$Project" --user 0:0 --entrypoint bash @mounts $PIN.RelayImage /tmp/keygen.sh $Port $PIN.RelayImage @ROLES
   Assert-Exit 'creating the key container'
   try {
     docker cp "$KIT\scripts\keygen.sh" "${c}:/tmp/keygen.sh" | Out-Null; Assert-Exit 'copying keygen.sh'
-    $out = docker start -a $c   # public keys, or a refusal; never a secret
+    $out = docker start -a $c   # public keys only; existing keys are kept
     if ($LASTEXITCODE) { throw "Key generation failed: $out" }
-    docker cp "${c}:/out/.env" $ENVFILE | Out-Null; Assert-Exit 'copying the relay secrets out'
+    if ($first) {
+      docker cp "${c}:/out/.env" $ENVFILE | Out-Null
+      if ($LASTEXITCODE) { throw 'The admin key exists without relay secrets: run teardown.ps1 to start over' }
+    }
   } finally { docker rm -f $c | Out-Null }
-  $s.agents = @{}
-  foreach ($l in $out) {
-    if ($l -match '^([a-z]+)=([0-9a-f]{64})$') { if ($Matches[1] -eq 'admin') { $s.admin = $Matches[2] } else { $s.agents[$Matches[1]] = $Matches[2] } }
+  $keys = @{}
+  foreach ($l in $out) { if ($l -match '^([a-z]+)=([0-9a-f]{64})$') { $keys[$Matches[1]] = $Matches[2] } }
+  # Keys kit.json already knows must come back unchanged: a different one means the volumes and kit.json disagree.
+  foreach ($k in @('admin') + $ROLES) {
+    $known = if ($k -eq 'admin') { $s.admin } else { $s.agents[$k] }
+    if (-not $keys[$k] -or ($known -and $known -ne $keys[$k])) { throw "The $k key does not match kit.json: run teardown.ps1 to start over" }
   }
-  if (-not $s.admin -or @($ROLES | Where-Object { -not $s.agents[$_] })) { throw 'Key generation did not print every public key' }
+  $s.admin = $keys.admin; foreach ($r in $ROLES) { $s.agents[$r] = $keys[$r] }
   Save-KitState $s
-  "  Generated the admin identity, one identity per agent ($($ROLES -join ', ')) and the relay secrets"
+  if ($first) { "  Generated the admin identity, one identity per agent ($($ROLES -join ', ')) and the relay secrets" }
+  else { "  Generated identities for the new agents: $($missing -join ', ')" }
 }
 
 Step "Relay up, published on 127.0.0.1:$Port only"

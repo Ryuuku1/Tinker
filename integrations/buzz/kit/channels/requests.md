@@ -20,5 +20,7 @@ your message. Follow up in that thread and mention it again.
 
 ## Next
 
-- An independent review: #reviews. A fact check with sources: #research.
+- Shape it first: #planning. Tests for the change: #testing. An independent review: #reviews. A fact
+  check with sources: #research.
+- Take the work to your PC: `Copy-AgentWork <topic> "$HOME\Downloads"` (GUIDE.md, section 9).
 - No reply? `Get-KitStatus` shows each run's outcome (GUIDE.md, section 9).

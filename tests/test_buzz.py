@@ -425,6 +425,10 @@ class BuzzKitTests(unittest.TestCase):
                           "BUZZ_ACP_NO_MEMORY": "true", "BUZZ_ACP_HEARTBEAT_INTERVAL": "0"})
         self.assertFalse({"BUZZ_RELAY_URL", "BUZZ_ACP_AGENT_OWNER", "BUZZ_PRIVATE_KEY",  # set per agent at start
                           "BUZZ_ACP_SYSTEM_PROMPT_FILE"} & set(settings))
+        # Command-line git config outranks a repository's own .git/config, which a writer agent controls.
+        count = int(settings["GIT_CONFIG_COUNT"])
+        forced = {settings[f"GIT_CONFIG_KEY_{i}"]: settings[f"GIT_CONFIG_VALUE_{i}"] for i in range(count)}
+        self.assertEqual(forced, {"core.fsmonitor": "false", "core.hooksPath": "/dev/null"})
 
     def test_deny_rules_follow_the_role(self):
         base = {"Bash(curl:*)", "Bash(wget:*)", "Bash(env)", "Bash(env:*)", "Bash(printenv)", "Bash(printenv:*)"}
@@ -436,16 +440,17 @@ class BuzzKitTests(unittest.TestCase):
         deny_py = [sys.executable, str(self.KIT / "agent" / "deny.py"), str(settings)]
         # The image is built with the Lead's rules; each agent applies its own role's rules when it starts.
         for role, expected in (("lead", base | web), ("researcher", base | edits), ("reviewer", base | web | edits),
-                               ("reviewer", base | web | edits)):
+                               ("reviewer", base | web | edits), ("planner", base | web | edits), ("tester", base | web)):
             subprocess.run(deny_py + [role], check=True, capture_output=True)
             deny = json.loads(settings.read_text(encoding="utf-8"))["permissions"]["deny"]
             with self.subTest(role=role):
                 self.assertEqual(set(deny), expected | {"Bash(rm:*)"})
                 self.assertEqual(len(deny), len(set(deny)))
+        before = settings.read_text(encoding="utf-8")
         for bad in ([], ["admin"]):
             with self.subTest(role=bad):
                 self.assertNotEqual(subprocess.run(deny_py + bad, capture_output=True).returncode, 0)
-        self.assertIn("Write", json.loads(settings.read_text(encoding="utf-8"))["permissions"]["deny"])
+        self.assertEqual(settings.read_text(encoding="utf-8"), before)  # a refused role changes nothing
 
     def pwsh(self, script):
         """Run PowerShell 7 against kit.ps1 (no Docker) and return its JSON output."""
@@ -464,12 +469,14 @@ class BuzzKitTests(unittest.TestCase):
     def test_each_agent_has_its_own_key_and_the_specialists_mount_read_only(self):
         runs = self.pwsh(r"""
 $s = @{ port = 3200; owner = 'o' * 64; image = 'img:1'; credentialFile = 'C:\c.env'; repository = 'C:\src\Tinker'
-        channels = @{ requests = 'c1'; reviews = 'c2' }; agents = @{ lead = 'a' * 64; reviewer = 'b' * 64; researcher = 'c' * 64 } }
+        channels = @{ reviews = 'c2'; zeta = 'c3'; requests = 'c1' }; agents = @{} }
+foreach ($r in $AGENTS.Keys) { $s.agents[$r] = "$r".PadRight(64, 'x') }
 $runs = [ordered]@{}
 foreach ($r in $AGENTS.Keys) { $runs[$r] = @(Get-AgentRunArgs $r $s) }
 $s.Remove('repository'); $runs['no-repository'] = @(Get-AgentRunArgs 'lead' $s)
 $runs | ConvertTo-Json -Depth 3""")
-        self.assertEqual(list(runs), ["lead", "reviewer", "researcher", "no-repository"])
+        self.assertEqual(list(runs), ["lead", "planner", "tester", "reviewer", "researcher", "no-repository"])
+        writers = {"lead", "tester"}  # everyone else reads /work
         for role, argv in runs.items():
             def after(flag, argv=argv):
                 return [argv[i + 1] for i, a in enumerate(argv) if a == flag]
@@ -479,8 +486,10 @@ $runs | ConvertTo-Json -Depth 3""")
                 self.assertEqual(argv[:2], ["-d", "--init"])
                 self.assertEqual(after("--name"), [f"t-{role}"])
                 self.assertEqual([v for v in volumes if "/agentkey" in v], [f"t-{role}-key:/agentkey:ro"])
-                self.assertIn("t-work:/work" + ("" if role == "lead" else ":ro"), volumes)
+                self.assertIn("t-work:/work" + ("" if role in writers else ":ro"), volumes)
                 self.assertEqual(argv[-3:], ["img:1", "bash", "/kit/agent.sh"])
+                # Sessions start in a private folder: project files a writer plants in /work never load.
+                self.assertEqual(after("-w"), ["/home/agent/chat"])
                 self.assertEqual(after("--cap-drop"), ["ALL"])
                 self.assertEqual(after("--security-opt"), ["no-new-privileges:true"])
                 self.assertEqual(after("--env-file")[0], r"C:\c.env")
@@ -488,10 +497,11 @@ $runs | ConvertTo-Json -Depth 3""")
                                 "BUZZ_ACP_AGENT_OWNER=" + "o" * 64, "BUZZ_RELAY_URL=ws://localhost:3200"):
                     self.assertIn(setting, env)
                 value = {e.split("=", 1)[0]: e.split("=", 1)[1] for e in env}
-                self.assertEqual(sorted(value["BUZZ_ACP_CHANNELS"].split(",")), ["c1", "c2"])
+                self.assertEqual(value["BUZZ_ACP_CHANNELS"], "c1,c2,c3")  # sorted: a stable settings hash
                 self.assertIn("o" * 64, value["BUZZ_ACP_TEAM_INSTRUCTIONS"])  # only the owner's events are tasks
-        for role in ("lead", "reviewer", "researcher"):
+        for role in ("lead", "planner", "tester", "reviewer", "researcher"):
             self.assertIn(r"C:\src\Tinker:/repo:ro", runs[role])
+            self.assertEqual([a for a in runs[role] if a.endswith(":/repo")], [])  # never writable
         self.assertFalse([a for a in runs["no-repository"] if a.endswith(":/repo:ro")])
 
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
@@ -500,40 +510,99 @@ $runs | ConvertTo-Json -Depth 3""")
         result = self.pwsh(r"""
 $PSStyle.OutputRendering = 'Ansi'
 Save-KitState @{ port = 3200; owner = 'o' * 64; channels = @{ requests = 'c1' }; repository = 'C:\r' }
-$script:failing = $true
+$script:case = @{}
 function docker {
-  $e = [char]27
+  $e = [char]27; $err = "$e[2m2026-09-28T19:08:00Z$e[0m $e[31mERROR$e[0m $e[2mpool::prompt$e[0m$e[2m:$e[0m failed"
   switch ($args[0]) {
     'logs' {
+      if ($script:case.error -eq 'startup') { $err }
       foreach ($m in 'agent initialized', 'connected to relay at ws://localhost:3200', "agent owner: $('o' * 64)", 'subscribed to channel c1') {
         "$e[2m2026-09-28T19:07:58Z$e[0m $e[32m INFO$e[0m $e[2mbuzz_acp$e[0m$e[2m:$e[0m $m"
       }
-      if ($script:failing) { "$e[2m2026-09-28T19:08:00Z$e[0m $e[31mERROR$e[0m $e[2mpool::prompt$e[0m$e[2m:$e[0m turn failed" }
+      if ($script:case.error -eq 'later') { $err }   # a failed turn long after startup
     }
     'ps' { 'abc123' }
-    'exec' { if ($args[-1] -eq '/proc/mounts') { 'v /work ext4 rw,relatime 0 0'; 'g /repo fuse ro,relatime 0 0' }
-             else { '{"permissions": {"deny": ["WebFetch", "WebSearch"]}}' } }
+    'exec' { if ($args[-1] -eq '/proc/mounts') { "v /work ext4 $($script:case.work),relatime 0 0"; 'g /repo fuse ro,relatime 0 0' }
+             else { @{ permissions = @{ deny = $script:case.deny } } | ConvertTo-Json -Depth 3 } }
   }
 }
+$writerDeny = @('WebFetch', 'WebSearch'); $readOnly = @('WebFetch', 'WebSearch', 'Write', 'Edit')   # never $lead: it is $LEAD
+$cases = [ordered]@{
+  'startup-error' = @{ role = 'lead'; error = 'startup'; work = 'rw'; deny = $writerDeny }
+  'later-error'   = @{ role = 'lead'; error = 'later'; work = 'rw'; deny = $writerDeny }
+  'clean'         = @{ role = 'lead'; work = 'rw'; deny = $writerDeny }
+  'reviewer-writable-work' = @{ role = 'reviewer'; work = 'rw'; deny = $readOnly }
+  'reviewer-clean'         = @{ role = 'reviewer'; work = 'ro'; deny = $readOnly }
+  'researcher-may-edit'    = @{ role = 'researcher'; work = 'ro'; deny = @('WebSearch') }
+}
 $result = [ordered]@{}
-foreach ($case in 'failing', 'clean') {
-  $script:failing = $case -eq 'failing'
-  try { Test-AgentStartup lead 5 | Out-Null; $result[$case] = 'passed' } catch { $result[$case] = "$_" }
+foreach ($name in $cases.Keys) {
+  $script:case = $cases[$name]
+  try { Test-AgentStartup $script:case.role 5 | Out-Null; $result[$name] = 'passed' } catch { $result[$name] = "$_" }
 }
 $result | ConvertTo-Json""")
-        self.assertTrue(result["failing"].startswith("Not started cleanly: t-lead"), result["failing"])
-        self.assertEqual(result["clean"], "passed")
+        self.assertTrue(result["startup-error"].startswith("Not started cleanly: t-lead"), result["startup-error"])
+        for passing in ("later-error", "clean", "reviewer-clean"):  # a later failed turn is not a startup failure
+            self.assertEqual(result[passing], "passed", passing)
+        self.assertTrue(result["reviewer-writable-work"].startswith("Not started cleanly: t-reviewer"))
+        self.assertTrue(result["researcher-may-edit"].startswith("Not started cleanly: t-researcher"))
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
+    def test_role_names_are_case_insensitive_everywhere(self):
+        calls = self.pwsh(r"""
+$script:calls = @()
+function docker { $script:calls += , ($args -join ' ') }
+Stop-Agent Reviewer, TESTER | Out-Null
+@($script:calls) | ConvertTo-Json""")
+        self.assertTrue(calls and all(("t-reviewer" in c or "t-tester" in c) for c in calls), calls)
+        self.assertFalse([c for c in calls if "Reviewer" in c or "TESTER" in c])
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
+    def test_copy_agent_work_takes_one_folder_under_work_through_a_read_only_mount(self):
+        result = self.pwsh(r"""
+Save-KitState @{ image = 'img:1' }
+$script:calls = @()
+function docker { $script:calls += , ($args -join ' '); if ($args[0] -eq 'create') { 'c0ffee' } }
+$result = [ordered]@{}
+foreach ($f in '..', '.', 'a/b', 'a\b', '../x') {
+  try { Copy-AgentWork $f 'C:\dest' | Out-Null; $result[$f] = 'copied' } catch { $result[$f] = 'refused' }
+}
+$result.refusedCalls = @($script:calls)
+$script:calls = @()
+$result.ok = "$(Copy-AgentWork 'docs-typos' 'C:\dest')"
+$result.calls = @($script:calls)
+$result | ConvertTo-Json -Depth 3""")
+        for folder in ("..", ".", "a/b", r"a\b", "../x"):
+            self.assertEqual(result[folder], "refused", folder)
+        self.assertEqual(result["refusedCalls"], [])
+        calls = result["calls"]
+        self.assertTrue(calls[0].startswith("create ") and "t-work:/work:ro" in calls[0], calls)
+        self.assertIn(r"cp c0ffee:/work/docs-typos C:\dest", calls)
+        self.assertEqual(calls[-1], "rm -f c0ffee")
 
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
     def test_every_agent_has_a_prompt_and_profile_and_every_channel_a_canvas(self):
         tables = self.pwsh("@{ agents = $AGENTS; channels = $CHANNELS } | ConvertTo-Json -Depth 3")
-        self.assertEqual(sorted(tables["agents"]), ["lead", "researcher", "reviewer"])
+        self.assertEqual(list(tables["agents"]), ["lead", "planner", "tester", "reviewer", "researcher"])
         self.assertEqual(sorted(p.stem for p in (self.KIT / "roles").glob("*.md")), sorted(tables["agents"]))
         self.assertEqual(sorted(p.stem for p in (self.KIT / "channels").glob("*.md")), sorted(tables["channels"]))
         names = [agent["name"] for agent in tables["agents"].values()]
-        self.assertEqual(names, ["Tinker", "Tinker Reviewer", "Tinker Researcher"])
-        for agent in tables["agents"].values():
-            self.assertTrue(agent["about"])
+        self.assertEqual(names, ["Tinker", "Tinker Planner", "Tinker Tester", "Tinker Reviewer", "Tinker Researcher"])
+        # The flags drive the mounts and the startup check; deny.py must agree with them for every role.
+        self.assertEqual({r for r, a in tables["agents"].items() if a["web"]}, {"researcher"})
+        self.assertEqual({r for r, a in tables["agents"].items() if a["writes"]}, {"lead", "tester"})
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        settings = Path(folder.name) / "settings.json"
+        for role, agent in tables["agents"].items():
+            settings.write_text("{}", encoding="utf-8")
+            subprocess.run([sys.executable, str(self.KIT / "agent" / "deny.py"), str(settings), role],
+                           check=True, capture_output=True)
+            deny = json.loads(settings.read_text(encoding="utf-8"))["permissions"]["deny"]
+            with self.subTest(role=role):
+                self.assertTrue(agent["about"])
+                self.assertEqual("WebFetch" not in deny, agent["web"])
+                self.assertEqual("Write" not in deny, agent["writes"])
         for channel, purpose in tables["channels"].items():
             canvas = (self.KIT / "channels" / f"{channel}.md").read_text(encoding="utf-8")
             with self.subTest(channel=channel):

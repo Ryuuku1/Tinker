@@ -37,7 +37,7 @@ RUN git config --system safe.directory /repo && git config --system core.autocrl
 # The bundled claude must be on PATH before the installer runs, or the plugin is never registered.
 RUN ln -s /opt/acp/lib/node_modules/@agentclientprotocol/claude-agent-acp/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude /usr/local/bin/claude \
     && useradd -m -u 10001 -s /bin/bash agent \
-    && install -d -o agent -g agent /work /opt/tinker/.tinker
+    && install -d -o agent -g agent /work /opt/tinker/.tinker /home/agent/chat
 ENV PATH=/opt/acp/bin:$PATH HOME=/home/agent \
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 DISABLE_AUTOUPDATER=1 DISABLE_TELEMETRY=1 DISABLE_ERROR_REPORTING=1
 USER agent

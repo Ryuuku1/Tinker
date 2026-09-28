@@ -10,9 +10,9 @@ On 2026-09-28 a Docker lab on Windows ran the Lead end to end with a live Claude
 Desktop 0.5.25 as the owner's client; nothing ran natively on Windows or macOS.
 
 **On Windows, use the [kit](kit/GUIDE.md):** one PowerShell 7 script sets up the relay, keys, the agent image,
-channels and Tinker's team (the Lead, a read-only Reviewer and a read-only Researcher with web access), owned by
-your Buzz Desktop identity; [EXAMPLES.md](kit/EXAMPLES.md) shows how to work with them. The sections below
-describe the single-Lead setup by hand.
+channels and Tinker's team (the Lead, a Tester, and a read-only Planner, Reviewer and Researcher, the last with web
+access), owned by your Buzz Desktop identity; [EXAMPLES.md](kit/EXAMPLES.md) shows how to work with them. The
+sections below describe the single-Lead setup by hand.
 
 ## What you get, and what you do not
 
