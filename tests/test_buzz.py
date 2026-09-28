@@ -668,6 +668,7 @@ foreach ($r in $AGENTS.Keys) { $s.agents[$r] = "$r".PadRight(64, 'x') }
         self.assertEqual(argv[-3:], ["img:1", "bash", "/kit/flow.sh"])
         self.assertEqual(after("--cap-drop"), ["ALL"])
         env = dict(e.split("=", 1) for e in after("-e"))
+        self.assertEqual(env["PYTHONUNBUFFERED"], "1")  # its step lines reach docker logs as they happen
         self.assertEqual((env["FLOW_OWNER"], env["FLOW_SELF"]), ("o" * 64, "f" * 64))
         self.assertEqual(env["FLOW_CHANNELS"], "c1,c9")
         agents = json.loads(env["FLOW_AGENTS"])

@@ -7,6 +7,9 @@ $ErrorActionPreference = 'Stop'
 if ($Project -notmatch '^[a-z0-9][a-z0-9-]{0,39}$') { throw "Project must be lowercase letters, digits and dashes: $Project" }
 
 $KIT = $PSScriptRoot
+# Docker prints UTF-8; with the console's code page, text such as a canvas's arrows and emoji would come back
+# garbled, so comparisons with the kit's files would never match.
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new()
 if (-not $StateRoot) { $StateRoot = Join-Path $env:LOCALAPPDATA 'TinkerBuzz' }
 $STATE = Join-Path $StateRoot $Project   # relay secrets (.env), build context, logs, kit.json
 # Pins that setup.ps1 verifies in the built image; agent/Dockerfile pins the base images and the adapter itself.
@@ -150,7 +153,7 @@ function Get-FlowRunArgs([hashtable]$Settings) {
   $crew = [ordered]@{}; foreach ($r in $AGENTS.Keys) { $crew[$r] = [ordered]@{ name = $AGENTS[$r].name; hex = $s.agents[$r] } }
   @('-d', '--init', '--name', "$Project-flow", '--label', "tinker.kit=$Project", '--network', $NET, '--cap-drop', 'ALL',
     '--security-opt', 'no-new-privileges:true', '--restart', 'no', '-v', "$($VOL['flow-key']):/agentkey:ro",
-    '-e', "KIT_PORT=$($s.port)", '-e', "FLOW_OWNER=$($s.owner)", '-e', "FLOW_SELF=$($s.agents.flow)",
+    '-e', 'PYTHONUNBUFFERED=1', '-e', "KIT_PORT=$($s.port)", '-e', "FLOW_OWNER=$($s.owner)", '-e', "FLOW_SELF=$($s.agents.flow)",
     '-e', "FLOW_CHANNELS=$((@($s.channels.Values) | Sort-Object) -join ',')",
     '-e', "FLOW_AGENTS=$($crew | ConvertTo-Json -Compress)", $s.image, 'bash', '/kit/flow.sh')
 }
