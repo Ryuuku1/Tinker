@@ -238,6 +238,23 @@ class BuzzOwnershipTests(BuzzFixture):
             with self.subTest(command=command):
                 self.assertEqual(self.hook("pre-tool", "claude", self.bash(command, session="B"))[:2], (0, ""))
 
+    def test_read_only_commands_never_claim_the_checkout(self):
+        self.assertEqual(self.write(self.repo / "a.txt", "A")[:2], (0, ""))
+        # Read-only commands that claimed /work/accept in the Phase 1 lab re-test (p1-prompts q2-q5, p1-t2)
+        for command in ('find . -iname "app.py" -not -path "*/node_modules/*" 2>/dev/null',
+                        "git -C . log -3 --oneline && git -C . branch --show-current",
+                        "git branch -a | grep -i release-old", "git remote -v; git log --oneline -1",
+                        "git show-ref --verify --quiet refs/heads/release-old && echo LOCAL EXISTS",
+                        "git ls-remote --heads origin release-old", "git merge-base --is-ancestor release-old main",
+                        "git --no-pager log -1 && git worktree list", "printf '%s\\n' b a | sort | uniq -c"):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook("pre-tool", "claude", self.bash(command, session="B"))[:2], (0, ""))
+        for command in ("find . -name '*.tmp' -exec touch {} +", "git branch feature-x", "git remote add up ../up.git",
+                        "git fetch origin", "git -c core.pager=less log", "git ls-remote --upload-pack=x origin",
+                        "sort -o sorted.txt a.txt", "uniq a.txt out.txt", 'python3 -c "print(1)"'):
+            with self.subTest(command=command):  # these write or can run code: they still claim, so B is refused
+                self.assertEqual(self.hook("pre-tool", "claude", self.bash(command, session="B"))[0], 2)
+
     def test_ownership_crosses_hosts(self):
         self.assertEqual(self.write(self.repo / "a.txt", "A")[0], 0)
         code, _, err = self.hook("pre-tool", "codex", {"session_id": "X", "cwd": str(self.repo), "tool_name": "apply_patch",

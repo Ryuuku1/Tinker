@@ -479,8 +479,14 @@ COPY_VERBS = {"cp", "copy", "copy-item", "cpi", "mv", "move", "move-item", "mi",
 READ_VERBS = {"cat", "type", "gc", "get-content"}
 READ_ONLY = {"rg", "grep", "findstr", "cat", "type", "head", "tail", "wc", "ls", "dir", "get-content", "gc",
              "select-string", "sls", "get-childitem", "gci", "test-path", "get-item", "gi", "resolve-path",
-             "stat", "file", "echo", "write-output", "pwd", "get-location"}
-GIT_READ_ONLY = {"diff", "show", "log", "grep", "status", "blame", "ls-files", "rev-parse", "branch-name"}
+             "stat", "file", "echo", "write-output", "pwd", "get-location",
+             "printf", "find", "sort", "uniq", "cut", "tr", "basename", "dirname", "realpath", "du", "which"}
+FIND_ACTIONS = {"-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"}
+GIT_READ_ONLY = {"diff", "show", "log", "grep", "status", "blame", "ls-files", "rev-parse", "branch-name",
+                 "show-ref", "merge-base", "rev-list", "for-each-ref", "describe", "cat-file", "ls-tree", "name-rev",
+                 "shortlog", "count-objects"}
+BRANCH_WRITES = _rx(r"--(?:delete|move|copy|force|set-upstream-to|unset-upstream|edit-description|track|no-track"
+                    r"|create-reflog|recurse-submodules)(?:=.*)?|-[a-z]*[dmcftu][a-z]*")
 GIT_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"}
 DELETE_RX = dict(RULES)["file.deleteRecursive"]
 ENCODED_ARG = re.compile(r"[-/–—―]{1,2}(?:e|ec|en|enc\w*)(?::.*)?", re.I | re.S)
@@ -641,18 +647,60 @@ def substitutes(seg, shell):
 
 
 def read_only(seg, verb, args, shell="posix"):
+    """Whether a segment only reads. Such a segment skips classification and never claims a checkout, so nothing
+    in it may write a file or run a program."""
     if seg["redirect"] or seg["bodies"] or any(w.startswith("--output") for w in args):
         return False
     if substitutes(seg, shell):  # substitutions run commands inside any verb
         return False
+    if any(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", w) for w in seg["words"][:verb_index(seg["words"]) or 0]):
+        return False  # GIT_EXTERNAL_DIFF=..., GIT_SSH_COMMAND=... and the like make reading commands run programs
     if verb == "git":
-        sub = args[0].lower() if args else ""
-        if sub not in GIT_READ_ONLY:
-            return False  # also rejects global options such as -c core.pager=...
-        return not (sub == "grep" and any(w.startswith(("-O", "--open-files-in-pager")) for w in args[1:]))
+        return _git_reads(git_command(args))
+    if verb == "find" and FIND_ACTIONS.intersection(args):
+        return False
+    if verb == "sort" and any(w.startswith("--compress-program") or re.fullmatch(r"-[a-zA-Z]*o.*", w) for w in args):
+        return False  # sort -o FILE writes; a compress program runs
+    if verb == "uniq" and len([w for w in args if not w.startswith("-")]) > 1:  # uniq IN OUT writes OUT
+        return False
     if verb == "rg" and any(w.startswith("--pre") for w in args):
         return False
     return verb in READ_ONLY
+
+
+def git_command(args):
+    """Git's subcommand and its arguments after the global options that run nothing (-C <dir>, --no-pager, -P,
+    --no-optional-locks), or None when another global option comes first (-c core.pager=... runs a program)."""
+    i = 0
+    while i < len(args) and args[i].startswith("-"):
+        if args[i] == "-C" and i + 1 < len(args):
+            i += 2
+        elif args[i] in ("--no-pager", "-P", "--no-optional-locks"):
+            i += 1
+        else:
+            return None
+    return args[i:]
+
+
+def _git_reads(rest):
+    if not rest:
+        return False
+    sub, more = rest[0].lower(), rest[1:]
+    if sub == "branch":  # listing; a name without --list, or a write option, changes branches
+        listing = not [w for w in more if not w.startswith("-")] or any(
+            w in ("-l", "--list") or w.split("=")[0] in ("--contains", "--no-contains", "--merged", "--no-merged",
+                                                         "--points-at") for w in more)
+        return listing and not any(BRANCH_WRITES.fullmatch(w) for w in more)
+    if sub == "remote":  # -v, show and get-url; add, rename, set-url and the rest change the config
+        names = [w for w in more if w not in ("-v", "--verbose")]
+        return not names or names[0] in ("show", "get-url")
+    if sub == "ls-remote":  # --upload-pack runs a program
+        return not any(w == "-u" or w.startswith("--upload-pack") for w in more)
+    if sub == "worktree":
+        return more[:1] == ["list"]
+    if sub == "grep":
+        return not any(w.startswith(("-O", "--open-files-in-pager")) for w in more)
+    return sub in GIT_READ_ONLY
 
 
 def _classify_segment(seg, previous, verb, args, base, unattended, labels, tamper, name_rx, depth, shell="posix"):
@@ -1086,7 +1134,7 @@ def command_writes(command, shell):
         reply = verb == "buzz" and args[:2] == ["messages", "send"] and not seg["redirect"]
         if reply or read_only(seg, verb, args, shell) or (not substitutes(seg, shell) and (
                 verb in CD_VERBS or (verb == "buzz" and not seg["redirect"])
-                or (verb == "git" and args[:2] in (["worktree", "add"], ["worktree", "list"])))):
+                or (verb == "git" and (git_command(args) or [])[:2] == ["worktree", "add"]))):
             continue
         return True
     return False

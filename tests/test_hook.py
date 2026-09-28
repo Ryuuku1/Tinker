@@ -106,6 +106,12 @@ class ClassifierTests(Fixture):
         ("cat <<$(echo x)\nhi\n$(echo x)\ngit push --force origin main", "posix", "command.unparsed"),
         ("echo 'a\u2019; git push --force origin main; echo \u2019b'", "pwsh", "git.forcePush"),
         ('echo "a\u201d; git push --force origin main; echo \u201cb"', "pwsh", "git.forcePush"),
+        # Read-only forms skip classification, so options that run code must keep a command classified.
+        ("git -c core.pager='git push --force origin main' log", "posix", "git.forcePush"),
+        ("git ls-remote --upload-pack='git push --force origin main' origin", "posix", "git.forcePush"),
+        ("find . -name '*.log' -exec rm -rf {} +", "posix", "file.deleteRecursive"),
+        ("GIT_EXTERNAL_DIFF='git push --force origin main;:' git log -p --ext-diff -1", "posix", "git.forcePush"),
+        ("GIT_SSH_COMMAND='git push --force origin main' git ls-remote ssh://h/r", "posix", "git.forcePush"),
         ("git push origin main", "posix", "git.pushProtected"),
         ("git push origin HEAD:master", "posix", "git.pushProtected"),
         ("git push origin feature:master", "posix", "git.pushProtected"),
@@ -235,6 +241,7 @@ class ClassifierTests(Fixture):
             ("Set-Content .claude\\settings.json (Get-Content evil.json)", "pwsh"),
             (f"Remove-Item -Recurse -Path:{home}\\.claude\\plugins\\cache", "pwsh"),
             (f"rm -rf {self.home.as_posix()}/.claude/plugins/cache/*", "posix"),
+            (f"find {self.home.as_posix()}/.tinker -delete", "posix"),
         ]
         for command, shell in cases:
             with self.subTest(command=command):
