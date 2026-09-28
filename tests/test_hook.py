@@ -73,6 +73,13 @@ class Fixture(unittest.TestCase):
         self.assertFalse(tamper, f"unexpected tamper for {command!r}: {tamper}")
         return labels
 
+    def read_only_verb(self, command, shell="posix"):
+        seg = self.tb.lex(command, shell)[0]
+        index = self.tb.verb_index(seg["words"])
+        verb = self.tb.base_name(seg["words"][index])
+        args = seg["words"][index + 1:]
+        return self.tb.read_only(seg, verb, args, shell)
+
 
 class ClassifierTests(Fixture):
     CONSEQUENTIAL = [
@@ -188,6 +195,18 @@ class ClassifierTests(Fixture):
         for command, shell in self.SAFE:
             with self.subTest(command=command):
                 self.assertEqual(self.labels(command, shell), set())
+
+    def test_hash_and_compare_verbs_are_read_only(self):
+        for command in ("sha256sum notes.txt", "cmp a.txt b.txt"):
+            with self.subTest(command=command):
+                self.assertTrue(self.read_only_verb(command), command)
+                self.assertEqual(self.labels(command), set())
+        for command in ("sha256sum notes.txt > out", "cmp a.txt b.txt > out"):
+            with self.subTest(command=command):
+                self.assertFalse(self.read_only_verb(command), command)
+        for command in ('echo "$(sha256sum notes.txt)"', 'echo "$(cmp a.txt b.txt)"'):
+            with self.subTest(command=command):
+                self.assertFalse(self.read_only_verb(command), command)
 
     def test_bare_push_uses_the_current_branch(self):
         self.assertEqual(self.labels("git push"), set())

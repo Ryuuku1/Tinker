@@ -480,7 +480,8 @@ READ_VERBS = {"cat", "type", "gc", "get-content"}
 READ_ONLY = {"rg", "grep", "findstr", "cat", "type", "head", "tail", "wc", "ls", "dir", "get-content", "gc",
              "select-string", "sls", "get-childitem", "gci", "test-path", "get-item", "gi", "resolve-path",
              "stat", "file", "echo", "write-output", "pwd", "get-location",
-             "printf", "find", "sort", "uniq", "cut", "tr", "basename", "dirname", "realpath", "du", "which"}
+             "printf", "find", "sort", "uniq", "cut", "tr", "basename", "dirname", "realpath", "du", "which",
+             "cmp", "sha256sum"}
 FIND_ACTIONS = {"-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"}
 GIT_READ_ONLY = {"diff", "show", "log", "grep", "status", "blame", "ls-files", "rev-parse", "branch-name",
                  "show-ref", "merge-base", "rev-list", "for-each-ref", "describe", "cat-file", "ls-tree", "name-rev",
