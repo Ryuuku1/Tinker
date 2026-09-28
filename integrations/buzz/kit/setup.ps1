@@ -33,6 +33,7 @@ if ($Repository) {
   $Repository = (Resolve-Path -LiteralPath $Repository).Path
 }
 $LOGS = "$STATE\logs"; $ENVFILE = "$STATE\.env"; $CTX = "$STATE\agent"; $ROLES = @($AGENTS.Keys)
+$KITARGS = "-Project $Project" + $(if ($StateRoot) { " -StateRoot '$StateRoot'" } else { '' })   # for the hints below
 $script:n = 0
 function Step([string]$Title) { $script:n++; "`n[$script:n/12] $Title" }
 function Assert-Exit([string]$What) { if ($LASTEXITCODE) { throw "$What failed (exit $LASTEXITCODE)" } }
@@ -228,7 +229,7 @@ Save-KitState $s
 
 if (-not $CredentialFile) { $CredentialFile = $s.credentialFile }
 if (-not $s.owner -or -not $CredentialFile) {   # the agents need both; stop here without starting anything
-  $again = ".\setup.ps1 -Project $Project -Port $Port" + $(if ($StateRoot) { " -StateRoot '$StateRoot'" } else { '' })
+  $again = ".\setup.ps1 $KITARGS -Port $Port"
   "`nThe relay is up at ws://localhost:$Port with the channels. Next (GUIDE.md, Buzz Desktop):"
   if (-not $s.owner) {
     "  1. In Buzz Desktop choose Add Community and enter ws://localhost:$Port."
@@ -269,5 +270,5 @@ Step 'Startup check'
 Test-AgentStartup
 "`nTinker's team is running. In Buzz Desktop open #tinker-lab and @mention an agent by name:"
 foreach ($r in $ROLES) { "  $($AGENTS[$r].name.PadRight(18)) $(ConvertTo-Npub $s.agents[$r])" }
-"Worked examples: EXAMPLES.md. Status: . .\kit.ps1 -Project $Project; Get-KitStatus   (Stop-Agent and Start-Agent there too)"
+"Worked examples: EXAMPLES.md. Status: . .\kit.ps1 $KITARGS; Get-KitStatus   (Stop-Agent and Start-Agent there too)"
 Invoke-SecretScan $s

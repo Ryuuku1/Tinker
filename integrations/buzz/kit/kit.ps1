@@ -94,6 +94,9 @@ if ((ConvertTo-Npub '7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86a
     'npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg') { throw 'bech32 self-check failed (NIP-19 vector)' }
 
 function Test-Agent([string]$Role) { [bool](docker ps -a --filter "name=^/$Project-$Role$" --format '{{.Names}}') }
+# An agent's log as plain text: buzz-acp colors it, and a console that renders ANSI keeps the codes, which would
+# hide ERROR lines from the checks below.
+function Get-AgentLog([string]$Name) { (docker logs $Name 2>&1 | Out-String) -replace '\x1b\[[0-9;]*m', '' }
 
 # docker run arguments for one agent: only its own key; /work and the repository are read-only for the specialists.
 function Get-AgentRunArgs([string]$Role, [hashtable]$Settings) {
@@ -147,7 +150,7 @@ function Test-AgentStartup([string[]]$Role = @($AGENTS.Keys), [int]$Seconds = 12
     $c = "$Project-$r"; $deadline = (Get-Date).AddSeconds($Seconds)
     do {
       Start-Sleep 3
-      $log = docker logs $c 2>&1 | Out-String
+      $log = Get-AgentLog $c
       $pending = @($s.channels.Values | Where-Object { $log -notmatch "subscribed to channel $_" })
     } until (-not $pending -or (Get-Date) -gt $deadline -or -not (docker ps -q --filter "name=^/$c$"))
     $running = [bool](docker ps -q --filter "name=^/$c$")
@@ -189,7 +192,7 @@ function Get-KitStatus {
     $c = "$Project-$r"; $npub = if ($s.agents -and $s.agents[$r]) { ConvertTo-Npub $s.agents[$r] } else { 'no key yet' }
     "`n$($AGENTS[$r].name) ($npub)"
     if (-not (Test-Agent $r)) { "  not running (Start-Agent $r)"; continue }
-    $log = docker logs $c 2>&1 | Out-String
+    $log = Get-AgentLog $c
     "  $(docker ps -a --filter "name=^/$c$" --format '{{.Status}}'); turns completed $(([regex]::Matches($log, 'turn complete for channel')).Count)" +
       "; ERROR lines $(@($log -split "`n" | Where-Object { $_ -cmatch '\sERROR\s|\bpanic\b' }).Count)" +
       "; NIP-AM 403 warnings $(([regex]::Matches($log, 'NIP-AM: publish failed:.*403')).Count) (expected until the owner attestation, Phase 2)"

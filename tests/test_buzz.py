@@ -495,6 +495,36 @@ $runs | ConvertTo-Json -Depth 3""")
         self.assertFalse([a for a in runs["no-repository"] if a.endswith(":/repo:ro")])
 
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
+    def test_the_startup_check_catches_colored_error_lines(self):
+        # buzz-acp colors its log; a console that renders ANSI keeps the codes in captured text.
+        result = self.pwsh(r"""
+$PSStyle.OutputRendering = 'Ansi'
+Save-KitState @{ port = 3200; owner = 'o' * 64; channels = @{ requests = 'c1' }; repository = 'C:\r' }
+$script:failing = $true
+function docker {
+  $e = [char]27
+  switch ($args[0]) {
+    'logs' {
+      foreach ($m in 'agent initialized', 'connected to relay at ws://localhost:3200', "agent owner: $('o' * 64)", 'subscribed to channel c1') {
+        "$e[2m2026-09-28T19:07:58Z$e[0m $e[32m INFO$e[0m $e[2mbuzz_acp$e[0m$e[2m:$e[0m $m"
+      }
+      if ($script:failing) { "$e[2m2026-09-28T19:08:00Z$e[0m $e[31mERROR$e[0m $e[2mpool::prompt$e[0m$e[2m:$e[0m turn failed" }
+    }
+    'ps' { 'abc123' }
+    'exec' { if ($args[-1] -eq '/proc/mounts') { 'v /work ext4 rw,relatime 0 0'; 'g /repo fuse ro,relatime 0 0' }
+             else { '{"permissions": {"deny": ["WebFetch", "WebSearch"]}}' } }
+  }
+}
+$result = [ordered]@{}
+foreach ($case in 'failing', 'clean') {
+  $script:failing = $case -eq 'failing'
+  try { Test-AgentStartup lead 5 | Out-Null; $result[$case] = 'passed' } catch { $result[$case] = "$_" }
+}
+$result | ConvertTo-Json""")
+        self.assertTrue(result["failing"].startswith("Not started cleanly: t-lead"), result["failing"])
+        self.assertEqual(result["clean"], "passed")
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
     def test_every_agent_has_a_prompt_and_profile_and_every_channel_a_canvas(self):
         tables = self.pwsh("@{ agents = $AGENTS; channels = $CHANNELS } | ConvertTo-Json -Depth 3")
         self.assertEqual(sorted(tables["agents"]), ["lead", "researcher", "reviewer"])
