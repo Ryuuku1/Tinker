@@ -14,7 +14,7 @@ across apps. Refuses an app where another Tinker installation is enabled or its 
 read, and a home whose apps.json it did not write (another installation can share the product name).
 Run it yourself, not through an agent. --dry-run prints the plan; --uninstall removes only what
 apps.json records, after each app confirms its plugin is gone. --write-descriptors regenerates
-this checkout's project descriptors.
+this checkout's project descriptors and the Buzz persona pack.
 """
 import argparse
 import hashlib
@@ -106,6 +106,43 @@ def project_descriptors(root=ROOT):
         files[f".claude/agents/tinker-{role}.md"] = claude_agent(f"tinker-{role}", fields, body)
         files[f".codex/agents/tinker-{role}.toml"] = codex_agent(f"tinker-{role}", fields, body)
         files[f".agents/agents/tinker-{role}.md"] = antigravity_agent(f"tinker-{role}", fields, body)
+    return files
+
+
+PACK = "integrations/buzz/pack"
+FULL_LINK = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
+
+
+def plain_links(text, source, root):
+    """Relative Markdown links as plain text naming their target in the Tinker checkout, so a copy stands alone."""
+    def plain(match):
+        label, target = match.groups()
+        if target.startswith(("http://", "https://", "mailto:")):
+            return match.group(0)
+        try:
+            rel = (source.parent / target.split("#")[0]).resolve().relative_to(root.resolve()).as_posix()
+        except ValueError:
+            return label
+        return label if target.startswith("#") else f"{label} (`{rel}` in the Tinker checkout)"
+    return FULL_LINK.sub(plain, text)
+
+
+def pack_files(root=ROOT):
+    """The Buzz persona pack (drift-tested, validated with `buzz pack validate`): manifest, the Lead persona
+    (the Buzz protocol), the Lead charter as pack instructions and the canonical skills. It carries no model
+    pins, hooks, MCP servers or secrets: provider defaults apply and Tinker's hooks come from the host install."""
+    read = lambda path: path.read_text(encoding="utf-8").replace("\r\n", "\n")  # noqa: E731
+    manifest = {"$schema": "https://open-plugin-spec.org/schema/v1/plugin.json", "id": "tinker", "name": "Tinker",
+                "version": "0.1.0", "description": ABOUT, "author": AUTHOR["name"],
+                "personas": ["agents/tinker-lead.persona.md"], "pack_instructions": "instructions.md"}
+    lead = "Tinker's Lead: owns the owner's outcome through execution, verification and a concise report."
+    files = {f"{PACK}/.plugin/plugin.json": dumps(manifest),
+             f"{PACK}/agents/tinker-lead.persona.md": (f"---\nname: tinker-lead\ndisplay_name: Tinker Lead\n"
+                                                       f"description: {json.dumps(lead)}\n---\n\n"
+                                                       + read(root / "integrations" / "buzz" / "protocol.md")),
+             f"{PACK}/instructions.md": plain_links(read(root / "AGENTS.md"), root / "AGENTS.md", root)}
+    for skill in sorted((root / ".agents" / "skills").glob("*/SKILL.md")):
+        files[f"{PACK}/skills/{skill.parent.name}/SKILL.md"] = plain_links(read(skill), skill, root)
     return files
 
 
@@ -861,9 +898,10 @@ class Installer:
 
 
 def write_descriptors(root=ROOT):
-    for rel, content in project_descriptors(root).items():
+    for rel, content in {**project_descriptors(root), **pack_files(root)}.items():
         path = root / rel
         if not path.exists() or path.read_bytes().decode("utf-8").replace("\r\n", "\n") != content:
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content.encode("utf-8"))
             print(f"wrote {rel}")
 
@@ -877,7 +915,7 @@ def main(argv=None):
     parser.add_argument("--home", default=str(Path.home()), help="user home to install into (tests use a temporary one)")
     parser.add_argument("--python", default=getattr(sys, "_base_executable", sys.executable),
                         help="interpreter the hooks run (never a virtual environment launcher)")
-    parser.add_argument("--write-descriptors", action="store_true", help="regenerate this checkout's project descriptors")
+    parser.add_argument("--write-descriptors", action="store_true", help="regenerate this checkout's project descriptors and Buzz pack")
     args = parser.parse_args(argv)
     if args.write_descriptors:
         write_descriptors()

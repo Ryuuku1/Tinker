@@ -21,6 +21,7 @@ Keep `status` to active, paused, blocked or completed: installed hooks and
 - Objective and acceptance criteria:
 - Authorized actions; actions still requiring authorization:
 - Package root; command working directory:
+- Buzz scope, when run through Buzz (relay, channel, thread); its own worktree:
 - Starting revision; staged/unstaged changes; untracked user files:
 
 ## Work and evidence

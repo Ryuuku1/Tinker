@@ -8,7 +8,7 @@ There are three different claims:
    empty test runs, stale review, malformed records, path boundaries, coverage,
    duplicates and review completeness. These test the tooling, not the agents.
 3. Behavioral evaluations: real host sessions with inspected artifacts and native
-   traces. The 41 cases in [cases.json](cases.json) define prompts, setup, measurable
+   traces. The 47 cases in [cases.json](cases.json) define prompts, setup, measurable
    observations and additional human review. None is passed merely by existing.
 
 Each case belongs to one set. Develop against `regression` cases. The six `held-out`
@@ -108,6 +108,13 @@ No accepted baseline exists. As of 2026-09-26 no suite of observed, reviewed run
 been recorded for any host, so every case is `not-verified`. Establish the first
 baseline only from a complete observed suite for a host, and record it with its
 manifest under `.tinker/evals/<run-id>/`; synthetic records never establish one.
+
+The six `buzz-*` regression cases run through `buzz-acp` against a disposable relay
+([fixtures](fixtures/buzz/README.md)). For live acceptance, invoke `buzz-acp run --task`
+or the conversational service explicitly per host. Keep the JSON terminal record, which
+reports how the turn ended but not whether the task succeeded, together with a relay
+snapshot of the posted messages, and grade the observations as above. Runs driven by a
+scripted model endpoint exercise the harness only and never count as live.
 
 ## Measure actual concurrency and contributions
 

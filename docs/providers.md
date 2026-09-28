@@ -112,6 +112,10 @@ structured tool input: a guard against mistakes and naive injection, not a sandb
 | Messages, MCP and connector tools, web requests, reading secrets, deployment through unclassified tools | Not gated | Instructions and host permissions |
 | Helper budget, one writer, no recursion, read-only reviewer | Descriptors request restrictions; parents can override | Delegation policy |
 | Checkpoint ownership | Not enforced; hooks only read front matter | Workspace policy |
+| Any gated operation in a Buzz-run chat (`BUZZ_*` variables present) | Denied with the Buzz reason, never asked; typed approvals refused ([Buzz](#buzz-optional-team-surface)) | Instructions |
+| Buzz relay changes beyond replying: workflows, memory, channels, membership, reactions, repositories, public posts (`buzz.mutate`) | Claude and Antigravity ask, Codex denies with a request id; denied in Buzz-run chats | Instructions |
+| A Buzz-run chat writing a checkout another Buzz-run chat writes | Refused (`workspace.owned`), never taken over; buzz-acp sent no SessionEnd in the spike, so records stay until the user releases them | Workspace policy |
+| Creating a schedule from a Buzz-run chat | Denied (`schedule.create`), marked or not | Instructions |
 
 ## Hook contracts and tool names
 
@@ -185,6 +189,63 @@ Scheduled runs start with a marker that makes them unattended. The team skill bu
 schedule plans and the host's own scheduler runs them; Antigravity scheduling is
 manual and unverified.
 
+## Buzz (optional team surface)
+
+Setup and operations: [integrations/buzz](../integrations/buzz/README.md). All of the evidence
+below comes from one spike on 2026-09-26: Buzz `781d39510`, buzz-acp 0.1.0, `claude-agent-acp`
+0.81.2 (bundling Claude Code 2.1.280) and `codex-acp` 1.13.1 (bundling codex-cli 0.156.1), run
+in Linux containers against a disposable relay.
+
+The host checks drove the real adapter, host CLI, Tinker hooks and permission flow with a scripted
+local model endpoint. That exercises the harness, but it is not a model run. Live model acceptance
+is `not-verified` for both hosts, because no provider key was available.
+
+| | Claude Code via `claude-agent-acp` | Codex via `codex-acp` |
+| --- | --- | --- |
+| Instructions from the working directory | AGENTS.md, through CLAUDE.md's import | AGENTS.md |
+| Skills | Only with the installed plugin; `.agents/skills` is not listed in project mode | `.agents/skills` in project mode; plugin skills once installed |
+| Tinker's hooks under the adapter | The installed plugin's hooks fire (SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, Stop); turn-one context reaches the model | Never run with the supported install: codex app-server 0.156.1 does not discover plugin hooks. Hooks in `~/.codex/hooks.json` fire once trusted in `/hooks`, but the installer does not write them |
+| Permission behavior | buzz-acp answers every permission request `allow_once` in every mode. `dont-ask` is not advertised, so buzz-acp skips it and Claude runs `default`. Before this integration, Tinker's `ask` was auto-approved in every mode, `plan` included; now it is denied. Claude's `permissions.deny` rules hold | `BUZZ_ACP_PERMISSION_MODE` never applies. codex-acp's modes are `read-only`, `agent` and `agent-full-access` (`INITIAL_AGENT_MODE`), and `read-only` still writes the workspace; with `agent-full-access` a tamper write succeeded |
+| Writing in Buzz | Yes: gated operations denied, one writer per checkout (two pooled sessions: the second write was refused) | No: read-only by instruction only |
+| Live model acceptance | `not-verified` (no `ANTHROPIC_API_KEY`) | `not-verified` (no `OPENAI_API_KEY`; codex-acp needs an API key, not a ChatGPT subscription) |
+
+**Unsupported:**
+- **Antigravity:** Buzz has no ACP runtime for it; the pinned source has no mention of it.
+- **`buzz-agent`:** no pre-tool hooks; `docs/MCP_DRIVEN_HOOKS.md` lists `PreToolUse` as deferred.
+
+Harness facts every Buzz setup inherits:
+- Concurrent channel and thread sessions, including a pool with `--agents 2`, share one working
+  directory.
+- The default owner-only gate kept a non-owner's direct mention from becoming a prompt. A
+  non-owner's earlier thread reply still reached the model verbatim, inside the owner's prompt, as
+  `<thread-context>`.
+- Agents inherit `BUZZ_PRIVATE_KEY`, `BUZZ_RELAY_URL` and a harness `GIT_CONFIG_*` block.
+  `--permission-mode` and `--respond-to` given as flags stay invisible to the agent.
+- buzz-acp forces Codex's sandbox network access on.
+
+Tinker detects Buzz by environment variable *names*, never values:
+- `BUZZ_PRIVATE_KEY` together with `BUZZ_RELAY_URL` verifies a Buzz run.
+- Any other `BUZZ_*` name still restricts the chat, as ambiguous.
+- Anyone can set these names, so detection only ever adds restriction.
+- A launcher that strips them would go undetected.
+- A shell that exports them restricts your native chats too, so unset them there.
+
+**Hook-enforced under Buzz** (Claude with the installed plugin):
+- the deny for every gated operation, including commit, push and `buzz.mutate`;
+- refusal of typed approvals;
+- the tamper refusal;
+- one writer per checkout across Buzz-run chats;
+- reports of unsafe settings in turn-one context and `status`.
+
+**Instruction-only** (the [Buzz protocol](../integrations/buzz/protocol.md)):
+- treating relayed content as data;
+- replying in the triggering thread;
+- keeping secrets and raw logs out of posts;
+- posting elsewhere only on request (`buzz messages send` is not gated);
+- an evidence-backed final report;
+- a worktree for every writing task;
+- Codex's read-only limit.
+
 ## Secondary Gemini CLI compatibility
 
 The existing GEMINI.md import and read-only reviewer descriptor remain available.
@@ -203,8 +264,9 @@ acceptance cases succeed.
 | Descriptor generation | Verified by package tests (no drift). 2026-09-26: `claude plugin validate` (CLI 2.1.274) passed for this checkout and for a bundle and marketplace rendered by the new installer into a disposable home | Package tests only | Package tests only |
 | Host discovery | Live 2026-09-23/24: skills and eight agents loaded; plugin validation passed | Desktop task loaded AGENTS.md and skills (2026-09-23); CLI 0.146.0 present, not run live | Not verified (no scoped live interface, no `agy` on PATH on 2026-09-26) |
 | Tool restrictions | Requested by descriptors; not verified live | Same | Same |
-| Hook behavior | Live 2026-09-24 for the runtime before this refactor (context, ask, block in default and bypass modes, session end). The 2026-09-26 runtime is verified only by sample-payload tests | Documented formats and shell self-tests only | Documented formats and `cmd /c` self-tests only |
+| Hook behavior | Live 2026-09-24 for the runtime before this refactor (context, ask, block in default and bypass modes, session end). The 2026-09-26 runtime: sample-payload tests, plus hooks, deny and context under `claude-agent-acp` with a scripted model ([Buzz](#buzz-optional-team-surface)) | Documented formats and shell self-tests only | Documented formats and `cmd /c` self-tests only |
 | Task execution | Behavioral cases not verified; no accepted baseline | Not verified (a delegation probe timed out; see below) | Not verified |
+| Under Buzz (`buzz-acp`) | Hooks and deny verified with a scripted model; live `not-verified` ([Buzz](#buzz-optional-team-surface)) | Hooks do not run with the supported install; read-only; live `not-verified` | Unsupported |
 
 Earlier Codex notes: a read-only smoke run recognized the Lead, roles, skills and
 limits from project context; a disposable feature/delegation probe timed out after

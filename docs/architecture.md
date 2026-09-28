@@ -26,6 +26,7 @@ database, scheduler service or simulated execution.
 | `scripts/install_apps.py` | Opt-in user-level installer and descriptor generator | By the user, in a terminal |
 | `scripts/graphify_project.py` | On-demand clean-commit Graphify graphs | On an explicit graph request |
 | `evals/` | Case catalog, evidence grader, suite acceptance, disposable fixtures | Offline, by a person |
+| `integrations/buzz/` | Optional Buzz team surface: working protocol, setup guide, generated persona pack | Protocol: turn-one context of a Buzz-run chat and `--system-prompt-file`; the rest by the user |
 
 ## Request flow
 
@@ -61,11 +62,15 @@ pre-tool, stop and session end for all three hosts. A gated call passes four ste
 3. **Session state.** Presence (state, directory, last action) is rewritten by every
    hook. The unattended restriction lives in its own sticky file under
    `~/.tinker/state/unattended/`, written by the scheduled-run marker, by an
-   earlier runtime's flag, or when session state exists but cannot be read; nothing
+   earlier runtime's flag, by Buzz harness variables (names only; any `BUZZ_*` name
+   restricts), or when session state exists but cannot be read; nothing
    removes it, so stale or concurrent presence writes cannot relax a run. Missing
    state is simply a new chat. This fails closed: an attended chat whose state became
    unreadable stays restricted, and the user approves in a new chat instead.
-4. **Decide and respond.** Restricted runs are denied with no grant path. Claude
+4. **Decide and respond.** Restricted runs are denied with no grant path, and in a
+   Buzz-run chat an ungated write is refused while another Buzz-run chat writes the same
+   checkout (`~/.tinker/state/claims/`; released at the host's session end, which buzz-acp did
+   not send in the spike, or by the user; never taken over). Claude
    Code asks through its own prompt (exit 2 denies); Antigravity uses `force_ask` or
    `deny`, and `{}` for no opinion. Codex parses but does not support `ask` (the hook
    fails and the tool runs), so Codex denies with a request id; the user types

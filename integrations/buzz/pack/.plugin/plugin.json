@@ -1,0 +1,12 @@
+{
+  "$schema": "https://open-plugin-spec.org/schema/v1/plugin.json",
+  "id": "tinker",
+  "name": "Tinker",
+  "version": "0.1.0",
+  "description": "Tinker software team: Lead charter, eight specialists, workflows, approvals and presence.",
+  "author": "Tinker",
+  "personas": [
+    "agents/tinker-lead.persona.md"
+  ],
+  "pack_instructions": "instructions.md"
+}

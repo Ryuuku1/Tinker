@@ -45,7 +45,7 @@ class Fixture(unittest.TestCase):
         (state / "plugin").mkdir(parents=True)
         (state / "plugin" / "AGENTS.md").write_text("# Lead charter snapshot\n", encoding="utf-8")
         (state / "config.json").write_text(json.dumps({"root": str(self.root)}), encoding="utf-8")
-        self.env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "CODEX"))}
+        self.env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("CLAUDE", "CODEX", "BUZZ_"))}
         self.env.update(USERPROFILE=str(self.home), HOME=str(self.home))
         patcher = mock.patch.dict(os.environ, {"USERPROFILE": str(self.home), "HOME": str(self.home)})
         patcher.start()
