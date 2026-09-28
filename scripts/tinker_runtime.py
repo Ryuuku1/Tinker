@@ -231,7 +231,7 @@ HEREDOC_WORD = re.compile(r"(?:[^\s;&|<>'\"\\]|\\.|'[^']*'|\"(?:[^\"\\]|\\.)*\")
 def lex(command, shell="posix"):
     """Split command text on ; && || | & and newlines outside quotes.
 
-    Returns segments {op, raw, words, redirect, bodies} (bodies: heredoc texts), or None
+    Returns segments {op, raw, words, redirect, bodies} (bodies: (text, quoted) per heredoc), or None
     when a quote is left open. Unquoted # starts a comment. Data heredocs are kept apart
     so their contents are not mistaken for commands.
     """
@@ -323,7 +323,7 @@ def lex(command, shell="posix"):
             i += 1
             if c == "\n" and pending:
                 target = segments[-1] if segments else None
-                for delimiter in pending:
+                for delimiter, quoted in pending:
                     body = []
                     while i < n:
                         end = command.find("\n", i)
@@ -333,7 +333,7 @@ def lex(command, shell="posix"):
                             break
                         body.append(line)
                     if target is not None:
-                        target["bodies"].append("\n".join(body))
+                        target["bodies"].append(("\n".join(body), quoted))
                 pending.clear()
             continue
         if c in "&|":
@@ -369,14 +369,14 @@ def lex(command, shell="posix"):
                 if parts is None or re.search(r"\$\(|`", command[j:k]):
                     return None  # a delimiter this lexer cannot read the way bash does
                 delimiter = parts[0]["words"][0].strip() if parts and parts[0]["words"] else ""
-                if delimiter:
-                    pending.append(delimiter)
+                if delimiter:  # a quoted delimiter (<<'EOF', <<\EOF) keeps bash from expanding the body
+                    pending.append((delimiter, bool(re.search(r"['\"\\]", command[j:k]))))
                 end_word()
                 raw.append(command[i:k])
                 i = k
                 continue
-            if c == ">":
-                state["redirect"] = True
+            if c == ">" and not re.match(r">>?\|?\s*(?:&\s*(?:\d+|-)|/dev/null)(?![^\s;&|<>()])", command[i:]):
+                state["redirect"] = True  # 2>&1, >&- and >/dev/null write no file
             end_word()
             raw.append(c)
             i += 1
@@ -634,7 +634,8 @@ def classify_command(command, shell, base, unattended=False, depth=0):
 def substitutes(seg, shell):
     """Whether a segment runs commands inside it: $( ), <( ), >( ), backticks (also in heredoc bodies, which
     bash expands unless the delimiter is quoted), or a PowerShell ( ) group."""
-    if any(re.search(r"\$\(|[<>]\(|`", text) for text in (seg["raw"], *seg["bodies"])):
+    expanded = [body for body, quoted in seg["bodies"] if not quoted]
+    if any(re.search(r"\$\(|[<>]\(|`", text) for text in (seg["raw"], *expanded)):
         return True
     return shell == "pwsh" and "(" in re.sub(r"'[^']*'|\"[^\"]*\"", "", seg["raw"])
 
@@ -731,7 +732,7 @@ def _classify_segment(seg, previous, verb, args, base, unattended, labels, tampe
             more, bad = classify_command(body, sub_shell, base, unattended, depth + 1)
             labels |= more
             tamper.extend(bad)
-        for body in seg["bodies"]:
+        for body, quoted in seg["bodies"]:
             if verb in SHELLS:
                 more, bad = classify_command(body, "posix", base, unattended, depth + 1)
                 labels |= more
@@ -739,7 +740,8 @@ def _classify_segment(seg, previous, verb, args, base, unattended, labels, tampe
             elif verb in RUNNERS:
                 pseudo = {"op": None, "raw": body, "words": [], "redirect": False, "bodies": []}
                 _classify_segment(pseudo, None, "", [], base, unattended, labels, tamper, name_rx, depth + 1)
-            elif re.search(r"\$\(|`", body):  # data for any other command, but bash still runs its substitutions
+            elif not quoted and re.search(r"\$\(|`", body):  # data for other commands; bash still runs the
+                # substitutions of an unquoted heredoc (<<EOF), never of a quoted one (<<'EOF')
                 more, bad = classify_command(body, "posix", base, unattended, depth + 1)
                 labels |= more
                 tamper.extend(bad)
@@ -1070,7 +1072,9 @@ def release_hint(top):
 
 def command_writes(command, shell):
     """Whether a command may change its checkout. Read-only commands, `git worktree add` (how a second
-    session gets its own checkout) and the Buzz CLI (it writes to the relay) do not."""
+    session gets its own checkout) and the Buzz CLI (it writes to the relay) do not; a reply never does,
+    since buzz-acp posts nothing else (ponytail: a substitution in a reply's text that writes is not
+    counted; parse substitutions as commands if Buzz chats ever abuse it)."""
     segments = lex(command, shell)
     if segments is None:
         return True
@@ -1079,7 +1083,8 @@ def command_writes(command, shell):
         if index is None:
             continue
         verb, args = base_name(seg["words"][index]), seg["words"][index + 1:]
-        if read_only(seg, verb, args, shell) or (not substitutes(seg, shell) and (
+        reply = verb == "buzz" and args[:2] == ["messages", "send"] and not seg["redirect"]
+        if reply or read_only(seg, verb, args, shell) or (not substitutes(seg, shell) and (
                 verb in CD_VERBS or (verb == "buzz" and not seg["redirect"])
                 or (verb == "git" and args[:2] in (["worktree", "add"], ["worktree", "list"])))):
             continue
@@ -1543,11 +1548,15 @@ def decide(host, payload, out):
         save_session(host, call["session"], record, last_action=f"denied in unattended run ({','.join(sorted(labels))})")
         # ponytail: fail closed; an attended chat whose state became unreadable stays restricted, so point to a new chat
         hint = " If this chat is attended, the user can approve it in a new chat." if "unreadable" in restricted else ""
+        ending = f"Report what you would have run in your final message instead: {operation}"
         if buzz:
             hint = (" Buzz messages, reactions and workflow approvals do not authorize it; the owner can run it "
                     "themselves, or authorize it in an attended native session.")
+            ending = ("Your final message is never posted, so send the owner this exact operation now with "
+                      "`buzz messages send --channel <id> --reply-to <event> --content - <<'EOF'` (text lines, then "
+                      f"EOF): {operation}")
         return out.deny(f"{tag} This chat is an unattended run ({restricted}): consequential operations are denied."
-                        f"{unjudged}{hint} Report what you would have run in your final message instead: {operation}")
+                        f"{unjudged}{hint} {ending}")
     typed = host == "codex" or (host == "claude" and call["permission_mode"] in TYPED_CLAUDE_MODES)
     if not typed:
         save_session(host, call["session"], record, state="working", last_action=f"asked approval ({','.join(sorted(labels))})")

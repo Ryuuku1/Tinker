@@ -17,6 +17,20 @@ from test_hook import Fixture, PROTECTED, SCRIPT
 BUZZ = {"BUZZ_PRIVATE_KEY": "not-a-key", "BUZZ_RELAY_URL": "ws://relay.test:3000"}
 GATED = "git push --force origin feat"
 ROOT = Path(__file__).resolve().parents[1]
+# Replies from the Route A lab (.tinker/evals/buzz-lab-20260928, t2/t3 lead-transcript-calls.txt), ids shortened:
+# each only posted text, yet was denied for words in it or refused as a write to another chat's checkout.
+T2_BODY = ("Confirmed release-old exists locally and on origin, and is fully merged into main (safe to delete).\n\n"
+           "I can't run the delete/push myself: this is an unattended session.\n\nCommands to run:\n"
+           "git branch -d release-old\ngit push origin --delete release-old\ngit push origin main")
+T3_BODY = ("Contention test result for tinker-lab-b:\n\nI did not append the line. Both my `Edit` attempt and an initial "
+           "combined `Bash` command (`git status && ls -la NOTES.md && cat NOTES.md`) were rejected:\n\n"
+           "> tinker[workspace.owned] This Buzz-run chat may not write here")
+OWNER_BODY = "- Current state: `git status --short` shows `?? NOTES.md` (untracked). No commit or push made."
+
+
+def reply(body):
+    """The one reply shape integrations/buzz/protocol.md teaches."""
+    return f"buzz messages send --channel c --reply-to e --content - <<'EOF'\n{body}\nEOF"
 
 
 class BuzzFixture(Fixture):
@@ -297,6 +311,72 @@ class BuzzOwnershipTests(BuzzFixture):
         self.assertEqual(self.write(self.repo / "a.txt", "N1")[0], 0)
         self.assertEqual(self.write(self.repo / "b.txt", "N2")[0], 0)
         self.assertFalse((self.home / ".tinker" / "state" / "claims").exists())
+
+
+class BuzzReplyTests(BuzzFixture):
+    """buzz-acp never posts the Lead's final message, so every reply is a `buzz messages send` that must pass."""
+
+    def setUp(self):
+        super().setUp()
+        self.buzz()
+        self.assertEqual(self.write(self.repo / "NOTES.md", "A")[:2], (0, ""))  # chat A writes the checkout (T3)
+
+    def run_as_b(self, command):
+        return self.hook("pre-tool", "claude", self.bash(command, session="B"))
+
+    def test_the_protocol_names_the_reply_shape(self):
+        protocol = (ROOT / "integrations" / "buzz" / "protocol.md").read_text(encoding="utf-8")
+        self.assertIn("--content - <<'EOF'", protocol)
+        self.assertIn("never posted", protocol)
+
+    def test_the_reply_shape_posts_gated_words_and_markdown(self):
+        for body in (T2_BODY, T3_BODY, OWNER_BODY):
+            for command in (reply(body), "cd /tmp && " + reply(body), reply(body).replace(" <<'EOF'", "<<'EOF'")):
+                with self.subTest(command=command[:70]):
+                    self.assertEqual(self.classify(command, unattended=True), (set(), []))
+                    self.assertEqual(self.run_as_b(command)[:2], (0, ""))
+
+    def test_reply_commands_never_claim_the_checkout(self):
+        for command in ('buzz messages send --channel c --reply-to e --content "Seen: \\`NOTES.md\\` has one line"',
+                        'buzz messages send --channel c --reply-to e --content "$(cat reply.md)"',
+                        "buzz messages send --channel c --reply-to e --content - < reply.md 2>&1"):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_as_b(command)[:2], (0, ""))
+        for command in ("echo x >> NOTES.md", "buzz messages send --channel c --content x > sent.json"):
+            with self.subTest(command=command):  # T3 still has one writer
+                code, _, err = self.run_as_b(command)
+                self.assertEqual(code, 2)
+                self.assertIn("workspace.owned", err)
+
+    def test_merging_or_dropping_output_is_not_a_write(self):
+        for command in ('git status && echo "---" && ls -la NOTES.md 2>&1 && echo "---" && cat NOTES.md 2>&1',
+                        "git status >/dev/null 2>&1", "ls 2> /dev/null", "cat NOTES.md &>/dev/null"):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_as_b(command)[:2], (0, ""))
+        for command in ("ls > listing.txt", "cat NOTES.md 2>&1 > copy.md", "ls >&listing.txt", "ls >/dev/nullx"):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_as_b(command)[0], 2)
+
+    def test_a_denial_tells_the_lead_to_post_the_exact_operation(self):
+        code, out, err = self.run_as_b("git push origin --delete release-old")
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("git push origin --delete release-old", err)
+        self.assertIn("never posted", err)
+        self.assertIn("buzz messages send --channel", err)
+        self.assertIn("--content - <<'EOF'", err)
+        self.assertNotIn("in your final message instead", err)
+
+    def test_real_commands_stay_gated_around_replies(self):
+        first_t2_attempt = f"buzz messages send --channel c --reply-to e --content \"$(cat <<'EOF'\n{T2_BODY}\nEOF\n)\""
+        self.assertIn("git.deleteBranch", self.labels(first_t2_attempt))  # a real substitution: judged as text
+        for command in ("git branch -d release-old", "git push origin --delete release-old", "git push origin main"):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_as_b(command)[0], 2)
+        for command in (f'buzz messages send --channel "$({GATED})" --content - <<\'EOF\'\nhi\nEOF',
+                        f"buzz messages send --channel c --content - <<EOF\n`{GATED}`\nEOF",
+                        f"bash <<'EOF'\n{GATED}\nEOF"):
+            with self.subTest(command=command):
+                self.assertIn("git.forcePush", self.labels(command))
 
 
 class BuzzPackTests(unittest.TestCase):
