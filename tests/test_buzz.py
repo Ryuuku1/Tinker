@@ -7,8 +7,10 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 
@@ -412,8 +414,8 @@ class BuzzKitTests(unittest.TestCase):
                 if path.suffix == ".sh":  # the port is a setting; 3000 is only the relay's port inside Docker
                     self.assertNotRegex(text, r"(?<!relay:)\b3000\b")
 
-    def test_the_lead_keeps_its_safe_settings(self):
-        lines = (self.KIT / "lead.env").read_text(encoding="utf-8").splitlines()
+    def test_every_agent_keeps_the_safe_settings(self):
+        lines = (self.KIT / "agent.env").read_text(encoding="utf-8").splitlines()
         settings = dict(line.split("=", 1) for line in lines if line and not line.startswith("#"))
         self.assertEqual({k: settings.get(k) for k in ("BUZZ_ACP_PERMISSION_MODE", "BUZZ_ACP_RESPOND_TO",
                                                        "BUZZ_ACP_ALLOWED_RESPOND_TO", "BUZZ_ACP_SESSION_POLICY",
@@ -421,8 +423,92 @@ class BuzzKitTests(unittest.TestCase):
                          {"BUZZ_ACP_PERMISSION_MODE": "dont-ask", "BUZZ_ACP_RESPOND_TO": "owner-only",
                           "BUZZ_ACP_ALLOWED_RESPOND_TO": "owner-only", "BUZZ_ACP_SESSION_POLICY": "thread",
                           "BUZZ_ACP_NO_MEMORY": "true", "BUZZ_ACP_HEARTBEAT_INTERVAL": "0"})
-        self.assertEqual(settings["BUZZ_ACP_SYSTEM_PROMPT_FILE"], "/opt/tinker/integrations/buzz/protocol.md")
-        self.assertFalse({"BUZZ_RELAY_URL", "BUZZ_ACP_AGENT_OWNER", "BUZZ_PRIVATE_KEY"} & set(settings))  # set at start
+        self.assertFalse({"BUZZ_RELAY_URL", "BUZZ_ACP_AGENT_OWNER", "BUZZ_PRIVATE_KEY",  # set per agent at start
+                          "BUZZ_ACP_SYSTEM_PROMPT_FILE"} & set(settings))
+
+    def test_deny_rules_follow_the_role(self):
+        base = {"Bash(curl:*)", "Bash(wget:*)", "Bash(env)", "Bash(env:*)", "Bash(printenv)", "Bash(printenv:*)"}
+        web, edits = {"WebFetch", "WebSearch"}, {"Write", "Edit", "MultiEdit", "NotebookEdit"}
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        settings = Path(folder.name) / "settings.json"
+        settings.write_text(json.dumps({"permissions": {"deny": ["Bash(rm:*)"]}}), encoding="utf-8")
+        deny_py = [sys.executable, str(self.KIT / "agent" / "deny.py"), str(settings)]
+        # The image is built with the Lead's rules; each agent applies its own role's rules when it starts.
+        for role, expected in (("lead", base | web), ("researcher", base | edits), ("reviewer", base | web | edits),
+                               ("reviewer", base | web | edits)):
+            subprocess.run(deny_py + [role], check=True, capture_output=True)
+            deny = json.loads(settings.read_text(encoding="utf-8"))["permissions"]["deny"]
+            with self.subTest(role=role):
+                self.assertEqual(set(deny), expected | {"Bash(rm:*)"})
+                self.assertEqual(len(deny), len(set(deny)))
+        for bad in ([], ["admin"]):
+            with self.subTest(role=bad):
+                self.assertNotEqual(subprocess.run(deny_py + bad, capture_output=True).returncode, 0)
+        self.assertIn("Write", json.loads(settings.read_text(encoding="utf-8"))["permissions"]["deny"])
+
+    def pwsh(self, script):
+        """Run PowerShell 7 against kit.ps1 (no Docker) and return its JSON output."""
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        path = Path(folder.name) / "probe.ps1"
+        path.write_text("\n".join(("$PSStyle.OutputRendering = 'PlainText'",
+                                   f". '{self.KIT / 'kit.ps1'}' -Project t -StateRoot '{folder.name}'", script)),
+                        encoding="utf-8")
+        out = subprocess.run(["pwsh", "-NoProfile", "-NonInteractive", "-File", str(path)],
+                             capture_output=True, text=True, timeout=120)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        return json.loads(out.stdout)
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
+    def test_each_agent_has_its_own_key_and_the_specialists_mount_read_only(self):
+        runs = self.pwsh(r"""
+$s = @{ port = 3200; owner = 'o' * 64; image = 'img:1'; credentialFile = 'C:\c.env'; repository = 'C:\src\Tinker'
+        channels = @{ requests = 'c1'; reviews = 'c2' }; agents = @{ lead = 'a' * 64; reviewer = 'b' * 64; researcher = 'c' * 64 } }
+$runs = [ordered]@{}
+foreach ($r in $AGENTS.Keys) { $runs[$r] = @(Get-AgentRunArgs $r $s) }
+$s.Remove('repository'); $runs['no-repository'] = @(Get-AgentRunArgs 'lead' $s)
+$runs | ConvertTo-Json -Depth 3""")
+        self.assertEqual(list(runs), ["lead", "reviewer", "researcher", "no-repository"])
+        for role, argv in runs.items():
+            def after(flag, argv=argv):
+                return [argv[i + 1] for i, a in enumerate(argv) if a == flag]
+            volumes, env = after("-v"), after("-e")
+            with self.subTest(role=role):
+                role = "lead" if role == "no-repository" else role
+                self.assertEqual(argv[:2], ["-d", "--init"])
+                self.assertEqual(after("--name"), [f"t-{role}"])
+                self.assertEqual([v for v in volumes if "/agentkey" in v], [f"t-{role}-key:/agentkey:ro"])
+                self.assertIn("t-work:/work" + ("" if role == "lead" else ":ro"), volumes)
+                self.assertEqual(argv[-3:], ["img:1", "bash", "/kit/agent.sh"])
+                self.assertEqual(after("--cap-drop"), ["ALL"])
+                self.assertEqual(after("--security-opt"), ["no-new-privileges:true"])
+                self.assertEqual(after("--env-file")[0], r"C:\c.env")
+                for setting in (f"KIT_ROLE={role}", f"BUZZ_ACP_SYSTEM_PROMPT_FILE=/kit/prompts/{role}.md",
+                                "BUZZ_ACP_AGENT_OWNER=" + "o" * 64, "BUZZ_RELAY_URL=ws://localhost:3200"):
+                    self.assertIn(setting, env)
+                value = {e.split("=", 1)[0]: e.split("=", 1)[1] for e in env}
+                self.assertEqual(sorted(value["BUZZ_ACP_CHANNELS"].split(",")), ["c1", "c2"])
+                self.assertIn("o" * 64, value["BUZZ_ACP_TEAM_INSTRUCTIONS"])  # only the owner's events are tasks
+        for role in ("lead", "reviewer", "researcher"):
+            self.assertIn(r"C:\src\Tinker:/repo:ro", runs[role])
+        self.assertFalse([a for a in runs["no-repository"] if a.endswith(":/repo:ro")])
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
+    def test_every_agent_has_a_prompt_and_profile_and_every_channel_a_canvas(self):
+        tables = self.pwsh("@{ agents = $AGENTS; channels = $CHANNELS } | ConvertTo-Json -Depth 3")
+        self.assertEqual(sorted(tables["agents"]), ["lead", "researcher", "reviewer"])
+        self.assertEqual(sorted(p.stem for p in (self.KIT / "roles").glob("*.md")), sorted(tables["agents"]))
+        self.assertEqual(sorted(p.stem for p in (self.KIT / "channels").glob("*.md")), sorted(tables["channels"]))
+        names = [agent["name"] for agent in tables["agents"].values()]
+        self.assertEqual(names, ["Tinker", "Tinker Reviewer", "Tinker Researcher"])
+        for agent in tables["agents"].values():
+            self.assertTrue(agent["about"])
+        for channel, purpose in tables["channels"].items():
+            canvas = (self.KIT / "channels" / f"{channel}.md").read_text(encoding="utf-8")
+            with self.subTest(channel=channel):
+                self.assertTrue(0 < len(purpose) <= 200)
+                self.assertTrue(any(f"@{name}" in canvas for name in names), "a canvas says whom to mention")
 
 
 class BuzzPackTests(unittest.TestCase):

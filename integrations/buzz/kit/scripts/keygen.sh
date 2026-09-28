@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Kit identities (admin, agent) and relay secrets. Runs once, as root in the relay image:
-#   keygen.sh <port> <relay-image>
-# Writes the key files into their volumes and /out/.env inside the container (setup copies it out with docker cp);
-# prints PUBLIC keys only. Refuses to run over existing keys.
+# Kit identities (the admin and one per agent role) and relay secrets. Runs once, as root in the relay image:
+#   keygen.sh <port> <relay-image> <role>...
+# Writes each key into its volume (/humankeys, /keys/<role>) and /out/.env inside the container (setup copies it
+# out with docker cp); prints PUBLIC keys only. Refuses to run over existing keys.
 set -euo pipefail
 umask 077
-port=${1:?port}; image=${2:?relay image}
+port=${1:?port}; image=${2:?relay image}; shift 2
+(($#)) || { echo "usage: keygen.sh <port> <relay-image> <role>..."; exit 1; }
 mkdir -p /out
 [ ! -e /out/.env ] || { echo "refusing: .env exists"; exit 1; }
-[ ! -e /humankeys/admin.sec ] && [ ! -e /agentkey/agent.sec ] || { echo "refusing: keys exist"; exit 1; }
+[ ! -e /humankeys/admin.sec ] || { echo "refusing: keys exist"; exit 1; }
+for r in "$@"; do [ ! -e "/keys/$r/agent.sec" ] || { echo "refusing: keys exist"; exit 1; }; done
 gen() {  # gen <dir> <name>
   local out; out=$(buzz-admin generate-key)
   [[ $out =~ Public\ key:[[:space:]]+([0-9a-f]{64}) ]] || { echo "unexpected generate-key output"; exit 1; }
@@ -16,7 +18,8 @@ gen() {  # gen <dir> <name>
   [[ $out =~ Secret\ key:[[:space:]]+([^[:space:]]+) ]] || { echo "unexpected generate-key output"; exit 1; }
   printf '%s' "${BASH_REMATCH[1]}" > "$1/$2.sec"
 }
-gen /humankeys admin; gen /agentkey agent
+gen /humankeys admin
+for r in "$@"; do gen "/keys/$r" agent; done
 relay=$(buzz-admin generate-key)
 [[ $relay =~ Secret\ key:[[:space:]]+([^[:space:]]+) ]] || { echo "unexpected generate-key output"; exit 1; }
 relay_sec=${BASH_REMATCH[1]}
@@ -50,7 +53,7 @@ BUZZ_S3_BUCKET=buzz-media
 BUZZ_S3_ADDRESSING_STYLE=path
 BUZZ_HTTP_PORT=127.0.0.1:$port
 EOF
-cp /agentkey/agent.pub /humankeys/agent.pub
-chown -R 10001:10001 /humankeys /agentkey
-chmod 400 /humankeys/*.sec /agentkey/*.sec; chmod 444 /humankeys/*.pub /agentkey/*.pub
-for w in admin agent; do echo "$w=$(cat /humankeys/$w.pub)"; done
+chown -R 10001:10001 /humankeys /keys
+chmod 400 /humankeys/*.sec /keys/*/*.sec; chmod 444 /humankeys/*.pub /keys/*/*.pub
+echo "admin=$(cat /humankeys/admin.pub)"
+for r in "$@"; do echo "$r=$(cat "/keys/$r/agent.pub")"; done

@@ -1,12 +1,12 @@
 #Requires -Version 7.2
 <#
 .SYNOPSIS
-Stops the Lead and the relay of one kit project; asks before deleting its data, keys, images or state folder.
+Stops the agents and the relay of one kit project; asks before deleting its data, keys, images or state folder.
 
 .DESCRIPTION
 Without confirmation it only stops containers. Deleting the volumes removes the community, the admin and agent
-identities, the Lead's work folder and the build caches; setup.ps1 then starts from scratch with new keys.
-Only resources named after -Project are touched, by exact name.
+identities, the agents' work folder and the build caches; setup.ps1 then starts from scratch with new keys.
+Only resources named after -Project are touched, by exact name. A folder mounted with -Repository is never touched.
 
 .EXAMPLE
 .\teardown.ps1                      # stop, then asks before deleting volumes
@@ -17,11 +17,11 @@ param([string]$Project = 'tinker-buzz', [string]$StateRoot, [switch]$Images, [sw
 . (Join-Path $PSScriptRoot 'kit.ps1') -Project $Project -StateRoot $StateRoot
 $s = Read-KitState
 
-Stop-Lead
+Stop-Agent
 if (Test-Path -LiteralPath "$STATE\compose.yml") {
   Invoke-Compose down; if ($LASTEXITCODE) { throw 'compose down failed' }
 }
-'The Lead and the relay are stopped.'
+'The agents and the relay are stopped.'
 
 $existing = @(docker volume ls -q)
 $ours = @($VOL.Values | Where-Object { $existing -contains $_ })
@@ -31,7 +31,7 @@ if (($ours + $composeVolumes) -and $PSCmdlet.ShouldProcess((($ours + $composeVol
   if (Test-Path -LiteralPath "$STATE\compose.yml") { Invoke-Compose down -v; if ($LASTEXITCODE) { throw 'compose down -v failed' } }
   foreach ($v in $ours) { docker volume rm $v | Out-Null; if ($LASTEXITCODE) { throw "could not delete volume $v" } }
   Remove-Item -LiteralPath "$STATE\.env" -Force -ErrorAction SilentlyContinue   # the relay secrets
-  foreach ($k in 'admin', 'agent', 'owner', 'channels', 'agentMembership', 'leadConfig') { $s.Remove($k) }
+  foreach ($k in 'admin', 'agents', 'owner', 'channels', 'agentMembership', 'agentConfig') { $s.Remove($k) }
   Save-KitState $s
   'Deleted the volumes and the relay secrets; setup.ps1 will generate new identities.'
 }

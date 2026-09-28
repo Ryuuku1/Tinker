@@ -1,7 +1,7 @@
-# Tinker's Lead for Buzz, built without mounting any host folder. Stage 1 fetches the pinned Buzz source and builds
-# buzz-acp and buzz; stage 2 adds claude-agent-acp 0.81.2 (it bundles Claude Code 2.1.280) and installs Tinker into
-# this image's own home. setup.ps1 puts tinker.tar, deny.py and scripts/ in the build context, and verifies the
-# pins recorded under /kit against kit.ps1.
+# Tinker's Buzz agents (Lead, Reviewer, Researcher: one image), built without mounting any host folder. Stage 1
+# fetches the pinned Buzz source and builds buzz-acp and buzz; stage 2 adds claude-agent-acp 0.81.2 (it bundles
+# Claude Code 2.1.280) and installs Tinker into this image's own home. setup.ps1 puts tinker.tar, deny.py, scripts/
+# and roles/ in the build context, and verifies the pins recorded under /kit against kit.ps1.
 FROM rust:1.95-bookworm@sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1 AS buzz
 ARG BUZZ_REPO=https://github.com/block/buzz
 ARG BUZZ_COMMIT=781d39510cf23cfe224e8f521ae06a23377e06de
@@ -26,8 +26,14 @@ RUN npm install -g --prefix /opt/acp --ignore-scripts @agentclientprotocol/claud
 COPY --from=buzz /out/bin/ /usr/local/bin/
 COPY --from=buzz /out/kit/ /kit/
 COPY scripts/ /kit/
+COPY roles/ /kit/roles/
 ADD tinker.tar /opt/
 COPY deny.py /opt/kit/deny.py
+# Each role's system prompt: Tinker's Buzz protocol at the pinned commit, then the role's own rules.
+RUN mkdir /kit/prompts && for r in /kit/roles/*.md; do \
+      { cat /opt/tinker/integrations/buzz/protocol.md; echo; cat "$r"; } > "/kit/prompts/${r##*/}"; done
+# A repository mounted read-only at /repo is owned by the host user, and a Windows checkout may have CRLF files.
+RUN git config --system safe.directory /repo && git config --system core.autocrlf input
 # The bundled claude must be on PATH before the installer runs, or the plugin is never registered.
 RUN ln -s /opt/acp/lib/node_modules/@agentclientprotocol/claude-agent-acp/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude /usr/local/bin/claude \
     && useradd -m -u 10001 -s /bin/bash agent \
@@ -37,6 +43,6 @@ ENV PATH=/opt/acp/bin:$PATH HOME=/home/agent \
 USER agent
 RUN python3 /opt/tinker/scripts/install_apps.py --app claude --home /home/agent --python /usr/bin/python3 \
       > /home/agent/tinker-install.log 2>&1 || (cat /home/agent/tinker-install.log; exit 1)
-RUN python3 /opt/kit/deny.py /home/agent/.claude/settings.json
+RUN python3 /opt/kit/deny.py /home/agent/.claude/settings.json lead
 WORKDIR /work
 LABEL tinker.kit=buzz

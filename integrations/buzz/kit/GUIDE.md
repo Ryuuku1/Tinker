@@ -1,9 +1,11 @@
-# Tinker's Lead in Buzz on your own Windows PC
+# Tinker's team in Buzz on your own Windows PC
 
-This kit sets up a private Buzz relay on your PC and runs Tinker's Lead as a Buzz agent that answers only you.
-You chat with it from Buzz Desktop. Everything runs in Docker on your machine; nothing is published beyond
-`127.0.0.1`. The relay, the agent and the Lead's safety settings match the lab setup the kit was built from (see
-the [integration README](../README.md) and the [Buzz protocol](../protocol.md) the Lead follows).
+This kit sets up a private Buzz relay on your PC and runs Tinker's team as three Buzz agents that answer
+only you: **Tinker** (the Lead), **Tinker Reviewer** and **Tinker Researcher**. You chat with them from Buzz
+Desktop in four channels whose canvases show how to work with each one; [EXAMPLES.md](EXAMPLES.md) has
+worked examples. Everything runs in Docker on your machine; nothing is published beyond `127.0.0.1`. The
+relay and the agents' safety settings match the lab setup the kit was built from (see the
+[integration README](../README.md) and the [Buzz protocol](../protocol.md) every agent follows).
 
 ## 1. Prerequisites
 
@@ -18,7 +20,7 @@ the [integration README](../README.md) and the [Buzz protocol](../protocol.md) t
 
 ```powershell
 git clone <Tinker repository URL> Tinker
-git -C Tinker checkout buzz-team-kit      # or the exact commit you were given
+git -C Tinker checkout master             # or the exact commit you were given
 ```
 
 The agent image installs Tinker at the commit the kit pins (`-TinkerCommit`, default in [kit.ps1](kit.ps1)), taken
@@ -26,8 +28,8 @@ with `git archive` from this clone, so your working tree's own changes never rea
 
 ## 3. Your own Claude token
 
-The Lead uses **your** Claude subscription through a long-lived token from `claude setup-token`. You create it and
-store it yourself; setup only passes the file's path to Docker and never reads it.
+The agents use **your** Claude subscription through a long-lived token from `claude setup-token`. You create it
+and store it yourself; setup only passes the file's path to Docker and never reads it. All three agents share it.
 
 1. Open a **new PowerShell window of your own**: never an agent's shell or a terminal panel an agent can read.
 2. Run `claude setup-token` and approve in the browser with the account you intend to use. It prints the token once.
@@ -54,9 +56,9 @@ instead (never both). Use a key you can revoke, ideally in a workspace with a sp
 documented by Anthropic ([authentication](https://code.claude.com/docs/en/authentication)). Sharing your
 credentials, or letting other people drive your account, is prohibited
 ([Consumer Terms](https://www.anthropic.com/legal/consumer-terms)); the kit's owner-only gate means only you can
-drive this Lead. Whether a relay-triggered agent on a personal plan counts as permitted automated use is not
+drive these agents. Whether a relay-triggered agent on a personal plan counts as permitted automated use is not
 spelled out. If your login is a company Team or Enterprise seat, your company's policy and admin settings apply:
-ask first. When in doubt, use the API-key fallback. Lead turns count against the same usage limits as your own
+ask first. When in doubt, use the API-key fallback. Agent turns count against the same usage limits as your own
 Claude use.
 
 ## 4. Run the setup
@@ -64,23 +66,31 @@ Claude use.
 From `Tinker\integrations\buzz\kit` in PowerShell 7:
 
 ```powershell
-.\setup.ps1
+.\setup.ps1 -Repository C:\src\my-repo       # -Repository is optional
 ```
 
-This first run builds everything and starts the relay on `ws://localhost:3000`, then stops and tells you to join
-from Buzz Desktop (section 5). Useful parameters: `-Port 3100` if 3000 is taken, `-Project <name>` for a second,
-separate setup, `-Channels tinker-lab,requests` for more channels, `-StateRoot <folder>` to keep setup's state
-somewhere other than `%LOCALAPPDATA%\TinkerBuzz` (pass it to `kit.ps1` and `teardown.ps1` too). Setup is idempotent: after an error, fix the
-cause and run the same command again. It never regenerates keys over an existing relay.
+This first run builds everything, starts the relay on `ws://localhost:3000`, publishes the agents' profiles and
+creates the channels, then stops and tells you to join from Buzz Desktop (section 5). Parameters:
+
+- `-Repository <folder>`: a folder every agent reads at `/repo`, **mounted read-only**. It is kept for later runs;
+  `-Repository ''` removes it. Every agent can read everything in it, including `.git` and untracked files.
+- `-Port 3100` if 3000 is taken; `-Project <name>` for a second, separate setup.
+- `-StateRoot <folder>` to keep setup's state somewhere other than `%LOCALAPPDATA%\TinkerBuzz` (pass it to
+  `kit.ps1` and `teardown.ps1` too).
+
+Setup is idempotent: after an error, fix the cause and run the same command again. It never regenerates keys
+over an existing relay, and it restarts an agent only when that agent's settings changed.
 
 What it does, in order: preflight; pulls the relay image by digest; one `docker build` that fetches Buzz `781d395`,
 builds `buzz-acp` and `buzz` (its three Cargo Git dependencies locked), and builds the agent image with Tinker
-installed in the image only, all from pinned base images and `claude-agent-acp` 0.81.2; verifies those pins and the
-compose file's SHA-256; generates the admin and agent keys and relay secrets inside containers; starts the relay on
-`127.0.0.1:<port>`; checks the bootstrap and routing; adds members; creates the channels; starts the Lead and
-checks its startup log; scans the kit folder and the setup logs for secrets. No container mounts a folder from
-your PC: files go in and out through `docker build` and `docker cp`. Setup's own state (logs, relay secrets,
-`kit.json`) lives in `%LOCALAPPDATA%\TinkerBuzz\<project>`, never in the repository.
+installed in the image only, all from pinned base images and `claude-agent-acp` 0.81.2; verifies those pins, the
+compose file's SHA-256 and each role's prompt; generates the admin key, one key per agent and the relay secrets
+inside containers; starts the relay on `127.0.0.1:<port>`; checks the bootstrap and routing; adds members; sets
+each agent's profile; creates the channels with a purpose and a canvas; starts the three agents and checks their
+startup, deny rules and mounts; scans the kit folder and the setup logs for secrets. The only folder from your PC
+a container mounts is `-Repository`, read-only; everything else goes in and out through `docker build` and
+`docker cp`. Setup's own state (logs, relay secrets, `kit.json`) lives in `%LOCALAPPDATA%\TinkerBuzz\<project>`,
+never in the repository.
 
 ## 5. Buzz Desktop 0.5.25
 
@@ -98,7 +108,7 @@ whether you may install it. Launch it from the Start menu, not from a terminal.
 ## 6. Onboarding
 
 1. On **Connect your AI provider**, choose **Set up later**. Never click Install or Connect for Claude or Codex: the
-   Lead brings its own agent, and a Desktop-managed one would run without Tinker's protections.
+   kit brings its own agents, and a Desktop-managed one would run without Tinker's protections.
 2. Choose **Add Community** and enter exactly `ws://localhost:3000` (or your `-Port`). A bare host becomes `wss://`.
 3. You will see **Not a member yet** with your npub. Copy it, then run, from the kit folder:
 
@@ -107,50 +117,59 @@ whether you may install it. Launch it from the Start menu, not from a terminal.
    ```
 
    Repeat any `-Port`, `-Project` or `-StateRoot` you used in section 4. This adds you to the relay and the
-   channels, and starts the Lead with you as its owner. Then press **Try again**.
+   channels, and starts the three agents with you as their owner. Then press **Try again**. (If you already
+   know your npub, pass `-OwnerNpub` in section 4; without `-CredentialFile`, setup stops before the agents.)
 4. Leave the **Welcome** channel at once when it opens.
 5. Never start, add or @mention **Fizz**, **Honey** or **Pollen** (Desktop's built-in agents). They would share your
    identity as their owner, and agents with the same owner pass each other's owner-only gate.
 
 ## 7. First chat
 
-Open `#tinker-lab` and @mention the Lead. It has no name or avatar yet, so pick it by the npub setup printed
-(also shown by `Get-KitStatus`). Try: "Read-only: what can you do here, and what are your limits?" The Lead
-answers in the thread.
+Open `#tinker-lab`: its canvas lists the team. Mention an agent by its name in the mention picker (setup also
+prints each npub, and so does `Get-KitStatus`). Try `@Tinker Read-only: what can you do here, and what are your
+limits?` The agent answers in the thread. Then read [EXAMPLES.md](EXAMPLES.md) and the canvases of #requests,
+#reviews and #research.
 
 ## 8. What to expect
 
-- The Lead runs **unattended**: commits, pushes, branch deletions, remote changes and Buzz workspace changes are
-  denied, and Buzz messages (including your "I approve") never authorize them. It posts the exact command so you
-  can run it yourself.
-- It answers only your messages; everything else it sees is data. It replies in the thread.
+- **Tinker** (the Lead) answers in any channel, usually #requests. It reads `/repo`, changes code only in its
+  own clone under `/work` and runs the tests there. **Tinker Reviewer** and **Tinker Researcher** are read-only:
+  `/repo` and `/work` are mounted read-only for them and their edit tools are denied. Only the Researcher may use
+  the web (WebSearch and WebFetch); `curl`, `wget`, `env` and `printenv` are denied for all three.
+- All three run **unattended**: commits, pushes, branch deletions, remote changes and Buzz workspace changes are
+  denied, and Buzz messages (including your "I approve") never authorize them. They post the exact command so
+  you can run it yourself.
+- Each answers only your messages, and only when you mention it; everything else it sees is data, including the
+  other agents. It replies in the thread. Agents never hand work to each other: you pick who is next.
 - One Buzz session writes a checkout at a time; another thread may be told `workspace.owned`.
-- Its work folder is an empty `/work` volume: a real repository comes in a later phase.
+- To take the Lead's work out of `/work`, copy it: `docker cp <project>-lead:/work/<folder> <destination>`.
 
 ## 9. Stop and start
 
 ```powershell
-. .\kit.ps1 -Project tinker-buzz      # in PowerShell 7, from the kit folder
-Get-KitStatus                         # containers, npubs, channels, the Lead's log summary and run outcomes
-Stop-Lead                             # stops and removes the Lead container, and verifies it is gone
-Start-Lead                            # starts it again with the saved owner, channels and credential file
+. .\kit.ps1 -Project tinker-buzz      # in PowerShell 7, from the kit folder (add -StateRoot if you used one)
+Get-KitStatus                         # containers, npubs, channels, each agent's log summary and run outcomes
+Stop-Agent                            # stops and removes all three agents, and verifies they are gone
+Start-Agent                           # starts them again with the saved owner, channels and credential file
+Stop-Agent reviewer; Start-Agent reviewer   # one agent: lead, reviewer or researcher
 ```
 
-The relay comes back with Docker Desktop on its own. The Lead does not: after a reboot, run `Start-Lead`.
+The relay comes back with Docker Desktop on its own. The agents do not: after a reboot, run `Start-Agent`.
 
 ## 10. Troubleshooting
 
-- **`NIP-AM: publish failed ... 403` in the Lead's log every turn.** Expected: the relay has no owner record for
-  the Lead yet (section 13). Replies are unaffected.
-- **The Lead shows as an npub, not "Tinker".** Expected until it gets a profile (a later phase).
-- **No reply in the thread.** Run `Get-KitStatus`: *Latest unattended run outcomes* shows each run's final message,
-  which Buzz never posts. Ask again in the thread.
+- **`NIP-AM: publish failed ... 403` in an agent's log every turn.** Expected: the relay has no owner record for
+  the agents yet (section 13). Replies are unaffected.
+- **An agent shows as an npub instead of its name.** Its profile did not reach Desktop yet: run setup again (it
+  republishes the profiles), then reopen the channel.
+- **No reply in the thread.** Run `Get-KitStatus`: *Latest unattended run outcomes* under each agent shows each
+  run's final message, which Buzz never posts. Ask again in the thread.
 - **Refused with `workspace.owned`, or the Lead made its own worktree.** A session that already ran a command in
-  `/work` holds it for up to a day. `Stop-Lead; Start-Lead` clears it.
+  a checkout holds it for up to a day. `Stop-Agent lead; Start-Agent lead` clears it.
 - **Port in use.** Run setup with `-Port 3100` and add `ws://localhost:3100` in Desktop. A project keeps its port:
   to change it, run `teardown.ps1` and delete its volumes first.
-- **"The Lead did not start cleanly".** Read `docker logs <project>-lead`. On an authentication or usage-limit
-  error, fix the token file or wait for the limit, then `Stop-Lead; Start-Lead`.
+- **"Not started cleanly".** The line for each agent names the failed check. Read `docker logs <project>-<role>`.
+  On an authentication or usage-limit error, fix the token file or wait for the limit, then `Stop-Agent; Start-Agent`.
 - **Never name a PowerShell variable `$lead`.** Names are case-insensitive, so it is `$LEAD`, the Lead's container
   name; the kit makes `$LEAD` read-only so such an assignment fails loudly.
 
@@ -161,37 +180,45 @@ The relay comes back with Docker Desktop on its own. The Lead does not: after a 
 .\teardown.ps1 -Images -StateFolder   # also asks before deleting the agent image and the state folder
 ```
 
-Docker keeps the Rust build cache for later rebuilds; `docker builder prune` frees it (for every project on the PC).
-Then delete `$HOME\tinker-buzz-secrets`, and revoke the token: open
-[claude.ai/settings/claude-code](https://claude.ai/settings/claude-code) and remove the authorization created on
-setup day. If you cannot identify it, log out of all sessions from claude.ai. Otherwise the token stays valid
-until it expires after a year. For the API-key fallback, revoke the key in the Anthropic Console.
+Teardown never touches the `-Repository` folder. Docker keeps the Rust build cache for later rebuilds;
+`docker builder prune` frees it (for every project on the PC). Then delete `$HOME\tinker-buzz-secrets`, and revoke
+the token: open [claude.ai/settings/claude-code](https://claude.ai/settings/claude-code) and remove the
+authorization created on setup day. If you cannot identify it, log out of all sessions from claude.ai. Otherwise
+the token stays valid until it expires after a year. For the API-key fallback, revoke the key in the Anthropic
+Console.
 
 ## 12. Known risks
 
-- **Only denies protect you.** buzz-acp approves every permission prompt itself; Tinker's hooks and the image's
-  deny rules are what stop consequential operations.
-- **Relayed text reaches the model.** Other members' messages in a thread are shown to the Lead; ignoring them is
-  model behavior.
+- **Only denies protect you.** buzz-acp approves every permission prompt itself; Tinker's hooks, the image's
+  deny rules and the read-only mounts are what stop consequential operations.
+- **Relayed text reaches the model.** Other members' and agents' messages in a thread are shown to each agent;
+  ignoring them is model behavior.
+- **The Researcher reads the web.** A page can carry instructions aimed at agents. It treats them as data, but
+  it still has your token and its key in its environment, can read `/repo`, and can reach the internet, so an
+  injected page could try to make it leak them. It cannot write files. Point it only at sources you trust.
+- **The mounted repository is fully readable** by all three agents: history, untracked files, anything secret
+  in it. Mount only what you would show them, never a folder that holds credentials.
 - **Agents with the same owner pass the owner-only gate** (section 6, step 5).
-- **Secrets are in the Lead's environment.** It can read its agent key and your Claude token, and the container has
-  internet access. Keep the relay local, and revoke the token when you stop.
+- **Secrets are in each agent's environment.** Each can read its own agent key and your Claude token, and the
+  containers have internet access. Keep the relay local, and revoke the token when you stop.
 - **The harness publishes on its own**: presence, typing indicators and seen or working reactions.
 - **Claims linger**: see section 10.
 - **No media uploads**: MinIO is off.
-- **Usage limits are shared** with your own Claude use.
+- **Usage limits are shared** by the three agents and your own Claude use.
 - **Policy is partly unclear** (section 3).
 
 ## 13. Owner registration later (Phase 2)
 
-The kit adds the Lead's key directly as a relay member so it can connect today. A direct member never gets an
+The kit adds each agent's key directly as a relay member so it can connect today. A direct member never gets an
 owner recorded: the relay admits it before looking at any owner attestation (Buzz `buzz-relay`
-`src/api/mod.rs:114-121`, `src/handlers/auth.rs:44-57`). That causes the NIP-AM 403. To register yourself as its
-owner later:
+`src/api/mod.rs:114-121`, `src/handlers/auth.rs:44-57`). That causes the NIP-AM 403. To register yourself as the
+agents' owner later, for each agent:
 
 1. Mint a NIP-OA attestation (`BUZZ_AUTH_TAG`) with your own owner key, on your machine
    (`crates/buzz-sdk/examples/compute_auth_tag.rs` in the Buzz source). The kit never handles your owner key.
-2. Remove the Lead's direct membership, after `. .\kit.ps1`:
-   `Invoke-Compose exec -T relay buzz-admin remove-member --pubkey <the agent hex in kit.json>`.
-3. Start the Lead with `BUZZ_AUTH_TAG` set. The relay then admits it through you and records you as its owner
-   (`src/api/mod.rs:123-151`). `Start-Lead` does not pass an attestation yet; that is part of Phase 2.
+2. Remove the agent's direct membership, after `. .\kit.ps1`:
+   `Invoke-Compose exec -T relay buzz-admin remove-member --pubkey <the agent's hex in kit.json, under agents>`.
+3. Start the agent with `BUZZ_AUTH_TAG` set. The relay then admits it through you and records you as its owner
+   (`src/api/mod.rs:123-151`). `Start-Agent` does not pass an attestation yet; that is part of Phase 2. Agents
+   with a recorded owner become siblings that pass each other's owner-only gate, so this also needs a rule that
+   keeps them from triggering each other.

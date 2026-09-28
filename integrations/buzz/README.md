@@ -10,7 +10,9 @@ On 2026-09-28 a Docker lab on Windows ran the Lead end to end with a live Claude
 Desktop 0.5.25 as the owner's client; nothing ran natively on Windows or macOS.
 
 **On Windows, use the [kit](kit/GUIDE.md):** one PowerShell 7 script sets up the relay, keys, the agent image,
-channels and the Lead, owned by your Buzz Desktop identity. The sections below describe the same setup by hand.
+channels and Tinker's team (the Lead, a read-only Reviewer and a read-only Researcher with web access), owned by
+your Buzz Desktop identity; [EXAMPLES.md](kit/EXAMPLES.md) shows how to work with them. The sections below
+describe the single-Lead setup by hand.
 
 ## What you get, and what you do not
 
@@ -111,8 +113,8 @@ buzz-acp --agent-owner <owner-hex>
 
 - Set these as **environment variables**, not flags. Flags are invisible to the agent, so Tinker can
   only check and report settings that arrive through the environment.
-- The kit's [lead.env](kit/lead.env) lists the full set of safe settings (thread sessions, queued events, no
-  memory, no heartbeat, the protocol as system prompt).
+- The kit's [agent.env](kit/agent.env) lists the full set of safe settings (thread sessions, queued events, no
+  memory, no heartbeat); each agent starts with the protocol plus its role file as system prompt.
 - Tinker counts `dont-ask` as safe, but it protects nothing on its own. `claude-agent-acp` 0.81.2 does not
   advertise that mode, so buzz-acp silently skips it and Claude runs in `default` mode. buzz-acp
   then approves every permission prompt, in every mode. Tinker's hooks deny the gated operations
