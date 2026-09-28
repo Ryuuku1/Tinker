@@ -436,7 +436,7 @@ RULES = [
     ("host.resume", _rx(r"\bcodex(?:\.exe|\.cmd)?\s.*(?:\bexec\b|\bresume\b|\s--last\b)")),
 ]
 UNATTENDED_RULES = [("git.push", _rx(r"\bgit\b.*\bpush\b")), ("git.commit", _rx(r"\bgit\b.*\bcommit\b"))]
-COMMIT_MESSAGE = _rx(r"(\s(?:-m|--message)(?:\s+|=))(\"(?:[^\"\\]|\\.)*\"|'[^']*')")
+COMMIT_MESSAGE = _rx(r"(\s(?:-m|--message)(?:\s+|=))(\"(?:[^\"\\$`]|\\.)*\"|'[^']*')")  # literal messages only
 DOWNLOADERS = _rx(r"\b(?:curl|wget|iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b")
 RUNNERS = {"sh", "bash", "zsh", "iex", "invoke-expression", "pwsh", "powershell", "python", "python3",
            "py", "node", "cmd", "perl", "ruby"}
@@ -619,7 +619,10 @@ def read_only(seg, verb, args):
 
 def _classify_segment(seg, previous, verb, args, base, unattended, labels, tamper, name_rx, depth):
     raw = seg["raw"]
-    text = COMMIT_MESSAGE.sub(r"\1''", raw) if verb == "git" and args[:1] == ["commit"] else raw
+    # Messages are blanked only when nothing in the command can run, since the regex's quotes can differ from the
+    # shell's: no $, backtick, <( ) or >( ), and no ( ) outside quotes (PowerShell runs those).
+    runs = re.search(r"[$`]|[<>]\(", raw) or "(" in re.sub(r"'[^']*'|\"[^\"]*\"", "", raw)
+    text = COMMIT_MESSAGE.sub(r"\1''", raw) if verb == "git" and args[:1] == ["commit"] and not runs else raw
     labels.update(name for name, rx in RULES if rx.search(text))
     if unattended:
         labels.update(name for name, rx in UNATTENDED_RULES if rx.search(text))
