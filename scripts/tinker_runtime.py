@@ -524,13 +524,16 @@ def expand(token):
     return re.sub(r"\$\{env:(\w+)\}|\$env:(\w+)|%(\w+)%|\$\{(\w+)\}|\$(\w+)", env, token, flags=re.I)
 
 
-def normalize(token, base):
+def normalize(token, base, shell=None):
     """Absolute, case-folded path for a command word or tool path, or None if unresolvable."""
     text = token.strip().strip("'\"")
     if not text or "://" in text or len(text) > 1024 or "\0" in text:
         return None
     text = expand(text)
     text = re.sub(r"^(?:microsoft\.powershell\.core\\)?filesystem::", "", text, flags=re.I)
+    if shell == "pwsh" and os.sep == "/":  # PowerShell reads \ as a path separator on Linux and macOS too
+        # ponytail: native commands get a literal \ there, so their arguments are read as paths too (stricter)
+        text = text.replace("\\", "/")
     if os.name == "nt":
         msys = re.match(r"^/(?:cygdrive/|mnt/)?([a-zA-Z])(?=/|$)(.*)$", text)
         if msys:
@@ -552,6 +555,8 @@ def normalize(token, base):
     if os.name == "nt":  # Windows ignores trailing dots and spaces in names
         parts = text.split("\\")
         text = "\\".join(p if set(p) <= {"."} else p.rstrip(". ") or p for p in parts)
+    else:  # normpath keeps a leading //, which Linux and macOS read as /; only Windows has UNC shares
+        text = re.sub(r"^/{2,}", "/", text)
     if not text.startswith(("\\\\", "//")):  # never touch the network: UNC stays lexical
         try:
             text = os.path.realpath(text)
@@ -609,6 +614,20 @@ def is_host_config(path):
 
 # ---------------------------------------------------------------- classifier
 
+def cd_target(args):
+    """The folder a cd, Set-Location or Push-Location names; home when it names none; None if unknown."""
+    words = iter(args)
+    for word in words:
+        value = re.match(r"-(?:path|literalpath|lp|pspath):(.+)$", word, re.I)  # -Path:x, -LiteralPath:x
+        if value:
+            return value.group(1)
+        if word.lower() == "-stackname":  # Push-Location -StackName s <folder>
+            next(words, None)
+        elif not word.startswith("-"):
+            return word
+    return None if args else str(Path.home())
+
+
 def classify_command(command, shell, base, unattended=False, depth=0):
     """Consequential labels and tamper reasons for one shell command."""
     labels, tamper = set(), []
@@ -626,10 +645,9 @@ def classify_command(command, shell, base, unattended=False, depth=0):
         verb = base_name(words[index]) if index is not None else ""
         args = words[index + 1:] if index is not None else []
         if verb in CD_VERBS and not substitutes(seg, shell):
-            targets = [a for a in args if not a.startswith("-")]
-            target = targets[0] if targets else (None if args else str(Path.home()))
+            target = cd_target(args)
             if target:
-                base = normalize(target, base) or base
+                base = normalize(target, base, shell) or base
             previous = seg
             continue
         if not read_only(seg, verb, args, shell):
@@ -752,10 +770,11 @@ def _classify_segment(seg, previous, verb, args, base, unattended, labels, tampe
             if not value:
                 continue
             word = value.group(1)
-        path = normalize(word, base)
+        path = normalize(word, base, shell)
         if not path:
             continue
-        folder = os.path.dirname(path) if re.search(r"[*?]", os.path.basename(path)) else path  # dir/* empties dir
+        # A wildcard name (dir/*, dir/cach[e]) may match anything in its folder.
+        folder = os.path.dirname(path) if re.search(r"[*?\[]", os.path.basename(path)) else path
         if is_protected(path):
             tamper.append(f"writes or runs inside a protected Tinker location ({one_line(word, 80)})")
         elif deleting and contains_protected(folder):

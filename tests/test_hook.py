@@ -254,6 +254,8 @@ class ClassifierTests(Fixture):
             (f'bash -c "echo x > {home}/.tinker/state/s.json"', "posix"),
             (f'echo "unterminated {home}/.tinker/state', "posix"),
             (f"Remove-Item -Recurse {home}\\.claude\\plugins\\cache", "pwsh"),
+            # PowerShell reads \ as a path separator on every platform, in cmdlet paths and in Set-Location.
+            (f"Set-Location {home}\\.claude\\plugins; Remove-Item -Recurse cache", "pwsh"),
             (f"rm -rf {self.home.as_posix()}/.gemini/config/plugins", "posix"),
             ("rm -rf ~", "posix"),
             ("Set-Content .claude/settings.json $(Get-Content evil.json)", "pwsh"),
@@ -261,7 +263,21 @@ class ClassifierTests(Fixture):
             (f"Remove-Item -Recurse -Path:{home}\\.claude\\plugins\\cache", "pwsh"),
             (f"rm -rf {self.home.as_posix()}/.claude/plugins/cache/*", "posix"),
             (f"find {self.home.as_posix()}/.tinker -delete", "posix"),
+            # The folder a location command names: colon forms, and an option whose value is not the folder.
+            ("Set-Location -LiteralPath:$HOME\\.tinker; Remove-Item -Recurse -Force state", "pwsh"),
+            ("Set-Location -Path:$HOME\\.claude\\plugins; Remove-Item -Recurse cache", "pwsh"),
+            ("Push-Location -StackName s $HOME\\.tinker; Remove-Item -Recurse -Force state", "pwsh"),
+            # [...] is a wildcard in both shells, as * and ? are.
+            ("rm -rf ~/.tinke[r]", "posix"),
+            ("rm -rf ~/.claude/plugins/cach[e]", "posix"),
+            ("Remove-Item -Recurse -Force ~\\.claude\\plugins\\cach[e]", "pwsh"),
         ]
+        if os.name != "nt":  # Linux and macOS read a leading // as /; on Windows \\x\y is a network share
+            posix_home = self.home.as_posix().lstrip("/")
+            cases += [(f"Remove-Item -Recurse -Force \\\\{posix_home.replace('/', chr(92))}\\.tinker", "pwsh"),
+                      (f"rm -rf //{posix_home}/.claude/plugins/cache", "posix")]
+        # The pwsh backslash rows fail only on Linux or macOS without the fix: run this suite there too
+        # (for example in the Buzz kit's image), since Windows reads \ as a separator already.
         for command, shell in cases:
             with self.subTest(command=command):
                 self.assertTrue(self.tampers(command, shell), command)
