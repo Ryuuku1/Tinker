@@ -1,0 +1,2 @@
+# Scripts run inside Linux containers and env files are read by Docker: keep every kit file LF.
+* text eol=lf

@@ -4,9 +4,13 @@
 harness runs Claude Code and Codex through their ACP adapters. This optional integration lets
 Tinker's Lead answer its owner in Buzz channels and threads. Nothing in Tinker's core depends on it.
 
-Everything below was checked on 2026-09-26 against Buzz `781d39510` (`main`), in Linux containers,
+Everything below was first checked on 2026-09-26 against Buzz `781d39510` (`main`), in Linux containers,
 with the scripted model endpoints described in [provider setup](../../docs/providers.md#buzz-optional-team-surface).
-No live model ran (no provider keys were available), and nothing ran natively on Windows or macOS.
+On 2026-09-28 a Docker lab on Windows ran the Lead end to end with a live Claude subscription token and Buzz
+Desktop 0.5.25 as the owner's client; nothing ran natively on Windows or macOS.
+
+**On Windows, use the [kit](kit/GUIDE.md):** one PowerShell 7 script sets up the relay, keys, the agent image,
+channels and the Lead, owned by your Buzz Desktop identity. The sections below describe the same setup by hand.
 
 ## What you get, and what you do not
 
@@ -31,19 +35,25 @@ No live model ran (no provider keys were available), and nothing ran natively on
 git clone https://github.com/block/buzz && cd buzz && git checkout 781d39510
 ```
 
-Without a Rust toolchain, build the binaries in a container, keeping `target` in a named volume:
+Use the published relay image `ghcr.io/block/buzz@sha256:1120aa3fa8b57b243de35f309255870ba3520726ff2490f0d494bfb16dcf9c79`
+(`sha-0275372`, the Desktop 0.5.25 tree; it contains `buzz-relay` and `buzz-admin`) with
+`deploy/compose/compose.yml` under its own project name. Build only the agent-side binaries yourself; without a
+Rust toolchain, in a container, keeping `target` in a named volume:
 
 ```bash
 docker run --rm -v "$PWD:/src:ro" -v buzz-target:/target -e CARGO_TARGET_DIR=/target -w /src \
-  rust:1.95-bookworm cargo build --release --locked -p buzz-relay -p buzz-acp -p buzz-cli -p buzz-admin
+  rust:1.95-bookworm cargo build --release --locked -p buzz-acp -p buzz-cli
 ```
 
-Put `buzz-relay` and `buzz-admin` in a small image (`debian:bookworm-slim` with `ca-certificates`,
-`git`, `libssl3`), then use `deploy/compose/compose.yml` under its own project name. Copy
-`.env.example` to `.env` and replace every `CHANGE_ME`. For a local relay, the spike used:
-- `RELAY_URL=ws://relay:3000`, `BUZZ_REQUIRE_AUTH_TOKEN=false`, `BUZZ_AUTO_MIGRATE=true`;
-- `BUZZ_IMAGE=<your image>`;
-- `BUZZ_HTTP_PORT=127.0.0.1:3979`, so the relay listens on loopback only.
+Copy `.env.example` to `.env` and replace every `CHANGE_ME`. For a local relay:
+- `RELAY_URL=ws://localhost:3000`. The relay binds each connection to one community by the exact `Host`
+  header, which must equal `RELAY_URL`'s authority; there is no fallback tenant. Every client, including
+  containers, must dial `localhost:3000` (containers through a local forwarder such as `socat`).
+- `BUZZ_HTTP_PORT=127.0.0.1:3000`, so the relay listens on loopback only.
+- `BUZZ_REQUIRE_AUTH_TOKEN=true`: with `false`, REST accepts an unsigned `X-Pubkey` header, so an agent could
+  impersonate its owner.
+- `BUZZ_AUTO_MIGRATE=true` and `BUZZ_IMAGE=<the image above>`.
+- `BUZZ_GIT_CONFORMANCE_PROBE=false` whenever MinIO is disabled (below): the probe is fatal without S3.
 
 ```bash
 docker compose -p my-buzz -f compose.yml -f compose.local.yml up -d
@@ -73,8 +83,8 @@ Tinker never reads, stores or posts private keys, and it never needs your provid
 
 ```bash
 docker compose -p my-buzz -f compose.yml exec relay buzz-admin add-member --pubkey <agent-hex>
-BUZZ_PRIVATE_KEY=<owner key> buzz --relay http://<relay> channels create --name tinker --type stream --visibility open
-BUZZ_PRIVATE_KEY=<owner key> buzz --relay http://<relay> channels add-member --channel <id> --pubkey <agent-hex>
+BUZZ_PRIVATE_KEY=<owner key> buzz --relay http://localhost:3000 channels create --name tinker --type stream --visibility open
+BUZZ_PRIVATE_KEY=<owner key> buzz --relay http://localhost:3000 channels add-member --channel <id> --pubkey <agent-hex>
 ```
 
 Use one Buzz identity for the Lead. Specialists stay native helpers inside the Lead's host.
@@ -82,14 +92,18 @@ Use one Buzz identity for the Lead. Specialists stay native helpers inside the L
 ## 3. Run buzz-acp with Claude Code
 
 Prerequisites on the agent machine:
-- `npm install -g @agentclientprotocol/claude-agent-acp@0.81.2` (it bundles Claude Code 2.1.280).
+- `npm install -g @agentclientprotocol/claude-agent-acp@0.81.2` (it bundles Claude Code 2.1.280). In a
+  container, link its bundled `claude` onto `PATH` before installing Tinker: without it the installer skips the
+  plugin registration.
 - Tinker installed for Claude (`python scripts/install_apps.py --app claude`, run by you).
-- Your own `ANTHROPIC_API_KEY`.
+- Your own Claude credential: by default a subscription token from `claude setup-token` in
+  `CLAUDE_CODE_OAUTH_TOKEN` (it ran end to end in the 2026-09-28 lab); an `ANTHROPIC_API_KEY` is the fallback.
+  Never set both, nor `ANTHROPIC_AUTH_TOKEN` or `ANTHROPIC_BASE_URL`, which outrank or reroute the token.
 
 ```bash
-export BUZZ_PRIVATE_KEY=<agent key> BUZZ_RELAY_URL=ws://<relay>
+export BUZZ_PRIVATE_KEY=<agent key> BUZZ_RELAY_URL=ws://localhost:3000
 export BUZZ_ACP_AGENT_COMMAND=claude-agent-acp
-export BUZZ_ACP_PERMISSION_MODE=dont-ask   # required; see the note below
+export BUZZ_ACP_PERMISSION_MODE=dont-ask   # a mode Tinker counts as safe; see the note below
 export BUZZ_ACP_RESPOND_TO=owner-only      # or allowlist with BUZZ_ACP_RESPOND_TO_ALLOWLIST
 export BUZZ_ACP_SYSTEM_PROMPT_FILE=<tinker>/integrations/buzz/protocol.md
 buzz-acp --agent-owner <owner-hex>
@@ -97,7 +111,9 @@ buzz-acp --agent-owner <owner-hex>
 
 - Set these as **environment variables**, not flags. Flags are invisible to the agent, so Tinker can
   only check and report settings that arrive through the environment.
-- `dont-ask` is required, but on its own it does not protect you. `claude-agent-acp` 0.81.2 does not
+- The kit's [lead.env](kit/lead.env) lists the full set of safe settings (thread sessions, queued events, no
+  memory, no heartbeat, the protocol as system prompt).
+- Tinker counts `dont-ask` as safe, but it protects nothing on its own. `claude-agent-acp` 0.81.2 does not
   advertise that mode, so buzz-acp silently skips it and Claude runs in `default` mode. buzz-acp
   then approves every permission prompt, in every mode. Tinker's hooks deny the gated operations
   anyway, and turn-one context and `status` report the host mode as unsafe.
@@ -153,6 +169,6 @@ shells. On Windows, Tinker reads the Buzz variable names case-insensitively.
 - If the first-turn context lacks "Tinker is active", the hooks are not loaded in that host (the
   Codex case): keep it read-only.
 - Teardown: `docker compose -p my-buzz -f compose.yml -f compose.local.yml down -v`, then remove the
-  image, build volume and keys you created.
+  image, build volume and keys you created. With the kit, run `kit/teardown.ps1`.
 - Tinker creates no Buzz workflows or schedules and writes no relay memory. Relay changes other than
   replying are gated (`buzz.mutate`) and are denied in Buzz sessions.

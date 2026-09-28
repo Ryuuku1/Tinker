@@ -1,0 +1,231 @@
+#Requires -Version 7.2
+<#
+.SYNOPSIS
+Sets up a local Buzz relay and Tinker's Lead on this Windows PC, owned by your Buzz Desktop identity.
+
+.DESCRIPTION
+Idempotent and resumable: after a failure, fix the cause and run it again with the same parameters. It never
+regenerates keys over an existing relay. Keys and relay secrets are generated inside containers and never printed;
+the credential file is only passed to Docker. No container mounts a host folder. See GUIDE.md.
+
+.EXAMPLE
+.\setup.ps1                                       # relay only, then it prints what to do in Buzz Desktop
+.\setup.ps1 -OwnerNpub npub1... -CredentialFile "$HOME\tinker-buzz-secrets\claude.env"
+#>
+[CmdletBinding()]
+param(
+  [string]$Project = 'tinker-buzz',
+  [ValidateRange(1024, 65535)][int]$Port = 3000,
+  [string]$TinkerRepo = (Join-Path $PSScriptRoot '..\..\..'),
+  [string]$TinkerCommit,     # default: the kit's pin
+  [string]$CredentialFile,   # a path only: passed to docker --env-file, never read
+  [string]$OwnerNpub,        # your Buzz Desktop npub; without it, setup stops once the relay is up
+  [string[]]$Channels = @('tinker-lab'),
+  [string]$StateRoot)        # default %LOCALAPPDATA%\TinkerBuzz; pass the same value to kit.ps1 and teardown.ps1
+. (Join-Path $PSScriptRoot 'kit.ps1') -Project $Project -StateRoot $StateRoot
+$TinkerRepo = (Resolve-Path -LiteralPath $TinkerRepo).Path
+if (-not $TinkerCommit) { $TinkerCommit = $PIN.TinkerCommit }
+$Channels = @($Channels | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+foreach ($c in $Channels) { if ($c -notmatch '^[a-z0-9][a-z0-9-]{0,63}$') { throw "Channel names are lowercase letters, digits and dashes: $c" } }
+if ($OwnerNpub -and $OwnerNpub -notmatch '^(npub1[02-9ac-hj-np-z]{58}|[0-9a-f]{64})$') { throw "Not an npub: $OwnerNpub" }
+$LOGS = "$STATE\logs"; $ENVFILE = "$STATE\.env"; $CTX = "$STATE\agent"
+$script:n = 0
+function Step([string]$Title) { $script:n++; "`n[$script:n/11] $Title" }
+function Assert-Exit([string]$What) { if ($LASTEXITCODE) { throw "$What failed (exit $LASTEXITCODE)" } }
+# Final check: file names in the kit folder or the setup logs that hold a key, a relay secret or the credential.
+function Invoke-SecretScan([hashtable]$Settings) {
+  "`nFinal check: secret scan of the kit folder and the setup logs"
+  $scan = @('create', '--label', "tinker.kit=$Project", '--user', '0:0', '-v', "$($VOL.humankeys):/humankeys:ro",
+    '-v', "$($VOL.agentkey):/agentkey:ro")
+  if ($Settings.credentialFile) { $scan += @('--env-file', $Settings.credentialFile) }
+  $c = docker @scan $Settings.image bash /kit/secretscan.sh /tmp/relay.env /tmp/kit /tmp/logs; Assert-Exit 'creating the scan container'
+  try {
+    docker cp $ENVFILE "${c}:/tmp/relay.env" | Out-Null; docker cp $KIT "${c}:/tmp/kit" | Out-Null; docker cp $LOGS "${c}:/tmp/logs" | Out-Null
+    $result = docker start -a $c
+  } finally { docker rm -f $c | Out-Null }
+  $result | ForEach-Object { "  $_" }
+  if ($result -notcontains 'secret-scan hits=0') { throw 'A secret was found in the kit folder or the logs (file names above): delete that copy and rotate the secret' }
+}
+
+Step 'Preflight: Docker with Linux containers, Compose, Git, a free port'
+$os = docker version --format '{{.Server.Os}}' 2>$null
+if ($LASTEXITCODE -or $os -ne 'linux') { throw 'Start Docker Desktop and switch it to Linux containers' }
+$compose = (docker compose version --short) -replace '^v', ''
+if ([version]($compose -replace '[^0-9.].*$', '') -lt [version]'2.24.4') { throw "Docker Compose 2.24.4 or newer is required (found $compose)" }
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw 'Git is required' }
+git -C $TinkerRepo cat-file -e "$TinkerCommit^{commit}" 2>$null
+if ($LASTEXITCODE) { throw "Tinker commit $TinkerCommit is not in ${TinkerRepo}: fetch it, or pass -TinkerRepo and -TinkerCommit" }
+New-Item -ItemType Directory -Force $STATE, $LOGS, "$CTX\scripts" | Out-Null
+$s = Read-KitState
+if ($s.port -and $s.port -ne $Port -and (Test-Path -LiteralPath $ENVFILE)) {
+  throw "This project was set up on port $($s.port): use -Port $($s.port), or run teardown.ps1 first"
+}
+$ours = (Test-Path -LiteralPath "$STATE\compose.yml") -and (Test-Path -LiteralPath $ENVFILE) -and (Invoke-Compose ps -q relay 2>$null)
+if (-not $ours -and @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue).Count) {
+  throw "Port $Port is in use: choose another with -Port"
+}
+$s.project = $Project; $s.port = $Port; $s.tinkerCommit = $TinkerCommit
+if (-not $s.channels) { $s.channels = @{} }
+Save-KitState $s
+"  Docker $os, Compose $compose, state folder $STATE"
+
+Step 'Pinned relay image'
+docker pull --quiet $PIN.RelayImage | Out-Null; Assert-Exit "docker pull $($PIN.RelayImage)"
+if ((docker image inspect $PIN.RelayImage --format '{{index .Config.Labels "org.opencontainers.image.revision"}}') -ne $PIN.RelayRevision) {
+  throw 'The relay image revision label does not match the pin'
+}
+"  $($PIN.RelayImage.Split('@')[1].Substring(0, 19))... revision $($PIN.RelayRevision.Substring(0, 9))"
+
+Step 'Build buzz-acp and buzz from the pinned Buzz source, and the agent image with Tinker (one docker build)'
+$inputs = @("$KIT\agent\Dockerfile", "$KIT\agent\deny.py") + @(Get-ChildItem "$KIT\scripts" -File | Sort-Object Name).FullName
+$kitHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes(
+  (($inputs | ForEach-Object { (Get-FileHash -LiteralPath $_).Hash }) -join '')))).Substring(0, 8).ToLower()
+$image = "$Project-agent:$($TinkerCommit.Substring(0, 12))-$kitHash"   # new Tinker commit or kit files: new image
+if (-not (docker images -q $image)) {
+  git -c core.autocrlf=false -C $TinkerRepo archive --format=tar --prefix=tinker/ -o "$CTX\tinker.tar" $TinkerCommit
+  Assert-Exit 'git archive of Tinker'
+  Copy-Item "$KIT\agent\Dockerfile", "$KIT\agent\deny.py" $CTX -Force
+  Copy-Item "$KIT\scripts\*" "$CTX\scripts" -Force
+  '  First build: 10-30 minutes, mostly downloads and Rust (log: logs\build-agent.log); a rerun resumes from the cache'
+  docker build -t $image $CTX *> "$LOGS\build-agent.log"; Assert-Exit "docker build (see $LOGS\build-agent.log)"
+}
+"  $image"
+
+Step 'Verify the build: Buzz commit, Cargo Git sources, compose file, binaries, Claude Code and Tinker'
+$facts = docker run --rm $image bash -c 'cat /kit/buzz-commit.txt /kit/cargo-git.txt /kit/binaries.sha256' | Out-String
+if ($facts -notmatch "(?m)^$($PIN.BuzzCommit)\r?$") { throw 'The image was not built from the pinned Buzz commit' }
+$gitSources = @([regex]::Matches($facts, 'source = "(git\+[^"]+)"') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+if (Compare-Object $gitSources @($PIN.CargoGit | Sort-Object)) { throw 'Cargo.lock names Git sources other than the pinned three' }
+foreach ($b in 'buzz-acp', 'buzz') {
+  $h = [regex]::Match($facts, "(?m)^([0-9a-f]{64})\s+$b\r?$").Groups[1].Value
+  if ($h -eq $PIN.Binaries[$b]) { "  $b sha256 matches the lab build" } else { "  $b sha256 $h (the lab build was $($PIN.Binaries[$b]))" }
+}
+$c = docker create $image; Assert-Exit 'creating a container to copy compose.yml'
+try { docker cp "${c}:/kit/compose.yml" "$STATE\compose.yml" | Out-Null; Assert-Exit 'copying compose.yml' } finally { docker rm -f $c | Out-Null }
+if ((Get-FileHash "$STATE\compose.yml").Hash.ToLower() -ne $PIN.ComposeSha256) { throw 'compose.yml does not match its pinned SHA-256' }
+$check = docker run --rm $image bash -c ('claude --version; claude plugin list; jq ".permissions.deny | length" ~/.claude/settings.json; ' +
+  'jq .apiKeyHelper ~/.claude/settings.json; compgen -e | grep -cE "^(ANTHROPIC_|CLAUDE_CODE_OAUTH_TOKEN$|CLAUDE_CODE_USE_)"; ' +
+  'jq -r "(.env // {}) | keys[]" ~/.claude/settings.json | grep -cE "^(ANTHROPIC_|CLAUDE_CODE_OAUTH_TOKEN$|CLAUDE_CODE_USE_)"; ' +
+  'git hash-object /opt/tinker/scripts/tinker_runtime.py; buzz-acp --help | head -n 1; grep -c "claude-agent-acp@0.81.2" /opt/acp/npm-ls.txt') | Out-String
+$blob = git -C $TinkerRepo rev-parse "${TinkerCommit}:scripts/tinker_runtime.py"
+$ok = [ordered]@{
+  'Buzz commit, 3 Cargo Git sources and compose.yml pinned' = $true
+  'Claude Code 2.1.280' = $check -match '2\.1\.280 \(Claude Code\)'
+  'tinker plugin enabled' = $check -match 'tinker@tinker-local[\s\S]*?enabled'
+  '8 deny rules, no apiKeyHelper, no credential names' = $check -match '(?m)^8\r?\n^null\r?\n^0\r?\n^0\r?$'
+  'runtime matches the Tinker commit' = $check -match [regex]::Escape($blob)
+  'buzz-acp runs; claude-agent-acp 0.81.2' = $check -match 'ACP harness that bridges Buzz events to AI agents\r?\n[1-9]'
+}
+$ok.GetEnumerator() | ForEach-Object { "  $($_.Key): $($_.Value)" }
+if ($ok.Values -contains $false) { throw 'The agent image check failed' }
+$s.image = $image; Save-KitState $s
+
+Step 'Keys and relay secrets, generated inside containers and never printed'
+if (Test-Path -LiteralPath $ENVFILE) {
+  if (-not ($s.admin -and $s.agent)) { throw ".env exists but kit.json has no public keys: run teardown.ps1, then setup again" }
+  '  Keys exist; never regenerated over a relay'
+} else {
+  if (@(docker volume ls -q) -contains "${Project}_buzz-postgres-data") { throw 'The relay database exists but .env is gone: run teardown.ps1 to start over' }
+  $c = docker create --label "tinker.kit=$Project" --user 0:0 --entrypoint bash -v "$($VOL.humankeys):/humankeys" `
+    -v "$($VOL.agentkey):/agentkey" $PIN.RelayImage /tmp/keygen.sh $Port $PIN.RelayImage
+  Assert-Exit 'creating the key container'
+  try {
+    docker cp "$KIT\scripts\keygen.sh" "${c}:/tmp/keygen.sh" | Out-Null; Assert-Exit 'copying keygen.sh'
+    $out = docker start -a $c   # public keys, or a refusal; never a secret
+    if ($LASTEXITCODE) { throw "Key generation failed: $out" }
+    docker cp "${c}:/out/.env" $ENVFILE | Out-Null; Assert-Exit 'copying the relay secrets out'
+  } finally { docker rm -f $c | Out-Null }
+  foreach ($l in $out) { if ($l -match '^(admin|agent)=([0-9a-f]{64})$') { $s[$Matches[1]] = $Matches[2] } }
+  if (-not ($s.admin -and $s.agent)) { throw 'Key generation did not print both public keys' }
+  Save-KitState $s
+  '  Generated the admin and agent identities and the relay secrets'
+}
+
+Step "Relay up, published on 127.0.0.1:$Port only"
+Invoke-Compose config --quiet; Assert-Exit 'compose config'
+Invoke-Compose up -d --wait *> "$LOGS\compose-up.log"; Assert-Exit "compose up (see $LOGS\compose-up.log)"
+$published = @(docker port "$Project-relay-1" 3000)
+if ($published.Count -ne 1 -or $published[0] -ne "127.0.0.1:$Port") { throw "The relay must be published on 127.0.0.1:$Port only, not: $published" }
+Invoke-Compose ps --format '  {{.Service}}: {{.State}} {{.Health}}'
+
+Step 'Bootstrap check and routing probe'
+$relayLog = Invoke-Compose logs relay 2>&1 | Out-String
+if ($relayLog -notmatch "Deployment community ensured`",`"host`":`"localhost:$Port`"" -or $relayLog -notmatch 'Relay owner bootstrapped') {
+  throw "The relay did not bootstrap the community for localhost:${Port}: check 'docker logs $Project-relay-1'"
+}
+$ws = '-s', '-o', 'NUL', '-m', '3', '-w', '%{http_code}', '-H', 'Connection: Upgrade', '-H', 'Upgrade: websocket',
+      '-H', 'Sec-WebSocket-Version: 13', '-H', 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='
+$hostCode = curl.exe @ws "http://localhost:$Port/"
+$wrongCode = curl.exe @ws -H 'Host: relay:3000' "http://localhost:$Port/"
+$probe = '. /kit/forward.sh; curl -s -o /dev/null -m 3 -w "%{http_code}" -H "Connection: Upgrade" -H "Upgrade: websocket" ' +
+         '-H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" "http://localhost:$KIT_PORT/"'
+$inCode = docker run --rm --label "tinker.kit=$Project" --network $NET -e "KIT_PORT=$Port" $image bash -c $probe
+$codes = "host=$hostCode wrong-host=$wrongCode container=$inCode"   # curl exits 28 after the upgrade; only the codes count
+"  $codes"
+if ($codes -ne 'host=101 wrong-host=404 container=101') { throw 'Routing probe failed: clients must reach the relay as localhost:<port>' }
+
+Step 'Relay membership (buzz-admin add-member)'
+function Add-RelayMember([string]$Key) {
+  $o = Invoke-Compose exec -T relay buzz-admin add-member --pubkey $Key 2>&1 | Out-String
+  if ($o -match '(?:added|already a member:)\s*([0-9a-f]{64})') { $Matches[1] } else { throw "add-member failed for $Key" }
+}
+[void](Add-RelayMember $s.agent)
+$s.agentMembership = 'direct'   # a direct member never gets an owner recorded; see GUIDE.md, Phase 2
+if ($OwnerNpub) { $s.owner = Add-RelayMember $OwnerNpub }
+Save-KitState $s
+"  Agent $(ConvertTo-Npub $s.agent)" + $(if ($s.owner) { "`n  Owner $(ConvertTo-Npub $s.owner)" } else { '' })
+
+Step 'Channels, with the owner and the agent as members'
+foreach ($name in $Channels) {
+  $ch = @(Invoke-Admin channels list | Out-String | ConvertFrom-Json) | Where-Object name -eq $name | Select-Object -First 1
+  if (-not $ch) {
+    Invoke-Admin channels create --name $name --type stream --visibility open | Out-Null; Assert-Exit "creating #$name"
+    $ch = @(Invoke-Admin channels list | Out-String | ConvertFrom-Json) | Where-Object name -eq $name | Select-Object -First 1
+  }
+  $s.channels[$name] = $ch.channel_id
+  $members = @(Invoke-Admin channels members --channel $ch.channel_id | Out-String | ConvertFrom-Json).pubkey
+  foreach ($k in @($s.agent, $s.owner) | Where-Object { $_ -and $members -notcontains $_ }) {
+    Invoke-Admin channels add-member --channel $ch.channel_id --pubkey $k | Out-Null; Assert-Exit "adding a member to #$name"
+  }
+  "  #$name ($($ch.channel_id))"
+}
+Save-KitState $s
+
+if (-not $s.owner) {
+  "`nThe relay is up at ws://localhost:$Port. Next (GUIDE.md, Buzz Desktop):"
+  "  1. In Buzz Desktop choose Add Community and enter ws://localhost:$Port."
+  "  2. Copy your npub from 'Not a member yet', then run this again with it:"
+  "     .\setup.ps1 -Project $Project -Port $Port -CredentialFile <your env file> -OwnerNpub <your npub>"
+  "  3. Back in Buzz Desktop, press Try again."
+  Invoke-SecretScan $s
+  return
+}
+
+Step 'Start the Lead with the safe settings and you as its owner'
+if (-not $CredentialFile) { $CredentialFile = $s.credentialFile }
+if (-not $CredentialFile -or -not (Test-Path -LiteralPath $CredentialFile -PathType Leaf)) {
+  throw 'Pass -CredentialFile with the path of the env file that holds your Claude token (GUIDE.md)'
+}
+$names = docker run --rm --env-file $CredentialFile $image bash -c `
+  'compgen -e | grep -E "^(ANTHROPIC_|CLAUDE_CODE_OAUTH_TOKEN$|CLAUDE_CODE_USE_|AWS_|GOOGLE_|CLOUD_ML_)" | sort | paste -sd, -'
+if ($names -notin 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY') {
+  throw "The credential file must set exactly one of CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY (names found: $names)"
+}
+"  Credential variable: $names (the value is never read)"
+$s.credentialFile = (Resolve-Path -LiteralPath $CredentialFile).Path
+$wanted = "$($s.owner)|$(($s.channels.Values | Sort-Object) -join ',')|$image|$($s.credentialFile)"
+Save-KitState $s
+if ((Test-Lead) -and $s.leadConfig -eq $wanted -and (docker ps -q --filter "name=^/$LEAD$")) {
+  '  The Lead is already running with these settings'
+} else {
+  if (Test-Lead) { Stop-Lead }
+  $s.leadConfig = $wanted; Save-KitState $s
+  Start-Lead
+}
+
+Step 'Startup check'
+Test-LeadStartup
+"`nTinker's Lead is running. In Buzz Desktop open #$($Channels[0]) and @mention it:"
+"  $(ConvertTo-Npub $s.agent)"
+"Status: . .\kit.ps1 -Project $Project; Get-KitStatus   (Stop-Lead and Start-Lead from the same prompt)"
+Invoke-SecretScan $s

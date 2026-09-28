@@ -1,0 +1,14 @@
+# Kit override for Buzz's deploy/compose/compose.yml: database images pinned by digest, MinIO disabled (its
+# pinned images did not pull, and nothing here needs media), and the relay no longer waits for it.
+services:
+  relay:
+    depends_on: !override
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    labels: {tinker.kit: buzz}
+  postgres:
+    image: postgres:17-alpine@sha256:979c4379dd698aba0b890599a6104e082035f98ef31d9b9291ec22f2b13059ca
+  redis:
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+  minio: {profiles: ["disabled"]}
+  minio-init: {profiles: ["disabled"]}

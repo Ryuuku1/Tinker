@@ -379,6 +379,35 @@ class BuzzReplyTests(BuzzFixture):
                 self.assertIn("git.forcePush", self.labels(command))
 
 
+class BuzzKitTests(unittest.TestCase):
+    """The Windows hand-over kit's files; its live run is evidence under .tinker/evals, not a unit test."""
+    KIT = ROOT / "integrations" / "buzz" / "kit"
+
+    def test_kit_files_are_lf_without_secrets_machine_paths_or_a_fixed_port(self):
+        files = [p for p in self.KIT.rglob("*") if p.is_file()]
+        self.assertGreater(len(files), 10)
+        for path in files:
+            text = path.read_bytes().decode("utf-8")
+            with self.subTest(file=path.relative_to(ROOT).as_posix()):
+                self.assertNotIn("\r", text)  # the scripts run in Linux containers; .gitattributes keeps them LF
+                self.assertNotRegex(text, r"nsec1[0-9a-z]{20,}|sk-ant-[\w-]{16,}|(?:OAUTH_TOKEN|API_KEY)=[\w-]{16,}")
+                self.assertNotRegex(text, r"(?i)\b[a-z]:\\users\\|/Users/|/home/(?!agent\b)\w+")
+                if path.suffix == ".sh":  # the port is a setting; 3000 is only the relay's port inside Docker
+                    self.assertNotRegex(text, r"(?<!relay:)\b3000\b")
+
+    def test_the_lead_keeps_its_safe_settings(self):
+        lines = (self.KIT / "lead.env").read_text(encoding="utf-8").splitlines()
+        settings = dict(line.split("=", 1) for line in lines if line and not line.startswith("#"))
+        self.assertEqual({k: settings.get(k) for k in ("BUZZ_ACP_PERMISSION_MODE", "BUZZ_ACP_RESPOND_TO",
+                                                       "BUZZ_ACP_ALLOWED_RESPOND_TO", "BUZZ_ACP_SESSION_POLICY",
+                                                       "BUZZ_ACP_NO_MEMORY", "BUZZ_ACP_HEARTBEAT_INTERVAL")},
+                         {"BUZZ_ACP_PERMISSION_MODE": "dont-ask", "BUZZ_ACP_RESPOND_TO": "owner-only",
+                          "BUZZ_ACP_ALLOWED_RESPOND_TO": "owner-only", "BUZZ_ACP_SESSION_POLICY": "thread",
+                          "BUZZ_ACP_NO_MEMORY": "true", "BUZZ_ACP_HEARTBEAT_INTERVAL": "0"})
+        self.assertEqual(settings["BUZZ_ACP_SYSTEM_PROMPT_FILE"], "/opt/tinker/integrations/buzz/protocol.md")
+        self.assertFalse({"BUZZ_RELAY_URL", "BUZZ_ACP_AGENT_OWNER", "BUZZ_PRIVATE_KEY"} & set(settings))  # set at start
+
+
 class BuzzPackTests(unittest.TestCase):
     """The generated persona pack; `buzz pack validate` itself runs in the Buzz spike, not here."""
 
