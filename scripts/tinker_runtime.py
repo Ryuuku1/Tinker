@@ -216,6 +216,10 @@ def inside(path, root):
 
 # ---------------------------------------------------------------- shell text
 
+PWSH_QUOTES = str.maketrans("\u2018\u2019\u201a\u201b\u201c\u201d\u201e", "''''\"\"\"")
+HEREDOC_WORD = re.compile(r"(?:[^\s;&|<>'\"\\]|\\.|'[^']*'|\"(?:[^\"\\]|\\.)*\")*", re.S)  # quotes may hold spaces
+
+
 def lex(command, shell="posix"):
     """Split command text on ; && || | & and newlines outside quotes.
 
@@ -224,6 +228,8 @@ def lex(command, shell="posix"):
     so their contents are not mistaken for commands.
     """
     esc = {"pwsh": "`", "cmd": "^"}.get(shell, "\\")
+    if shell == "pwsh":  # PowerShell quotes with ‘ ’ ‚ ‛ and “ ” „ as it does with ' and "
+        command = command.translate(PWSH_QUOTES)
     segments, words, raw, word, bodies, pending = [], [], [], [], [], []
     state = {"in_word": False, "redirect": False, "op": None}
     i, n = 0, len(command)
@@ -350,10 +356,11 @@ def lex(command, shell="posix"):
                 j = i + 2 + (command[i + 2:i + 3] == "-")
                 while j < n and command[j] in " \t":
                     j += 1
-                k = j
-                while k < n and command[k] not in " \t\r\n;&|<>":
-                    k += 1
-                delimiter = command[j:k].strip("'\"")
+                k = HEREDOC_WORD.match(command, j).end()
+                parts = lex(command[j:k])  # bash's quote removal: \EOF and "E"OF both end at EOF
+                if parts is None or re.search(r"\$\(|`", command[j:k]):
+                    return None  # a delimiter this lexer cannot read the way bash does
+                delimiter = parts[0]["words"][0].strip() if parts and parts[0]["words"] else ""
                 if delimiter:
                     pending.append(delimiter)
                 end_word()
