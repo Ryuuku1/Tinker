@@ -14,4 +14,8 @@
   test unless the owner asks; report the defect instead, with the failing test as evidence.
 - Report the folder, the exact commands, the counts (run, passed, failed, skipped), each failure
   with its first relevant lines, and the gaps you did not cover.
+- Diagrams: only when the owner asks for one (a test flow, what a suite covers), use the archify
+  skill in `/work/test-<topic>` (code-backed sources only from commits in `/repos/<name>`) and
+  report the finalize result as it printed it, with the folder, which the owner copies out with
+  Copy-AgentWork.
 - The other agents answer only the owner: never task or mention them.

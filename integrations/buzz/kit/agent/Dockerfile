@@ -1,7 +1,8 @@
 # Tinker's Buzz agents and Tinker Flow (one image), built without mounting any host folder. Stage 1
-# fetches the pinned Buzz source and builds buzz-acp and buzz; stage 2 adds claude-agent-acp 0.81.2 (it bundles
-# Claude Code 2.1.280) and installs Tinker into this image's own home. setup.ps1 puts tinker.tar, deny.py, scripts/
-# and roles/ in the build context, and verifies the pins recorded under /kit against kit.ps1.
+# fetches the pinned Buzz source and builds buzz-acp and buzz; stage 2 fetches archify, the diagram skill; stage 3
+# adds claude-agent-acp 0.81.2 (it bundles Claude Code 2.1.280), installs Tinker into this image's own home and
+# gives every agent archify. setup.ps1 puts tinker.tar, deny.py, scripts/ and roles/ in the build context, and
+# verifies the pins recorded under /kit against kit.ps1.
 FROM rust:1.95-bookworm@sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1 AS buzz
 ARG BUZZ_REPO=https://github.com/block/buzz
 ARG BUZZ_COMMIT=781d39510cf23cfe224e8f521ae06a23377e06de
@@ -18,8 +19,20 @@ RUN mkdir -p /out/kit && git rev-parse HEAD > /out/kit/buzz-commit.txt \
     && cp deploy/compose/compose.yml /out/kit/compose.yml \
     && (cd /out/bin && sha256sum buzz-acp buzz) > /out/kit/binaries.sha256
 
+# archify (tt-a1i/archify, MIT): typed JSON to checked HTML diagrams. Only its archify/ folder is kept; its runtime
+# uses Node's built-ins, so nothing is installed with npm.
+FROM node:24-bookworm@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4 AS archify
+ARG ARCHIFY_REPO=https://github.com/tt-a1i/archify
+ARG ARCHIFY_COMMIT=2ab3cae7ac2c2a55d7386ca789d03c4fcd31816c
+RUN git init -q /src && git -C /src remote add origin "$ARCHIFY_REPO" \
+    && git -C /src fetch -q --depth 1 origin "$ARCHIFY_COMMIT" \
+    && git -C /src -c advice.detachedHead=false checkout -q FETCH_HEAD \
+    && test "$(git -C /src rev-parse HEAD)" = "$ARCHIFY_COMMIT" \
+    && mkdir /out && cp -a /src/archify /out/archify && git -C /src rev-parse HEAD > /out/archify-commit.txt
+
 FROM node:24-bookworm@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4
-RUN apt-get update && apt-get install -y --no-install-recommends python3 git jq socat \
+# Chromium's headless shell: archify's last gate checks each diagram in a real browser.
+RUN apt-get update && apt-get install -y --no-install-recommends python3 git jq socat chromium-headless-shell \
     && rm -rf /var/lib/apt/lists/*
 RUN npm install -g --prefix /opt/acp --ignore-scripts @agentclientprotocol/claude-agent-acp@0.81.2 \
     && npm ls -g --prefix /opt/acp --all --depth=2 > /opt/acp/npm-ls.txt
@@ -39,10 +52,18 @@ RUN ln -s /opt/acp/lib/node_modules/@agentclientprotocol/claude-agent-acp/node_m
     && useradd -m -u 10001 -s /bin/bash agent \
     && install -d -o agent -g agent /work /opt/tinker/.tinker /home/agent/chat
 ENV PATH=/opt/acp/bin:$PATH HOME=/home/agent \
-    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 DISABLE_AUTOUPDATER=1 DISABLE_TELEMETRY=1 DISABLE_ERROR_REPORTING=1
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 DISABLE_AUTOUPDATER=1 DISABLE_TELEMETRY=1 DISABLE_ERROR_REPORTING=1 \
+    ARCHIFY_UPDATE_CHECK_DISABLED=1 ARCHIFY_CHROME=/usr/bin/chromium-headless-shell
+# The agents run without capabilities or new privileges, so Chromium cannot build its sandbox: the container is
+# the boundary, and the browser opens only the agent's own diagram, as the same user that already runs commands.
+ENV ARCHIFY_CHROME_NO_SANDBOX=1
 USER agent
 RUN python3 /opt/tinker/scripts/install_apps.py --app claude --home /home/agent --python /usr/bin/python3 \
       > /home/agent/tinker-install.log 2>&1 || (cat /home/agent/tinker-install.log; exit 1)
 RUN python3 /opt/kit/deny.py /home/agent/.claude/settings.json lead
+# A user-scope skill every agent loads. COPY leaves its files owned by root, so no agent edits them in place; an
+# agent owns ~/.claude and could still swap the folder (as it could write ~/.claude/CLAUDE.md) until it restarts.
+COPY --from=archify /out/archify/ /home/agent/.claude/skills/archify/
+COPY --from=archify /out/archify-commit.txt /kit/
 WORKDIR /work
 LABEL tinker.kit=buzz

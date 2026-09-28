@@ -27,7 +27,8 @@ $PIN = [ordered]@{
   # SHA-256 of the lab build (2026-09-28); a different result is reported, not treated as a failure.
   Binaries      = @{ 'buzz-acp' = 'bfb092185696820271fd7aa178679959f365608ba7c60fc6f31728417f2e049c'
                      'buzz'     = 'e2902a14281413389c68cfeadc0ee3fdb7da24110e3e65fe91e93635f6f28859' }
-  TinkerCommit  = 'c4af65052c341c84c37ef8d0d2610edde77d58e5'   # Tinker with the Buzz reply and read-only claim fixes
+  TinkerCommit  = '8b79e0df1cdc6aae3f9489528e52572e927155d1'   # Tinker with the pwsh path and glob tamper fixes
+  ArchifyCommit = '2ab3cae7ac2c2a55d7386ca789d03c4fcd31816c'   # tt-a1i/archify v3.0.1, the agents' diagram skill
 }
 # The team: one Buzz identity, key volume and container per role. Each answers only its owner (and Tinker Flow, which
 # relays the owner's flows), when @mentioned. writes: /work is writable (everyone else reads it); web: WebSearch and

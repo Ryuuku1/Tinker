@@ -14,8 +14,8 @@ relay and the agents' safety settings match the lab setup the kit was built from
 - Windows 10 or 11 with **Docker Desktop** running **Linux containers** (Compose 2.24.4 or newer is included).
 - **PowerShell 7** (`pwsh`) and **Git for Windows**.
 - **Claude Code**, only to create your token (section 3).
-- About **8 GB** of free disk space: sources, build caches, the agent image and base images.
-- About **10-30 minutes** for the first setup: about 4.7 GB of images to download, then the Rust build (97 s on
+- About **9 GB** of free disk space: sources, build caches, the agent image (3.1 GB) and base images.
+- About **10-30 minutes** for the first setup: about 4.9 GB of images to download, then the Rust build (97 s on
   the PC the kit was tested on). Later runs take under a minute.
 
 ## 2. Get Tinker at the kit's commit
@@ -96,9 +96,10 @@ Setup is idempotent: after an error, fix the cause and run it again. It never re
 relay, and it restarts an agent only when that agent's settings changed.
 
 What it does, in order: preflight; pulls the relay image by digest; one `docker build` that fetches Buzz `781d395`,
-builds `buzz-acp` and `buzz` (its three Cargo Git dependencies locked), and builds the agent image with Tinker
-installed in the image only, all from pinned base images and `claude-agent-acp` 0.81.2; verifies those pins, the
-compose file's SHA-256 and each role's prompt; generates the admin key, one key per agent and Tinker Flow's key
+builds `buzz-acp` and `buzz` (its three Cargo Git dependencies locked), fetches archify `2ab3cae` (the diagram
+skill, section 9), and builds the agent image with Tinker installed in the image only, all from pinned base images
+and `claude-agent-acp` 0.81.2; verifies those pins, the compose file's SHA-256, each role's prompt and archify
+(root-owned files, no update checks, its full gate passing in Chromium with no network); generates the admin key, one key per agent and Tinker Flow's key
 and the relay secrets inside containers; starts the relay on `127.0.0.1:<port>`; checks the bootstrap and
 routing; adds members; sets each profile; creates the channels with a purpose and a canvas; starts the agents
 and Tinker Flow and checks their startup, deny rules and mounts; scans the kit folder and the setup logs for
@@ -183,6 +184,17 @@ at a time, and cannot loop, since every flow has a fixed list of steps. The agen
 buzz-acp's allowlist (`BUZZ_ACP_RESPOND_TO=allowlist`, which always includes you, plus Tinker Flow's key only). A
 step that fails, times out or is never picked up stops the flow with a ⏹️ line.
 
+**Diagrams.** Every agent has [archify](https://github.com/tt-a1i/archify) (MIT) 3.0.1 as a user skill, pinned
+to commit `2ab3cae`, its files owned by root in the image and its update checks off. It turns typed JSON into a
+checked, self-contained HTML diagram: architecture, workflow, sequence, data flow or lifecycle. Ask Tinker (or
+Tinker Tester for a test's view) for one. It draws in `/work/diagram-<topic>` and ends with archify's `finalize`:
+validation (for a diagram of code under `/repos`, every cited source is checked against the committed code at the
+revision it pins), a provenance check that the HTML is exactly what was validated, and a check in Chromium. A
+diagram of uncommitted work cites no sources, and the reply says so. Copy the folder out with `Copy-AgentWork` and
+open its `.html` file in your browser. The read-only agents write no files, so they give the facts and send you
+to Tinker. An agent draws only when you ask; the skill's one-paragraph description is in every session's prompt,
+and the rest loads only when a diagram is drawn.
+
 ## 10. Stop, start and usage
 
 ```powershell
@@ -259,6 +271,12 @@ Console.
   inside such a folder are still read if an agent works there.
 - **The mounted repositories are fully readable** by every agent: history, untracked files, anything secret
   in it. Mount only what you would show them, never a folder that holds credentials.
+- **archify's browser runs without Chromium's sandbox.** The agents have no capabilities and no new privileges,
+  so Chromium cannot build one (`ARCHIFY_CHROME_NO_SANDBOX=1`). It opens only the agent's own diagram, as the
+  same user that already runs commands in that container; the container is the boundary.
+- **An agent can change its own home.** archify's files are root-owned, but each agent owns `~/.claude`: a misled
+  agent could swap the skill folder or write `~/.claude/CLAUDE.md`, and its later sessions would read that. Both
+  live in the container, not in a volume, so `Stop-Agent` and `Start-Agent` give it a clean copy.
 - **Agents with the same owner pass the owner-only gate** (section 6, step 5).
 - **Secrets are in each agent's environment.** Each can read its own agent key and your Claude token, and the
   containers have internet access. Keep the relay local, and revoke the token when you stop.

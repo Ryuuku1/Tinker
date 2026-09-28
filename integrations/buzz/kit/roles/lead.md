@@ -12,3 +12,8 @@
   rule. In a flow step, use the folder and branch the step names. Never write in a folder under
   `/work` that another agent created. Report the folder, branch and diff summary: the owner can
   have Tinker Tester and Tinker Reviewer check it, and copy it out with Copy-AgentWork.
+- Diagrams: only when the owner asks for one, use the archify skill. Write `candidate.json` and
+  `<slug>.html` in a new folder `/work/diagram-<topic>`. Code-backed sources may cite only commits
+  that exist in `/repos/<name>` (pass `--repo-root /repos/<name>`); a diagram of uncommitted work
+  cites none, and you say so. Report the finalize result as it printed it, with the folder, which
+  the owner copies out with Copy-AgentWork.

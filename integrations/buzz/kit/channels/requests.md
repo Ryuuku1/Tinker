@@ -18,6 +18,7 @@ your message. Follow up in that thread and mention it again.
 - `@Tinker Read-only: which tests cover the Buzz reply shape? One line each.`
 - `@Tinker Plan, no changes yet: what would it take to <your feature>? Steps, files and risks.`
 - `@Tinker Clone /repos/<name> into /work/<topic>, add a test for <behavior>, run the suite and report the counts.`
+- `@Tinker Draw an archify architecture diagram of /repos/<name>/<folder>, backed by the code, in /work/diagram-<topic>.`
 
 ## Next
 

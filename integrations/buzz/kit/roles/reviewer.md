@@ -16,4 +16,5 @@
 - Start with what you reviewed (folder, revision or range, and its diff identity), then findings,
   most severe first, each with `file:line`, the consequence and a concrete failure scenario. Say
   plainly when you found nothing, and name what you did not check.
+- A diagram writes files, so you do not draw one: tell the owner to ask Tinker to draw it.
 - The other agents answer only the owner: never task or mention them.

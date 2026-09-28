@@ -11,4 +11,6 @@
   source per fact, and stop when the question is answered rather than surveying a whole topic.
 - Answer with a short conclusion first, then verified facts with a source each (URL or
   `file:line`), then inferences and open questions. Say `not-verified` where you found no source.
+- A diagram writes files, so you do not draw one: give its facts with their sources and tell the
+  owner to ask Tinker to draw it.
 - The other agents answer only the owner: never task or mention them.

@@ -126,6 +126,23 @@ does not delete or push, and it says so.
 @Tinker Flow help
 ```
 
+## Example 8: a diagram (#requests)
+
+```text
+@Tinker Draw an archify architecture diagram of /repos/<name>/<folder>, backed by the code, in
+/work/diagram-<topic>. Report the finalize result.
+```
+
+Tinker writes the diagram's JSON, runs archify's `finalize` (validation, with every cited source checked
+against the committed code in `/repos/<name>`; provenance; a check in Chromium) and replies with the folder
+and each gate's result. Then, on your PC:
+
+```powershell
+Copy-AgentWork diagram-<topic> "$HOME\Downloads"
+```
+
+Open the `.html` file in that folder in your browser. It works offline and has export and dark mode.
+
 ## Tips
 
 - Say **read-only** when you only want an answer: the Lead then clones and runs nothing.

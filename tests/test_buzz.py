@@ -466,6 +466,38 @@ class BuzzKitTests(unittest.TestCase):
                 self.assertNotEqual(subprocess.run(deny_py + bad, capture_output=True).returncode, 0)
         self.assertEqual(settings.read_text(encoding="utf-8"), before)  # a refused role changes nothing
 
+    def test_archify_is_pinned_root_owned_and_offline_in_the_image(self):
+        dockerfile = (self.KIT / "agent" / "Dockerfile").read_text(encoding="utf-8")
+        setup = (self.KIT / "setup.ps1").read_text(encoding="utf-8")
+        pin = re.search(r"ArchifyCommit\s*=\s*'([0-9a-f]{40})'", (self.KIT / "kit.ps1").read_text(encoding="utf-8"))
+        self.assertTrue(pin, "kit.ps1 pins archify's commit")
+        # One commit everywhere: the build fetches it and stops on any other; setup checks what the image records.
+        self.assertIn(f"ARG ARCHIFY_COMMIT={pin.group(1)}", dockerfile)
+        self.assertIn('test "$(git -C /src rev-parse HEAD)" = "$ARCHIFY_COMMIT"', dockerfile)
+        self.assertIn("/kit/archify-commit.txt", setup)
+        self.assertIn("$PIN.ArchifyCommit", setup)
+        # A user skill with root-owned files: every agent loads it, none edits it. No update checks, and a browser
+        # for archify's real-browser gate. Setup runs that gate as the agents run: no capabilities, no network.
+        self.assertRegex(dockerfile, r"(?m)^COPY --from=archify /out/archify/ /home/agent/\.claude/skills/archify/$")
+        self.assertRegex(dockerfile, r"ARCHIFY_UPDATE_CHECK_DISABLED=1\b")
+        self.assertRegex(dockerfile, r"apt-get install [^\n]*\bchromium-headless-shell\b")  # no desktop browser
+        self.assertRegex(dockerfile, r"ARCHIFY_CHROME=/usr/bin/chromium-headless-shell\b")
+        # Without capabilities or new privileges Chromium has no sandbox; the container is the boundary.
+        self.assertRegex(dockerfile, r"ARCHIFY_CHROME_NO_SANDBOX=1\b")
+        self.assertRegex(setup, r"--cap-drop ALL --security-opt no-new-privileges:true --network none \$image")
+        self.assertIn("archify.mjs\" finalize", setup)
+
+    def test_writers_draw_diagrams_where_copy_agent_work_reaches(self):
+        roles = {p.stem: p.read_text(encoding="utf-8") for p in (self.KIT / "roles").glob("*.md")}
+        for role in ("lead", "tester"):  # /work is theirs; Copy-AgentWork copies one folder under /work
+            with self.subTest(role=role):
+                self.assertRegex(roles[role], r"archify[\s\S]*`/work/[a-z-]+<topic>`[\s\S]*Copy-AgentWork")
+        for role in ("planner", "reviewer", "researcher"):  # read-only: no diagram, since it writes files
+            with self.subTest(role=role):
+                self.assertRegex(roles[role], r"(?i)diagram[\s\S]*ask Tinker")
+        base = (self.KIT / "scripts" / "base.md").read_text(encoding="utf-8")
+        self.assertNotIn("archify", base)  # every session pays for the base prompt; the role files say it once
+
     def pwsh(self, script):
         """Run PowerShell 7 against kit.ps1 (no Docker) and return its JSON output."""
         folder = tempfile.TemporaryDirectory()

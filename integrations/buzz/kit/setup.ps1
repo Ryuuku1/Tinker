@@ -128,9 +128,12 @@ if (-not (docker images -q $image)) {
 }
 "  $image"
 
-Step 'Verify the build: Buzz commit, Cargo Git sources, compose file, binaries, Claude Code, Tinker and the prompts'
+Step 'Verify the build: Buzz and archify commits, Cargo Git sources, compose file, binaries, Claude Code, Tinker, the prompts'
 $facts = docker run --rm $image bash -c 'cat /kit/buzz-commit.txt /kit/cargo-git.txt /kit/binaries.sha256' | Out-String
 if ($facts -notmatch "(?m)^$($PIN.BuzzCommit)\r?$") { throw 'The image was not built from the pinned Buzz commit' }
+if ((docker run --rm $image cat /kit/archify-commit.txt) -ne $PIN.ArchifyCommit) {
+  throw 'The image was not built from the pinned archify commit'
+}
 $gitSources = @([regex]::Matches($facts, 'source = "(git\+[^"]+)"') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
 if (Compare-Object $gitSources @($PIN.CargoGit | Sort-Object)) { throw 'Cargo.lock names Git sources other than the pinned three' }
 foreach ($b in 'buzz-acp', 'buzz') {
@@ -147,6 +150,12 @@ $check = docker run --rm $image bash -c ('claude --version; claude plugin list; 
   'for r in ' + ($ROLES -join ' ') + '; do { cat /opt/tinker/integrations/buzz/protocol.md; echo; cat "/kit/roles/$r.md"; } | ' +
   'cmp -s - "/kit/prompts/$r.md" && echo "prompt $r"; done; git config --system --get core.autocrlf; ' +
   'for f in base.md flow.py flows.json usage.py; do test -s "/kit/$f" && echo "kit $f"; done') | Out-String
+# archify as the agents run it (their user, no capabilities, no network): a bundled example through its full gate.
+$archify = docker run --rm --cap-drop ALL --security-opt no-new-privileges:true --network none $image bash -c (
+  'a=~/.claude/skills/archify; test -w "$a" || echo read-only; echo "updates=${ARCHIFY_UPDATE_CHECK_DISABLED:-on}"; ' +
+  'mkdir /tmp/d && cp "$a/examples/web-app.architecture.json" /tmp/d/c.json && cd /tmp/d && ' +
+  'node "$a/bin/archify.mjs" finalize architecture c.json web-app.html --quality showcase --json | jq -r .status') |
+  Out-String
 $blob = git -C $TinkerRepo rev-parse "${TinkerCommit}:scripts/tinker_runtime.py"
 $ok = [ordered]@{
   'Buzz commit, 3 Cargo Git sources and compose.yml pinned' = $true
@@ -158,6 +167,8 @@ $ok = [ordered]@{
   'each role prompt is the protocol, then its role file' = -not @($ROLES | Where-Object { $check -notmatch "(?m)^prompt $_\r?$" })
   'git reads CRLF checkouts; base prompt, Tinker Flow and usage files present' = $check -match '(?m)^input\r?$' -and
     -not @('base.md', 'flow.py', 'flows.json', 'usage.py' | Where-Object { $check -notmatch "(?m)^kit $([regex]::Escape($_))\r?$" })
+  'archify files root-owned, no update checks; its full gate passes offline in Chromium' =
+    $archify -match '(?m)^read-only\r?\n^updates=1\r?\n^pass\r?$'
 }
 $ok.GetEnumerator() | ForEach-Object { "  $($_.Key): $($_.Value)" }
 if ($ok.Values -contains $false) { throw 'The agent image check failed' }
