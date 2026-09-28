@@ -2,7 +2,8 @@
 
 buzz-acp approves every permission prompt, so only deny rules and Tinker's own denies hold. Tinker already
 gates commit, push, branch deletion, remote changes and Buzz workspace changes; these cover what it does not.
-The image is built with the Lead's rules; every agent applies its own role's rules when it starts.
+The image is built with the Lead's rules; every agent applies its own role's rules when it starts. Every agent may
+use the web; WEB stays listed so a start removes the web denies an older image had.
 """
 import json
 import sys
@@ -11,8 +12,8 @@ from pathlib import Path
 BASE = ["Bash(curl:*)", "Bash(wget:*)", "Bash(env)", "Bash(env:*)", "Bash(printenv)", "Bash(printenv:*)"]
 WEB = ["WebFetch", "WebSearch"]
 EDITS = ["Write", "Edit", "MultiEdit", "NotebookEdit"]
-ROLES = {"lead": WEB, "planner": WEB + EDITS, "tester": WEB,   # kit.ps1 $AGENTS: writes = lead, tester
-         "reviewer": WEB + EDITS, "researcher": EDITS}           # only the Researcher uses the web
+ROLES = {"lead": [], "planner": EDITS, "tester": [],   # kit.ps1 $AGENTS: writes = lead, tester
+         "reviewer": EDITS, "researcher": EDITS}
 path, role = Path(sys.argv[1]), sys.argv[2]
 rules = BASE + ROLES[role]
 data = json.loads(path.read_text(encoding="utf-8"))

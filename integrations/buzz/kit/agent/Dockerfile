@@ -1,4 +1,4 @@
-# Tinker's Buzz agents (Lead, Reviewer, Researcher: one image), built without mounting any host folder. Stage 1
+# Tinker's Buzz agents and Tinker Flow (one image), built without mounting any host folder. Stage 1
 # fetches the pinned Buzz source and builds buzz-acp and buzz; stage 2 adds claude-agent-acp 0.81.2 (it bundles
 # Claude Code 2.1.280) and installs Tinker into this image's own home. setup.ps1 puts tinker.tar, deny.py, scripts/
 # and roles/ in the build context, and verifies the pins recorded under /kit against kit.ps1.
@@ -32,8 +32,8 @@ COPY deny.py /opt/kit/deny.py
 # Each role's system prompt: Tinker's Buzz protocol at the pinned commit, then the role's own rules.
 RUN mkdir /kit/prompts && for r in /kit/roles/*.md; do \
       { cat /opt/tinker/integrations/buzz/protocol.md; echo; cat "$r"; } > "/kit/prompts/${r##*/}"; done
-# A repository mounted read-only at /repo is owned by the host user, and a Windows checkout may have CRLF files.
-RUN git config --system safe.directory /repo && git config --system core.autocrlf input
+# A Windows checkout mounted under /repos may have CRLF files (agent.sh trusts each mounted repository by path).
+RUN git config --system core.autocrlf input
 # The bundled claude must be on PATH before the installer runs, or the plugin is never registered.
 RUN ln -s /opt/acp/lib/node_modules/@agentclientprotocol/claude-agent-acp/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude /usr/local/bin/claude \
     && useradd -m -u 10001 -s /bin/bash agent \

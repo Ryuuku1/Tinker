@@ -4,7 +4,9 @@ Synthetic payloads against a temporary home, like test_hook. What buzz-acp and i
 do is recorded as spike evidence in docs/providers.md; these tests prove only the runtime's decisions.
 """
 import hashlib
+import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -420,11 +422,21 @@ class BuzzKitTests(unittest.TestCase):
         self.assertEqual({k: settings.get(k) for k in ("BUZZ_ACP_PERMISSION_MODE", "BUZZ_ACP_RESPOND_TO",
                                                        "BUZZ_ACP_ALLOWED_RESPOND_TO", "BUZZ_ACP_SESSION_POLICY",
                                                        "BUZZ_ACP_NO_MEMORY", "BUZZ_ACP_HEARTBEAT_INTERVAL")},
-                         {"BUZZ_ACP_PERMISSION_MODE": "dont-ask", "BUZZ_ACP_RESPOND_TO": "owner-only",
-                          "BUZZ_ACP_ALLOWED_RESPOND_TO": "owner-only", "BUZZ_ACP_SESSION_POLICY": "thread",
+                         {"BUZZ_ACP_PERMISSION_MODE": "dont-ask", "BUZZ_ACP_RESPOND_TO": "allowlist",
+                          "BUZZ_ACP_ALLOWED_RESPOND_TO": "owner-only,allowlist", "BUZZ_ACP_SESSION_POLICY": "thread",
                           "BUZZ_ACP_NO_MEMORY": "true", "BUZZ_ACP_HEARTBEAT_INTERVAL": "0"})
+        # allowlist = the owner (always implied by buzz-acp) plus Tinker Flow, added per start; never anyone.
+        self.assertNotIn("anyone", " ".join(settings.values()))
         self.assertFalse({"BUZZ_RELAY_URL", "BUZZ_ACP_AGENT_OWNER", "BUZZ_PRIVATE_KEY",  # set per agent at start
-                          "BUZZ_ACP_SYSTEM_PROMPT_FILE"} & set(settings))
+                          "BUZZ_ACP_SYSTEM_PROMPT_FILE", "BUZZ_ACP_RESPOND_TO_ALLOWLIST"} & set(settings))
+        # Fewer tokens per session: the kit's short Buzz base prompt, no git instructions, no auto memory.
+        self.assertEqual({k: settings.get(k) for k in ("BUZZ_ACP_BASE_PROMPT_FILE", "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS",
+                                                       "CLAUDE_CODE_DISABLE_AUTO_MEMORY")},
+                         {"BUZZ_ACP_BASE_PROMPT_FILE": "/kit/base.md", "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+                          "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"})
+        base = (self.KIT / "scripts" / "base.md").read_text(encoding="utf-8")
+        self.assertIn("## Incoming Turn Contract", base)  # Buzz's framing of each turn stays
+        self.assertLess(len(base), 6000)  # the default base prompt is 17.7 KB
         # Command-line git config outranks a repository's own .git/config, which a writer agent controls.
         count = int(settings["GIT_CONFIG_COUNT"])
         forced = {settings[f"GIT_CONFIG_KEY_{i}"]: settings[f"GIT_CONFIG_VALUE_{i}"] for i in range(count)}
@@ -438,9 +450,11 @@ class BuzzKitTests(unittest.TestCase):
         settings = Path(folder.name) / "settings.json"
         settings.write_text(json.dumps({"permissions": {"deny": ["Bash(rm:*)"]}}), encoding="utf-8")
         deny_py = [sys.executable, str(self.KIT / "agent" / "deny.py"), str(settings)]
-        # The image is built with the Lead's rules; each agent applies its own role's rules when it starts.
-        for role, expected in (("lead", base | web), ("researcher", base | edits), ("reviewer", base | web | edits),
-                               ("reviewer", base | web | edits), ("planner", base | web | edits), ("tester", base | web)):
+        # Every agent may use the web; the read-only ones lose the edit tools. The image is built with the Lead's
+        # rules, and a stale web deny from an older image must go when an agent applies its role at start.
+        settings.write_text(json.dumps({"permissions": {"deny": ["Bash(rm:*)", *sorted(web)]}}), encoding="utf-8")
+        for role, expected in (("lead", base), ("researcher", base | edits), ("reviewer", base | edits),
+                               ("reviewer", base | edits), ("planner", base | edits), ("tester", base)):
             subprocess.run(deny_py + [role], check=True, capture_output=True)
             deny = json.loads(settings.read_text(encoding="utf-8"))["permissions"]["deny"]
             with self.subTest(role=role):
@@ -468,12 +482,13 @@ class BuzzKitTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
     def test_each_agent_has_its_own_key_and_the_specialists_mount_read_only(self):
         runs = self.pwsh(r"""
-$s = @{ port = 3200; owner = 'o' * 64; image = 'img:1'; credentialFile = 'C:\c.env'; repository = 'C:\src\Tinker'
-        channels = @{ reviews = 'c2'; zeta = 'c3'; requests = 'c1' }; agents = @{} }
+$s = @{ port = 3200; owner = 'o' * 64; image = 'img:1'; credentialFile = 'C:\c.env'
+        repositories = @('C:\src\Tinker', 'D:\work\Atriis.App')
+        channels = @{ reviews = 'c2'; zeta = 'c3'; requests = 'c1' }; agents = @{ flow = 'f' * 64 } }
 foreach ($r in $AGENTS.Keys) { $s.agents[$r] = "$r".PadRight(64, 'x') }
 $runs = [ordered]@{}
 foreach ($r in $AGENTS.Keys) { $runs[$r] = @(Get-AgentRunArgs $r $s) }
-$s.Remove('repository'); $runs['no-repository'] = @(Get-AgentRunArgs 'lead' $s)
+$s.Remove('repositories'); $runs['no-repository'] = @(Get-AgentRunArgs 'lead' $s)
 $runs | ConvertTo-Json -Depth 3""")
         self.assertEqual(list(runs), ["lead", "planner", "tester", "reviewer", "researcher", "no-repository"])
         writers = {"lead", "tester"}  # everyone else reads /work
@@ -498,18 +513,25 @@ $runs | ConvertTo-Json -Depth 3""")
                     self.assertIn(setting, env)
                 value = {e.split("=", 1)[0]: e.split("=", 1)[1] for e in env}
                 self.assertEqual(value["BUZZ_ACP_CHANNELS"], "c1,c2,c3")  # sorted: a stable settings hash
-                self.assertIn("o" * 64, value["BUZZ_ACP_TEAM_INSTRUCTIONS"])  # only the owner's events are tasks
+                self.assertIn("o" * 64, value["BUZZ_ACP_TEAM_INSTRUCTIONS"])  # the owner's events are tasks,
+                self.assertEqual(value["BUZZ_ACP_RESPOND_TO_ALLOWLIST"], "f" * 64)  # and those of Tinker Flow
+                self.assertIn("f" * 64, value["BUZZ_ACP_TEAM_INSTRUCTIONS"])
         for role in ("lead", "planner", "tester", "reviewer", "researcher"):
-            self.assertIn(r"C:\src\Tinker:/repo:ro", runs[role])
-            self.assertEqual([a for a in runs[role] if a.endswith(":/repo")], [])  # never writable
-        self.assertFalse([a for a in runs["no-repository"] if a.endswith(":/repo:ro")])
+            volumes = [runs[role][i + 1] for i, a in enumerate(runs[role]) if a == "-v"]
+            self.assertIn(r"C:\src\Tinker:/repos/Tinker:ro", volumes)
+            self.assertIn(r"D:\work\Atriis.App:/repos/Atriis.App:ro", volumes)
+            self.assertEqual([v for v in volumes if "/repos/" in v and not v.endswith(":ro")], [])  # never writable
+            team = next(e for e in runs[role] if e.startswith("BUZZ_ACP_TEAM_INSTRUCTIONS="))
+            self.assertIn("/repos/Tinker", team)
+            self.assertIn("/repos/Atriis.App", team)
+        self.assertFalse([a for a in runs["no-repository"] if "/repos/" in a])
 
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
     def test_the_startup_check_catches_colored_error_lines(self):
         # buzz-acp colors its log; a console that renders ANSI keeps the codes in captured text.
         result = self.pwsh(r"""
 $PSStyle.OutputRendering = 'Ansi'
-Save-KitState @{ port = 3200; owner = 'o' * 64; channels = @{ requests = 'c1' }; repository = 'C:\r' }
+Save-KitState @{ port = 3200; owner = 'o' * 64; channels = @{ requests = 'c1' }; repositories = @('C:\src\r') }
 $script:case = @{}
 function docker {
   $e = [char]27; $err = "$e[2m2026-09-28T19:08:00Z$e[0m $e[31mERROR$e[0m $e[2mpool::prompt$e[0m$e[2m:$e[0m failed"
@@ -522,18 +544,20 @@ function docker {
       if ($script:case.error -eq 'later') { $err }   # a failed turn long after startup
     }
     'ps' { 'abc123' }
-    'exec' { if ($args[-1] -eq '/proc/mounts') { "v /work ext4 $($script:case.work),relatime 0 0"; 'g /repo fuse ro,relatime 0 0' }
+    'exec' { if ($args[-1] -eq '/proc/mounts') { "v /work ext4 $($script:case.work),relatime 0 0"; "g /repos/r fuse $($script:case.repo),relatime 0 0" }
              else { @{ permissions = @{ deny = $script:case.deny } } | ConvertTo-Json -Depth 3 } }
   }
 }
-$writerDeny = @('WebFetch', 'WebSearch'); $readOnly = @('WebFetch', 'WebSearch', 'Write', 'Edit')   # never $lead: it is $LEAD
+$writerDeny = @('Bash(curl:*)'); $readOnly = @('Bash(curl:*)', 'Write', 'Edit')   # never $lead: it is $LEAD
 $cases = [ordered]@{
-  'startup-error' = @{ role = 'lead'; error = 'startup'; work = 'rw'; deny = $writerDeny }
-  'later-error'   = @{ role = 'lead'; error = 'later'; work = 'rw'; deny = $writerDeny }
-  'clean'         = @{ role = 'lead'; work = 'rw'; deny = $writerDeny }
-  'reviewer-writable-work' = @{ role = 'reviewer'; work = 'rw'; deny = $readOnly }
-  'reviewer-clean'         = @{ role = 'reviewer'; work = 'ro'; deny = $readOnly }
-  'researcher-may-edit'    = @{ role = 'researcher'; work = 'ro'; deny = @('WebSearch') }
+  'startup-error' = @{ role = 'lead'; error = 'startup'; work = 'rw'; repo = 'ro'; deny = $writerDeny }
+  'later-error'   = @{ role = 'lead'; error = 'later'; work = 'rw'; repo = 'ro'; deny = $writerDeny }
+  'clean'         = @{ role = 'lead'; work = 'rw'; repo = 'ro'; deny = $writerDeny }
+  'lead-without-web'       = @{ role = 'lead'; work = 'rw'; repo = 'ro'; deny = @('WebFetch') }
+  'repository-writable'    = @{ role = 'lead'; work = 'rw'; repo = 'rw'; deny = $writerDeny }
+  'reviewer-writable-work' = @{ role = 'reviewer'; work = 'rw'; repo = 'ro'; deny = $readOnly }
+  'reviewer-clean'         = @{ role = 'reviewer'; work = 'ro'; repo = 'ro'; deny = $readOnly }
+  'researcher-may-edit'    = @{ role = 'researcher'; work = 'ro'; repo = 'ro'; deny = @('Bash(curl:*)') }
 }
 $result = [ordered]@{}
 foreach ($name in $cases.Keys) {
@@ -544,8 +568,9 @@ $result | ConvertTo-Json""")
         self.assertTrue(result["startup-error"].startswith("Not started cleanly: t-lead"), result["startup-error"])
         for passing in ("later-error", "clean", "reviewer-clean"):  # a later failed turn is not a startup failure
             self.assertEqual(result[passing], "passed", passing)
-        self.assertTrue(result["reviewer-writable-work"].startswith("Not started cleanly: t-reviewer"))
-        self.assertTrue(result["researcher-may-edit"].startswith("Not started cleanly: t-researcher"))
+        for failing, agent in (("reviewer-writable-work", "t-reviewer"), ("researcher-may-edit", "t-researcher"),
+                               ("lead-without-web", "t-lead"), ("repository-writable", "t-lead")):
+            self.assertTrue(result[failing].startswith(f"Not started cleanly: {agent}"), (failing, result[failing]))
 
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
     def test_role_names_are_case_insensitive_everywhere(self):
@@ -589,7 +614,7 @@ $result | ConvertTo-Json -Depth 3""")
         names = [agent["name"] for agent in tables["agents"].values()]
         self.assertEqual(names, ["Tinker", "Tinker Planner", "Tinker Tester", "Tinker Reviewer", "Tinker Researcher"])
         # The flags drive the mounts and the startup check; deny.py must agree with them for every role.
-        self.assertEqual({r for r, a in tables["agents"].items() if a["web"]}, {"researcher"})
+        self.assertEqual({r for r, a in tables["agents"].items() if a["web"]}, set(tables["agents"]))  # all agents
         self.assertEqual({r for r, a in tables["agents"].items() if a["writes"]}, {"lead", "tester"})
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
@@ -607,7 +632,223 @@ $result | ConvertTo-Json -Depth 3""")
             canvas = (self.KIT / "channels" / f"{channel}.md").read_text(encoding="utf-8")
             with self.subTest(channel=channel):
                 self.assertTrue(0 < len(purpose) <= 200)
-                self.assertTrue(any(f"@{name}" in canvas for name in names), "a canvas says whom to mention")
+                self.assertTrue(any(f"@{name}" in canvas for name in names + ["Tinker Flow"]),
+                                "a canvas says whom to mention")
+
+    def test_usage_counts_each_reply_once(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        session = Path(folder.name) / ".claude" / "projects" / "-home-agent-chat" / "s1.jsonl"
+        session.parent.mkdir(parents=True)
+        usage = {"input_tokens": 10, "output_tokens": 5, "cache_read_input_tokens": 100,
+                 "cache_creation_input_tokens": 20}
+        lines = [{"type": "user", "message": {"role": "user", "content": "hi"}},
+                 {"type": "assistant", "message": {"id": "m1", "usage": usage}},
+                 {"type": "assistant", "message": {"id": "m1", "usage": usage}},  # one reply, logged per block
+                 {"type": "assistant", "message": {"id": "m2", "usage": dict(usage, output_tokens=7)}}]
+        session.write_text("\n".join(json.dumps(line) for line in lines) + "\nnot json\n", encoding="utf-8")
+        out = subprocess.run([sys.executable, str(self.KIT / "scripts" / "usage.py")], capture_output=True, text=True,
+                             env={**os.environ, "HOME": folder.name, "USERPROFILE": folder.name}, check=True)
+        self.assertEqual(json.loads(out.stdout), {"sessions": 1, "replies": 2, "input": 20, "output": 12,
+                                                  "cache_read": 200, "cache_write": 40})
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
+    def test_tinker_flow_runs_without_a_model_credential_or_files(self):
+        argv = self.pwsh(r"""
+$s = @{ port = 3200; owner = 'o' * 64; image = 'img:1'; credentialFile = 'C:\c.env'; repositories = @('C:\src\Tinker')
+        channels = @{ requests = 'c1'; flows = 'c9' }; agents = @{ flow = 'f' * 64 } }
+foreach ($r in $AGENTS.Keys) { $s.agents[$r] = "$r".PadRight(64, 'x') }
+@(Get-FlowRunArgs $s) | ConvertTo-Json""")
+
+        def after(flag):
+            return [argv[i + 1] for i, a in enumerate(argv) if a == flag]
+        self.assertEqual(after("--name"), ["t-flow"])
+        self.assertEqual(after("-v"), ["t-flow-key:/agentkey:ro"])  # its key only: no /work, no repositories
+        self.assertEqual(after("--env-file"), [])  # no Claude credential: Tinker Flow runs no model
+        self.assertEqual(argv[-3:], ["img:1", "bash", "/kit/flow.sh"])
+        self.assertEqual(after("--cap-drop"), ["ALL"])
+        env = dict(e.split("=", 1) for e in after("-e"))
+        self.assertEqual((env["FLOW_OWNER"], env["FLOW_SELF"]), ("o" * 64, "f" * 64))
+        self.assertEqual(env["FLOW_CHANNELS"], "c1,c9")
+        agents = json.loads(env["FLOW_AGENTS"])
+        self.assertEqual(sorted(agents), ["lead", "planner", "researcher", "reviewer", "tester"])
+        self.assertEqual(agents["planner"], {"name": "Tinker Planner", "hex": "planner".ljust(64, "x")})
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
+    def test_the_wizard_asks_until_each_answer_is_valid(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        repo, worktree = Path(folder.name) / "Repo", Path(folder.name) / "Wt"
+        (repo / ".git").mkdir(parents=True)
+        worktree.mkdir()
+        (worktree / ".git").write_text("gitdir: C:/elsewhere", encoding="utf-8")
+        credential = Path(folder.name) / "claude.env"
+        credential.write_text("", encoding="utf-8")  # the wizard only checks that the file exists
+        answers = ["Bad Name!", "team-buzz", "80", "3300", str(worktree), str(repo), str(credential), "y"]
+        listed = ", ".join("'" + a.replace("'", "''") + "'" for a in answers)
+        result = self.pwsh(f"""
+$script:answers = @({listed}); $script:asked = 0
+function Read-Host([string]$Prompt) {{ $script:asked++; $script:answers[$script:asked - 1] }}
+function Test-PortFree([int]$Port) {{ $true }}
+$a = Read-SetupAnswers 6>$null
+@{{ answers = $a; asked = $script:asked }} | ConvertTo-Json -Depth 3""")
+        self.assertEqual(result["asked"], len(answers))
+        a = result["answers"]
+        self.assertEqual((a["Project"], a["Port"]), ("team-buzz", 3300))
+        self.assertEqual([os.path.normcase(p) for p in a["Repository"]], [os.path.normcase(str(repo))])
+        self.assertEqual(os.path.normcase(a["CredentialFile"]), os.path.normcase(str(credential)))
+
+
+class BuzzFlowTests(unittest.TestCase):
+    """Tinker Flow, the conductor with no model: kit/scripts/flow.py against a fake relay."""
+    FLOWS = BuzzKitTests.KIT / "scripts" / "flows.json"
+    OWNER, ME = "0" * 64, "f" * 64
+    AGENTS = {role: {"name": name, "hex": role.ljust(64, "a")} for role, name in (
+        ("lead", "Tinker"), ("planner", "Tinker Planner"), ("tester", "Tinker Tester"),
+        ("reviewer", "Tinker Reviewer"), ("researcher", "Tinker Researcher"))}
+
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("kit_flow", BuzzKitTests.KIT / "scripts" / "flow.py")
+        self.flow = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.flow)
+        self.relay = FakeRelay({a["hex"]: role for role, a in self.AGENTS.items()})
+        self.conductor = self.flow.Flow(self.relay, owner=self.OWNER, me=self.ME, agents=self.AGENTS,
+                                        channels=["c1"], flows=json.loads(self.FLOWS.read_text(encoding="utf-8")),
+                                        poll=10, step_timeout=3600, pickup_timeout=300,
+                                        sleep=self.relay.tick, now=lambda: self.relay.t, log=lambda *a: None)
+
+    def request(self, text, author=None, mention=True):
+        return self.relay.post(author or self.OWNER, text, "c1", mentions=[self.ME] if mention else [])
+
+    def test_parse_and_topic(self):
+        parse, topic = self.flow.parse, self.flow.topic
+        self.assertEqual(parse("@Tinker Flow story: Add a disk check"), ("story", "Add a disk check"))
+        self.assertEqual(parse("@Tinker Flow  BUG -  setup hangs"), ("bug", "setup hangs"))
+        self.assertEqual(parse("@Tinker Flow stop"), ("stop", ""))
+        self.assertEqual(parse("@Tinker Flow"), ("help", ""))
+        self.assertEqual(topic("Add a disk-space warning to setup.ps1!"), "add-a-disk-space-warning-to-setup-ps1")
+        self.assertLessEqual(len(topic("x " * 100)), 40)
+        self.assertEqual(topic("!!!"), "flow")
+
+    def test_a_story_runs_through_each_agent_in_one_thread(self):
+        root = self.request("@Tinker Flow story: Add a disk check")
+        self.conductor.poll_once()
+        sent = self.relay.sent
+        self.assertEqual([s["mentions"] for s in sent],
+                         [[], *[[self.AGENTS[r]["hex"]] for r in ("planner", "lead", "tester", "reviewer")],
+                          [self.OWNER]])
+        self.assertTrue(all(s["reply_to"] == root for s in sent))  # the whole flow is one thread
+        lead = sent[2]["text"]
+        self.assertTrue(lead.startswith("@Tinker "))
+        self.assertIn("/work/add-a-disk-check", lead)
+        self.assertIn("> planner report", lead)  # the Planner's brief, quoted as data
+        self.assertIn("＠Tinker Tester", lead)  # a quoted mention can never trigger another agent
+        self.assertNotIn("@Tinker Tester", lead)
+        self.assertIn("Copy-AgentWork add-a-disk-check", sent[-1]["text"])
+
+    def test_only_the_owner_starts_a_flow_and_only_by_mentioning_it(self):
+        self.request("@Tinker Flow story: from an agent", author=self.AGENTS["lead"]["hex"])
+        self.request("@Tinker Flow story: from a stranger", author="9" * 64)
+        self.request("Tinker Flow story: no mention", mention=False)
+        self.conductor.poll_once()
+        self.assertEqual(self.relay.sent, [])
+
+    def test_a_failed_step_stops_the_flow(self):
+        self.relay.behavior["lead"] = "fail"
+        self.request("@Tinker Flow story: Add a disk check")
+        self.conductor.poll_once()
+        mentioned = [s["mentions"] for s in self.relay.sent]
+        self.assertNotIn([self.AGENTS["tester"]["hex"]], mentioned)
+        self.assertEqual(mentioned[-1], [self.OWNER])
+        self.assertIn("stopped at Tinker", self.relay.sent[-1]["text"])
+
+    def test_an_agent_that_never_picks_up_stops_the_flow(self):
+        self.relay.behavior["planner"] = "silent"
+        self.request("@Tinker Flow story: Add a disk check")
+        self.conductor.poll_once()
+        self.assertIn("Tinker Planner", self.relay.sent[-1]["text"])
+        self.assertIn("did not pick", self.relay.sent[-1]["text"])
+        self.assertLess(self.relay.t, 1000 + 3600)  # the pickup timeout, not the step timeout
+
+    def test_the_owner_can_stop_a_running_flow(self):
+        root = self.request("@Tinker Flow story: Add a disk check")
+        self.relay.later(15, lambda: self.relay.post(self.OWNER, "@Tinker Flow stop", "c1", root=root,
+                                                      mentions=[self.ME]))
+        self.relay.behavior["planner"] = "slow"
+        self.conductor.poll_once()
+        self.assertIn("stopped", self.relay.sent[-1]["text"])
+        self.assertNotIn([self.AGENTS["lead"]["hex"]], [s["mentions"] for s in self.relay.sent])
+
+    def test_help_lists_the_flows(self):
+        self.request("@Tinker Flow dance")
+        self.conductor.poll_once()
+        self.assertEqual(len(self.relay.sent), 1)
+        for name in json.loads(self.FLOWS.read_text(encoding="utf-8")):
+            self.assertIn(name, self.relay.sent[0]["text"])
+
+    def test_flows_name_known_roles_and_placeholders(self):
+        flows = json.loads(self.FLOWS.read_text(encoding="utf-8"))
+        self.assertTrue({"story", "bug", "review", "research"} <= set(flows))
+        for name, flow in flows.items():
+            known = {"request", "topic"}
+            for role, template in flow["steps"]:
+                with self.subTest(flow=name, role=role):
+                    self.assertIn(role, self.AGENTS)
+                    self.assertLessEqual(set(re.findall(r"\{(\w+)\}", template)), known)
+                    self.assertNotIn("@", template)  # only the conductor adds the one mention per step
+                known.add(role)
+
+
+class FakeRelay:
+    """Just enough of a Buzz relay for Tinker Flow: events, threads, reactions and scripted agents."""
+
+    def __init__(self, agents):
+        self.t, self.events, self.reacts, self.sent, self.jobs = 1000, [], {}, [], []
+        self.agents, self.behavior = agents, {}
+
+    def post(self, author, text, channel, root=None, mentions=()):
+        eid = f"{len(self.events) + 1:064x}"
+        tags = [["h", channel]] + ([["e", root, "", "root"]] if root else []) + [["p", m] for m in mentions]
+        self.events.append({"id": eid, "pubkey": author, "content": text, "created_at": self.t, "tags": tags})
+        return eid
+
+    def later(self, seconds, job):
+        self.jobs.append((self.t + seconds, job))
+
+    def tick(self, seconds):
+        self.t += seconds
+        due = [j for j in self.jobs if j[0] <= self.t]
+        self.jobs = [j for j in self.jobs if j[0] > self.t]
+        for _, job in due:
+            job()
+
+    # The client interface flow.py uses.
+    def messages(self, channel, since):
+        return [e for e in self.events if ["h", channel] in e["tags"] and e["created_at"] >= since]
+
+    def thread(self, channel, root):
+        return [e for e in self.events if e["id"] == root or any(t[:2] == ["e", root] for t in e["tags"])]
+
+    def reactions(self, event_id):
+        return [{"emoji": emoji, "pubkeys": [pk]} for emoji, pk in self.reacts.get(event_id, [])]
+
+    def send(self, channel, reply_to, text, mentions):
+        self.sent.append({"channel": channel, "reply_to": reply_to, "text": text, "mentions": list(mentions)})
+        eid = self.post("f" * 64, text, channel, root=reply_to, mentions=mentions)
+        for hexkey in mentions:
+            if hexkey in self.agents:
+                self.answer(self.agents[hexkey], hexkey, eid, reply_to, channel)
+        return eid
+
+    def answer(self, role, hexkey, prompt, root, channel):
+        behavior = self.behavior.get(role, "ok")
+        if behavior == "silent":
+            return
+        delay = 400 if behavior == "slow" else 20
+        self.later(5, lambda: self.reacts.setdefault(prompt, []).extend([("👀", hexkey), ("💬", hexkey)]))
+        text = ("⚠️ I couldn't process the last request" if behavior == "fail"
+                else f"{role} report. Next, @Tinker Tester should test /work/x.")
+        self.later(delay, lambda: (self.post(hexkey, text, channel, root=root), self.reacts.pop(prompt, None)))
 
 
 class BuzzPackTests(unittest.TestCase):

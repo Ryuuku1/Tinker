@@ -1,8 +1,8 @@
 # #planning: shape it before anyone builds it, with Tinker Planner
 
-@mention **@Tinker Planner** with an idea, a problem or a feature request. It reads the repository at
-`/repo` to ground the plan and changes nothing: `/repo` and `/work` are read-only for it, and its edit
-tools and the web are denied.
+@mention **@Tinker Planner** with an idea, a problem or a feature request. It reads the repositories under
+`/repos` and the web to ground the plan, and changes nothing: `/repos` and `/work` are read-only for it,
+and its edit tools are denied.
 
 ## Try
 
@@ -14,4 +14,4 @@ tools and the web are denied.
 
 A short brief: the problem and the outcome, in and out of scope, acceptance criteria, the user flow and
 its states, risks and open questions. Hand it to **@Tinker** in #requests to build, and to
-**@Tinker Tester** in #testing to turn the criteria into tests.
+**@Tinker Tester** in #testing to turn the criteria into tests, or run it all with `@Tinker Flow story`.

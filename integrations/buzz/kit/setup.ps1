@@ -1,18 +1,19 @@
 #Requires -Version 7.2
 <#
 .SYNOPSIS
-Sets up a local Buzz relay and Tinker's team on this Windows PC: Tinker (the Lead), Tinker Reviewer and Tinker
-Researcher, owned by your Buzz Desktop identity, in channels whose canvases show how to work with them.
+Sets up a local Buzz relay and Tinker's team on this Windows PC: five agents (Tinker the Lead, Tinker Planner, Tester,
+Reviewer and Researcher) and Tinker Flow, which runs whole flows across them, owned by your Buzz Desktop identity.
 
 .DESCRIPTION
-Idempotent and resumable: after a failure, fix the cause and run it again with the same parameters. It never
-regenerates keys over an existing relay. Keys and relay secrets are generated inside containers and never printed;
-the credential file is only passed to Docker. The only host folder a container mounts is -Repository, read-only.
-See GUIDE.md and EXAMPLES.md.
+Run it with no parameters for the wizard: it asks a few questions, sets everything up, and asks for your npub once
+Buzz Desktop shows it. With parameters it runs unattended. Idempotent and resumable: after a failure, fix the cause
+and run it again. It never regenerates keys over an existing relay. Keys and relay secrets are generated inside
+containers and never printed; the credential file is only passed to Docker. The only host folders a container mounts
+are the -Repository folders, read-only. See GUIDE.md and EXAMPLES.md.
 
 .EXAMPLE
-.\setup.ps1                                       # relay, profiles and channels, then it prints what to do in Buzz Desktop
-.\setup.ps1 -OwnerNpub npub1... -CredentialFile "$HOME\tinker-buzz-secrets\claude.env" -Repository C:\src\my-repo
+.\setup.ps1                                       # the wizard
+.\setup.ps1 -OwnerNpub npub1... -CredentialFile "$HOME\tinker-buzz-secrets\claude.env" -Repository C:\src\app, C:\src\lib
 #>
 [CmdletBinding()]
 param(
@@ -22,20 +23,42 @@ param(
   [string]$TinkerCommit,     # default: the kit's pin
   [string]$CredentialFile,   # a path only: passed to docker --env-file, never read
   [string]$OwnerNpub,        # your Buzz Desktop npub; without it, setup stops once the relay and channels are up
-  [string]$Repository,       # a folder every agent reads at /repo, mounted read-only; kept for reruns, '' removes it
+  [string[]]$Repository,     # folders every agent reads at /repos/<name>, read-only; kept for reruns, '' removes them
   [string]$StateRoot)        # default %LOCALAPPDATA%\TinkerBuzz; pass the same value to kit.ps1 and teardown.ps1
+
+# The wizard: no parameters in an interactive console. It runs this script twice, before and after your npub.
+if (-not $PSBoundParameters.Count -and [Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+  . (Join-Path $PSScriptRoot 'kit.ps1')
+  Write-Host "Tinker's team in Buzz: this sets up a private relay, five agents and Tinker Flow on this PC (GUIDE.md).`n"
+  $answers = Read-SetupAnswers
+  if (-not $answers) { 'Nothing was changed.'; return }
+  & $PSCommandPath @answers
+  . (Join-Path $PSScriptRoot 'kit.ps1') -Project $answers.Project
+  if (-not (Read-KitState).owner) {
+    Write-Host "`nIn Buzz Desktop: Add Community, enter ws://localhost:$($answers.Port), and copy the npub it shows."
+    do { $npub = (Read-Host -Prompt 'Your npub').Trim() } until ($npub -match '^npub1[02-9ac-hj-np-z]{58}$')
+    & $PSCommandPath @answers -OwnerNpub $npub
+    Write-Host "`nBack in Buzz Desktop, press Try again, then open #tinker-lab."
+  }
+  return
+}
 . (Join-Path $PSScriptRoot 'kit.ps1') -Project $Project -StateRoot $StateRoot
 $TinkerRepo = (Resolve-Path -LiteralPath $TinkerRepo).Path
 if (-not $TinkerCommit) { $TinkerCommit = $PIN.TinkerCommit }
 if ($OwnerNpub -and $OwnerNpub -notmatch '^(npub1[02-9ac-hj-np-z]{58}|[0-9a-f]{64})$') { throw "Not an npub: $OwnerNpub" }
-if ($Repository) {
-  if (-not (Test-Path -LiteralPath $Repository -PathType Container)) { throw "Repository folder not found: $Repository" }
-  $Repository = (Resolve-Path -LiteralPath $Repository).Path
-  if (Test-Path -LiteralPath (Join-Path $Repository '.git') -PathType Leaf) {   # its .git names a Windows gitdir path
-    throw "A git worktree cannot be mounted, since git inside Linux cannot follow its .git file: pass the main clone ($Repository)"
+$Repository = @(foreach ($r in $Repository | Where-Object { $_ }) {
+  if (-not (Test-Path -LiteralPath $r -PathType Container)) { throw "Repository folder not found: $r" }
+  $r = (Resolve-Path -LiteralPath $r).Path
+  if (Test-Path -LiteralPath (Join-Path $r '.git') -PathType Leaf) {   # its .git names a Windows gitdir path
+    throw "A git worktree cannot be mounted, since git inside Linux cannot follow its .git file: pass the main clone ($r)"
   }
+  $r
+})
+if (@($Repository | ForEach-Object { Split-Path -Leaf $_ } | Group-Object | Where-Object Count -gt 1)) {
+  throw 'Two repositories share a folder name, so they would share one /repos/<name>: rename one'
 }
 $LOGS = "$STATE\logs"; $ENVFILE = "$STATE\.env"; $CTX = "$STATE\agent"; $ROLES = @($AGENTS.Keys)
+function Get-Profile([string]$Id) { if ($Id -eq 'flow') { $FLOW } else { $AGENTS[$Id] } }   # name and about
 $KITARGS = "-Project $Project" + $(if ($StateRoot) { " -StateRoot '$StateRoot'" } else { '' })   # for the hints below
 $script:n = 0
 function Step([string]$Title) { $script:n++; "`n[$script:n/12] $Title" }
@@ -44,7 +67,7 @@ function Assert-Exit([string]$What) { if ($LASTEXITCODE) { throw "$What failed (
 function Invoke-SecretScan([hashtable]$Settings) {
   "`nFinal check: secret scan of the kit folder and the setup logs"
   $scan = @('create', '--label', "tinker.kit=$Project", '--user', '0:0', '-v', "$($VOL.humankeys):/humankeys:ro") +
-    @($ROLES | ForEach-Object { '-v', "$($VOL["$_-key"]):/keys/${_}:ro" })
+    @($IDENTITIES | ForEach-Object { '-v', "$($VOL["$_-key"]):/keys/${_}:ro" })
   if ($Settings.credentialFile) { $scan += @('--env-file', $Settings.credentialFile) }
   $c = docker @scan $Settings.image bash /kit/secretscan.sh /tmp/relay.env /tmp/kit /tmp/logs; Assert-Exit 'creating the scan container'
   try {
@@ -73,11 +96,12 @@ if (-not $ours -and @(Get-NetTCPConnection -LocalPort $Port -State Listen -Error
   throw "Port $Port is in use: choose another with -Port"
 }
 $s.project = $Project; $s.port = $Port; $s.tinkerCommit = $TinkerCommit
-if ($PSBoundParameters.ContainsKey('Repository')) { $s.repository = $Repository }
+if ($PSBoundParameters.ContainsKey('Repository')) { $s.repositories = @($Repository) }
 if (-not $s.channels) { $s.channels = @{} }
 if (-not $s.agentConfig) { $s.agentConfig = @{} }
 Save-KitState $s
-"  Docker $os, Compose $compose, state folder $STATE" + $(if ($s.repository) { "`n  Repository (read-only at /repo): $($s.repository)" } else { '' })
+"  Docker $os, Compose $compose, state folder $STATE"
+Get-RepoMounts $s | ForEach-Object { "  Repository $($_.host), read-only at $($_.path)" }
 
 Step 'Pinned relay image'
 docker pull --quiet $PIN.RelayImage | Out-Null; Assert-Exit "docker pull $($PIN.RelayImage)"
@@ -121,17 +145,19 @@ $check = docker run --rm $image bash -c ('claude --version; claude plugin list; 
   'jq -r "(.env // {}) | keys[]" ~/.claude/settings.json | grep -cE "^(ANTHROPIC_|CLAUDE_CODE_OAUTH_TOKEN$|CLAUDE_CODE_USE_)"; ' +
   'git hash-object /opt/tinker/scripts/tinker_runtime.py; buzz-acp --help | head -n 1; grep -c "claude-agent-acp@0.81.2" /opt/acp/npm-ls.txt; ' +
   'for r in ' + ($ROLES -join ' ') + '; do { cat /opt/tinker/integrations/buzz/protocol.md; echo; cat "/kit/roles/$r.md"; } | ' +
-  'cmp -s - "/kit/prompts/$r.md" && echo "prompt $r"; done; git config --system --get safe.directory') | Out-String
+  'cmp -s - "/kit/prompts/$r.md" && echo "prompt $r"; done; git config --system --get core.autocrlf; ' +
+  'for f in base.md flow.py flows.json usage.py; do test -s "/kit/$f" && echo "kit $f"; done') | Out-String
 $blob = git -C $TinkerRepo rev-parse "${TinkerCommit}:scripts/tinker_runtime.py"
 $ok = [ordered]@{
   'Buzz commit, 3 Cargo Git sources and compose.yml pinned' = $true
   'Claude Code 2.1.280' = $check -match '2\.1\.280 \(Claude Code\)'
   'tinker plugin enabled' = $check -match 'tinker@tinker-local[\s\S]*?enabled'
-  "8 deny rules (the Lead's), no apiKeyHelper, no credential names" = $check -match '(?m)^8\r?\n^null\r?\n^0\r?\n^0\r?$'
+  "6 deny rules (the Lead's), no apiKeyHelper, no credential names" = $check -match '(?m)^6\r?\n^null\r?\n^0\r?\n^0\r?$'
   'runtime matches the Tinker commit' = $check -match [regex]::Escape($blob)
   'buzz-acp runs; claude-agent-acp 0.81.2' = $check -match 'ACP harness that bridges Buzz events to AI agents\r?\n[1-9]'
   'each role prompt is the protocol, then its role file' = -not @($ROLES | Where-Object { $check -notmatch "(?m)^prompt $_\r?$" })
-  'git trusts /repo only' = $check -match '(?m)^/repo\r?$'
+  'git reads CRLF checkouts; base prompt, Tinker Flow and usage files present' = $check -match '(?m)^input\r?$' -and
+    -not @('base.md', 'flow.py', 'flows.json', 'usage.py' | Where-Object { $check -notmatch "(?m)^kit $([regex]::Escape($_))\r?$" })
 }
 $ok.GetEnumerator() | ForEach-Object { "  $($_.Key): $($_.Value)" }
 if ($ok.Values -contains $false) { throw 'The agent image check failed' }
@@ -141,11 +167,11 @@ Step 'Keys and relay secrets, generated inside containers and never printed'
 $first = -not (Test-Path -LiteralPath $ENVFILE)
 if (-not $first -and -not $s.admin) { throw '.env exists but kit.json lacks the admin key: run teardown.ps1, then setup again' }
 if (-not $s.agents) { $s.agents = @{} }
-$missing = @($ROLES | Where-Object { -not $s.agents[$_] })
+$missing = @($IDENTITIES | Where-Object { -not $s.agents[$_] })
 if (-not $first -and -not $missing) { '  Keys exist; never regenerated over a relay' } else {
   if ($first -and @(docker volume ls -q) -contains "${Project}_buzz-postgres-data") { throw 'The relay database exists but .env is gone: run teardown.ps1 to start over' }
-  $mounts = @('-v', "$($VOL.humankeys):/humankeys") + @($ROLES | ForEach-Object { '-v', "$($VOL["$_-key"]):/keys/$_" })
-  $c = docker create --label "tinker.kit=$Project" --user 0:0 --entrypoint bash @mounts $PIN.RelayImage /tmp/keygen.sh $Port $PIN.RelayImage @ROLES
+  $mounts = @('-v', "$($VOL.humankeys):/humankeys") + @($IDENTITIES | ForEach-Object { '-v', "$($VOL["$_-key"]):/keys/$_" })
+  $c = docker create --label "tinker.kit=$Project" --user 0:0 --entrypoint bash @mounts $PIN.RelayImage /tmp/keygen.sh $Port $PIN.RelayImage @IDENTITIES
   Assert-Exit 'creating the key container'
   try {
     docker cp "$KIT\scripts\keygen.sh" "${c}:/tmp/keygen.sh" | Out-Null; Assert-Exit 'copying keygen.sh'
@@ -159,14 +185,14 @@ if (-not $first -and -not $missing) { '  Keys exist; never regenerated over a re
   $keys = @{}
   foreach ($l in $out) { if ($l -match '^([a-z]+)=([0-9a-f]{64})$') { $keys[$Matches[1]] = $Matches[2] } }
   # Keys kit.json already knows must come back unchanged: a different one means the volumes and kit.json disagree.
-  foreach ($k in @('admin') + $ROLES) {
+  foreach ($k in @('admin') + $IDENTITIES) {
     $known = if ($k -eq 'admin') { $s.admin } else { $s.agents[$k] }
     if (-not $keys[$k] -or ($known -and $known -ne $keys[$k])) { throw "The $k key does not match kit.json: run teardown.ps1 to start over" }
   }
-  $s.admin = $keys.admin; foreach ($r in $ROLES) { $s.agents[$r] = $keys[$r] }
+  $s.admin = $keys.admin; foreach ($r in $IDENTITIES) { $s.agents[$r] = $keys[$r] }
   Save-KitState $s
-  if ($first) { "  Generated the admin identity, one identity per agent ($($ROLES -join ', ')) and the relay secrets" }
-  else { "  Generated identities for the new agents: $($missing -join ', ')" }
+  if ($first) { "  Generated the admin identity, one per agent ($($ROLES -join ', ')), Tinker Flow's and the relay secrets" }
+  else { "  Generated identities for: $($missing -join ', ')" }
 }
 
 Step "Relay up, published on 127.0.0.1:$Port only"
@@ -197,17 +223,18 @@ function Add-RelayMember([string]$Key) {
   $o = Invoke-Compose exec -T relay buzz-admin add-member --pubkey $Key 2>&1 | Out-String
   if ($o -match '(?:added|already a member:)\s*([0-9a-f]{64})') { $Matches[1] } else { throw "add-member failed for $Key" }
 }
-foreach ($r in $ROLES) { [void](Add-RelayMember $s.agents[$r]) }
+foreach ($r in $IDENTITIES) { [void](Add-RelayMember $s.agents[$r]) }
 $s.agentMembership = 'direct'   # a direct member never gets an owner recorded; see GUIDE.md, Phase 2
 if ($OwnerNpub) { $s.owner = Add-RelayMember $OwnerNpub }
 Save-KitState $s
-foreach ($r in $ROLES) { "  $($AGENTS[$r].name.PadRight(18)) $(ConvertTo-Npub $s.agents[$r])" }
+foreach ($r in $IDENTITIES) { "  $((Get-Profile $r).name.PadRight(18)) $(ConvertTo-Npub $s.agents[$r])" }
 if ($s.owner) { "  $('Owner'.PadRight(18)) $(ConvertTo-Npub $s.owner)" }
 
-Step 'Agent profiles: a name and an about line, published with each agent key'
-foreach ($r in $ROLES) {
-  Invoke-As $r users set-profile --name $AGENTS[$r].name --about $AGENTS[$r].about | Out-Null; Assert-Exit "setting the $r profile"
-  "  $($AGENTS[$r].name)"
+Step 'Profiles: a name and an about line, published with each identity'
+foreach ($r in $IDENTITIES) {
+  $p = Get-Profile $r
+  Invoke-As $r users set-profile --name $p.name --about $p.about | Out-Null; Assert-Exit "setting the $r profile"
+  "  $($p.name)"
 }
 
 Step 'Channels: the owner and every agent as members, a purpose and a canvas each'
@@ -221,7 +248,7 @@ foreach ($name in $CHANNELS.Keys) {
   }
   $id = $ch.channel_id; $s.channels[$name] = $id; $done = @()
   $members = @(Invoke-Admin channels members --channel $id | Out-String | ConvertFrom-Json).pubkey
-  foreach ($k in @($ROLES | ForEach-Object { $s.agents[$_] }) + @($s.owner) | Where-Object { $_ -and $members -notcontains $_ }) {
+  foreach ($k in @($IDENTITIES | ForEach-Object { $s.agents[$_] }) + @($s.owner) | Where-Object { $_ -and $members -notcontains $_ }) {
     Invoke-Admin channels add-member --channel $id --pubkey $k | Out-Null; Assert-Exit "adding a member to #$name"; $done += 'member'
   }
   $info = @(Invoke-Admin channels search --query $name | Out-String | ConvertFrom-Json) | Where-Object channel_id -eq $id   # get omits the purpose
@@ -272,12 +299,19 @@ foreach ($r in $ROLES) {   # restart an agent only when its run settings changed
   if ((docker ps -q --filter "name=^/$Project-$r$") -and $s.agentConfig[$r] -eq $wanted) { "  $($AGENTS[$r].name) is already running with these settings" }
   else { $restart += $r; $s.agentConfig[$r] = $wanted }
 }
+$flowWanted = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes(
+  (Get-FlowRunArgs $s) -join "`n")))
+$flowRestart = -not (docker ps -q --filter "name=^/$Project-flow$") -or $s.agentConfig.flow -ne $flowWanted
+$s.agentConfig.flow = $flowWanted
 Save-KitState $s
 if ($restart) { Stop-Agent $restart; Start-Agent $restart }
+if ($flowRestart) { Stop-Flow; Start-Flow } else { '  Tinker Flow is already running with these settings' }
 
 Step 'Startup check'
 Test-AgentStartup
-"`nTinker's team is running. In Buzz Desktop open #tinker-lab and @mention an agent by name:"
-foreach ($r in $ROLES) { "  $($AGENTS[$r].name.PadRight(18)) $(ConvertTo-Npub $s.agents[$r])" }
-"Worked examples: EXAMPLES.md. Status: . .\kit.ps1 $KITARGS; Get-KitStatus   (Stop-Agent and Start-Agent there too)"
+Test-FlowStartup
+"`nTinker's team is running. In Buzz Desktop open #tinker-lab and @mention an agent by name, or run a whole flow in"
+"#flows with '@Tinker Flow story <request>':"
+foreach ($r in $IDENTITIES) { "  $((Get-Profile $r).name.PadRight(18)) $(ConvertTo-Npub $s.agents[$r])" }
+"Worked examples: EXAMPLES.md. Status: . .\kit.ps1 $KITARGS; Get-KitStatus; Get-KitUsage   (Stop-Agent and Start-Agent there too)"
 Invoke-SecretScan $s

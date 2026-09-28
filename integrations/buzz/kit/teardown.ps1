@@ -18,6 +18,7 @@ param([string]$Project = 'tinker-buzz', [string]$StateRoot, [switch]$Images, [sw
 $s = Read-KitState
 
 Stop-Agent
+Stop-Flow
 if (Test-Path -LiteralPath "$STATE\compose.yml") {
   Invoke-Compose down; if ($LASTEXITCODE) { throw 'compose down failed' }
 }

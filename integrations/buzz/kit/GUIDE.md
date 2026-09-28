@@ -2,8 +2,10 @@
 
 This kit sets up a private Buzz relay on your PC and runs Tinker's team as five Buzz agents that answer
 only you: **Tinker** (the Lead), **Tinker Planner**, **Tinker Tester**, **Tinker Reviewer** and **Tinker
-Researcher**. You chat with them from Buzz Desktop in six channels whose canvases show how to work with each
-one; [EXAMPLES.md](EXAMPLES.md) has worked examples. Everything runs in Docker on your machine; nothing is published beyond `127.0.0.1`. The
+Researcher**, plus **Tinker Flow**, which runs a whole flow across them from one message and has no AI of its
+own. You chat with them from Buzz Desktop in seven channels whose canvases show how to work with each one;
+[EXAMPLES.md](EXAMPLES.md) has worked examples. One command sets it all up (section 4). Everything runs in Docker
+on your machine; nothing is published beyond `127.0.0.1`. The
 relay and the agents' safety settings match the lab setup the kit was built from (see the
 [integration README](../README.md) and the [Buzz protocol](../protocol.md) every agent follows).
 
@@ -61,36 +63,47 @@ spelled out. If your login is a company Team or Enterprise seat, your company's 
 ask first. When in doubt, use the API-key fallback. Agent turns count against the same usage limits as your own
 Claude use.
 
-## 4. Run the setup
+## 4. Run the setup wizard
 
-From `Tinker\integrations\buzz\kit` in PowerShell 7:
+Install Buzz Desktop first (section 5). Then, from `Tinker\integrations\buzz\kit` in PowerShell 7:
 
 ```powershell
-.\setup.ps1 -Repository C:\src\my-repo       # -Repository is optional
+.\setup.ps1
 ```
 
-This first run builds everything, starts the relay on `ws://localhost:3000`, publishes the agents' profiles and
-creates the channels, then stops and tells you to join from Buzz Desktop (section 5). Parameters:
+With no parameters, setup is a wizard. It asks four things, each again until the answer is valid:
 
-- `-Repository <folder>`: a folder every agent reads at `/repo`, **mounted read-only**. It is kept for later runs;
-  `-Repository ''` removes it. Every agent can read everything in it, including `.git` and untracked files.
-  Pass a main clone: a git worktree's `.git` file points to a Windows path that git inside Linux cannot follow.
+1. A project name (`tinker-buzz`).
+2. A free port (it suggests one).
+3. The repositories the agents may read. These are comma-separated main clones, not git worktrees.
+4. Your token file from section 3.
+
+It then builds and starts everything. When the relay is up it tells you to add the community in Buzz Desktop,
+and waits for the npub Desktop shows you (section 6). Answer, and it adds you and starts the team.
+
+For unattended or scripted runs, pass parameters instead; the wizard is skipped:
+
+- `-Repository C:\src\app, C:\src\lib`: folders every agent reads at `/repos/<folder name>`, **mounted
+  read-only**. They are kept for later runs; `-Repository ''` removes them. Every agent can read everything in
+  them, including `.git` and untracked files. Pass main clones: a git worktree's `.git` file points to a Windows
+  path that git inside Linux cannot follow.
+- `-OwnerNpub <npub>` and `-CredentialFile <path>`: without both, setup stops before starting the agents.
 - `-Port 3100` if 3000 is taken; `-Project <name>` for a second, separate setup.
 - `-StateRoot <folder>` to keep setup's state somewhere other than `%LOCALAPPDATA%\TinkerBuzz` (pass it to
   `kit.ps1` and `teardown.ps1` too).
 
-Setup is idempotent: after an error, fix the cause and run the same command again. It never regenerates keys
-over an existing relay, and it restarts an agent only when that agent's settings changed.
+Setup is idempotent: after an error, fix the cause and run it again. It never regenerates keys over an existing
+relay, and it restarts an agent only when that agent's settings changed.
 
 What it does, in order: preflight; pulls the relay image by digest; one `docker build` that fetches Buzz `781d395`,
 builds `buzz-acp` and `buzz` (its three Cargo Git dependencies locked), and builds the agent image with Tinker
 installed in the image only, all from pinned base images and `claude-agent-acp` 0.81.2; verifies those pins, the
-compose file's SHA-256 and each role's prompt; generates the admin key, one key per agent and the relay secrets
-inside containers; starts the relay on `127.0.0.1:<port>`; checks the bootstrap and routing; adds members; sets
-each agent's profile; creates the channels with a purpose and a canvas; starts the agents and checks their
-startup, deny rules and mounts; scans the kit folder and the setup logs for secrets. The only folder from your PC
-a container mounts is `-Repository`, read-only; everything else goes in and out through `docker build` and
-`docker cp`. Setup's own state (logs, relay secrets, `kit.json`) lives in `%LOCALAPPDATA%\TinkerBuzz\<project>`,
+compose file's SHA-256 and each role's prompt; generates the admin key, one key per agent and Tinker Flow's key
+and the relay secrets inside containers; starts the relay on `127.0.0.1:<port>`; checks the bootstrap and
+routing; adds members; sets each profile; creates the channels with a purpose and a canvas; starts the agents
+and Tinker Flow and checks their startup, deny rules and mounts; scans the kit folder and the setup logs for
+secrets. The only folders from your PC a container mounts are the `-Repository` folders, read-only; everything
+else goes in and out through `docker build` and `docker cp`. Setup's own state (logs, relay secrets, `kit.json`) lives in `%LOCALAPPDATA%\TinkerBuzz\<project>`,
 never in the repository.
 
 ## 5. Buzz Desktop 0.5.25
@@ -110,16 +123,12 @@ whether you may install it. Launch it from the Start menu, not from a terminal.
 
 1. On **Connect your AI provider**, choose **Set up later**. Never click Install or Connect for Claude or Codex: the
    kit brings its own agents, and a Desktop-managed one would run without Tinker's protections.
-2. Choose **Add Community** and enter exactly `ws://localhost:3000` (or your `-Port`). A bare host becomes `wss://`.
-3. You will see **Not a member yet** with your npub. Copy it, then run, from the kit folder:
-
-   ```powershell
-   .\setup.ps1 -OwnerNpub <your npub> -CredentialFile "$HOME\tinker-buzz-secrets\claude.env"
-   ```
-
-   Repeat any `-Port`, `-Project` or `-StateRoot` you used in section 4. This adds you to the relay and the
-   channels, and starts the agents with you as their owner. Then press **Try again**. (If you already
-   know your npub, pass `-OwnerNpub` in section 4; without `-CredentialFile`, setup stops before the agents.)
+2. When the wizard says so, choose **Add Community** and enter exactly `ws://localhost:3000` (or your port). A
+   bare host becomes `wss://`.
+3. You will see **Not a member yet** with your npub. Copy it and paste it into the wizard: it adds you to the
+   relay and the channels and starts the team with you as their owner. Then press **Try again**. (Without the
+   wizard: `.\setup.ps1 -OwnerNpub <your npub> -CredentialFile "$HOME\tinker-buzz-secrets\claude.env"`, repeating
+   any `-Port`, `-Project` or `-StateRoot` you used.)
 4. Leave the **Welcome** channel at once when it opens.
 5. Never start, add or @mention **Fizz**, **Honey** or **Pollen** (Desktop's built-in agents). They would share your
    identity as their owner, and agents with the same owner pass each other's owner-only gate.
@@ -128,52 +137,75 @@ whether you may install it. Launch it from the Start menu, not from a terminal.
 
 Open `#tinker-lab`: its canvas lists the team. Mention an agent by its name in the mention picker (setup also
 prints each npub, and so does `Get-KitStatus`). Try `@Tinker Read-only: what can you do here, and what are your
-limits?` The agent answers in the thread. Then read [EXAMPLES.md](EXAMPLES.md) and the canvases of #requests,
-#planning, #testing, #reviews and #research.
+limits?` The agent answers in the thread. Then try a whole flow in #flows: `@Tinker Flow help`. Read
+[EXAMPLES.md](EXAMPLES.md) and the canvases of #requests, #flows, #planning, #testing, #reviews and #research.
 
 ## 8. What to expect
 
-| Agent | Home channel | `/work` | Web tools | Does |
-|---|---|---|---|---|
-| **Tinker** (the Lead) | #requests | writes its own clones | no | explains, plans and changes code, runs the tests |
-| **Tinker Planner** | #planning | read-only | no | shapes ideas: outcome, scope, acceptance criteria |
-| **Tinker Tester** | #testing | writes its own `test-<topic>` copies | no | writes and runs tests, reports counts and gaps |
-| **Tinker Reviewer** | #reviews | read-only | no | reviews a branch, commit or folder with `file:line` |
-| **Tinker Researcher** | #research | read-only | **yes** | answers from the code and the web, with sources |
+| Agent | Home channel | `/work` | Does |
+|---|---|---|---|
+| **Tinker** (the Lead) | #requests | writes its own clones | explains, plans and changes code, runs the tests |
+| **Tinker Planner** | #planning | read-only | shapes ideas: outcome, scope, acceptance criteria |
+| **Tinker Tester** | #testing | writes its own `test-<topic>` copies | writes and runs tests, reports counts and gaps |
+| **Tinker Reviewer** | #reviews | read-only | reviews a branch, commit or folder with `file:line` |
+| **Tinker Researcher** | #research | read-only | answers from the code and the web, with sources |
+| **Tinker Flow** | #flows | none | runs a whole flow across the agents; no AI of its own |
 
-- `/repo` is read-only for every agent. The read-only agents also have their edit tools denied. `curl`, `wget`,
-  `env` and `printenv` are denied for all of them. These denies stop tools, not the network or the shell: Bash
-  can still reach the internet, and every agent can write its own home folder. The hard write barriers are the
-  read-only mounts.
+- Every agent reads the repositories under `/repos` (read-only for all) and may use the web (WebSearch and
+  WebFetch). The read-only agents also have their edit tools denied. `curl`, `wget`, `env` and `printenv` are
+  denied for all of them. These denies stop tools, not the network or the shell: Bash can still reach the
+  internet, and every agent can write its own home folder. The hard write barriers are the read-only mounts.
+- Every agent uses the kit's short Buzz base prompt instead of Buzz's 17.7 KB default, and runs without Claude
+  Code's commit instructions and auto memory: fewer tokens per session and no instructions that contradict
+  Tinker. `Get-KitUsage` shows what each agent used (section 10).
 - Each chat session starts in the agent's own folder, never in `/work`, so files one agent writes there are not
   loaded as another agent's settings or instructions.
 - All of them run **unattended**: commits, pushes, branch deletions, remote changes and Buzz workspace changes
   are denied, and Buzz messages (including your "I approve") never authorize them. They post the exact command
   so you can run it yourself.
-- Each answers only your messages, and only when you mention it; everything else it sees is data, including the
-  other agents. It replies in the thread. Agents never hand work to each other: you pick who is next, and agents
-  in different threads work at the same time. A full loop: #planning, #requests, #testing, #reviews.
+- Each answers only your messages (and the steps of your flows, below), and only when mentioned; everything else
+  it sees is data, including the other agents. It replies in the thread. Agents never hand work to each other on
+  their own: you pick who is next, or a flow does. Agents in different threads work at the same time.
 - One Buzz session writes a checkout at a time; another thread may be told `workspace.owned`.
-- To take work out of `/work`, copy the folder to your PC with `Copy-AgentWork` (section 9).
+- To take work out of `/work`, copy the folder to your PC with `Copy-AgentWork` (section 10).
 
-## 9. Stop and start
+## 9. Flows: the whole team from one message
+
+`@Tinker Flow story <request>` in #flows (or any kit channel) runs Planner, Tinker, Tester and Reviewer in order,
+in one thread under your message. Tinker Flow posts each step with a mention of one agent and hands it only your
+request and the earlier reports it needs, quoted as data, with every `@` made inert so a quote cannot trigger
+another agent. A step ends when the agent has replied and Buzz's seen and working reactions on the step are gone.
+Then a ✅ line gives the time and the folder to copy out. The flows are `story`, `bug`, `review` and `research`
+(`scripts/flows.json`; `@Tinker Flow help` lists them), and `@Tinker Flow stop` in a flow's thread stops it.
+
+Tinker Flow has no model and no Claude credential: orchestration costs no tokens. It obeys only you, runs one flow
+at a time, and cannot loop, since every flow has a fixed list of steps. The agents accept its steps through
+buzz-acp's allowlist (`BUZZ_ACP_RESPOND_TO=allowlist`, which always includes you, plus Tinker Flow's key only). A
+step that fails, times out or is never picked up stops the flow with a ⏹️ line.
+
+## 10. Stop, start and usage
 
 ```powershell
 . .\kit.ps1 -Project tinker-buzz      # in PowerShell 7, from the kit folder (add -StateRoot if you used one)
 Get-KitStatus                         # containers, npubs, channels, each agent's log summary and run outcomes
+Get-KitUsage                          # tokens per agent since it started: input, cache reads and writes, output
 Stop-Agent                            # stops and removes every agent, and verifies they are gone
 Start-Agent                           # starts them again with the saved owner, channels and credential file
 Stop-Agent tester; Start-Agent tester # one agent: lead, planner, tester, reviewer or researcher
+Stop-Flow; Start-Flow                 # Tinker Flow
 Copy-AgentWork docs-typos "$HOME\Downloads"   # copies /work/docs-typos to your PC, agents running or not
 ```
 
-The relay comes back with Docker Desktop on its own. The agents do not: after a reboot, run `Start-Agent`. When a
-new kit version adds an agent, run setup again: it creates only the new agent's key and keeps every other one.
+The relay comes back with Docker Desktop on its own. The agents do not: after a reboot, run `Start-Agent` and
+`Start-Flow` (or setup again). When a new kit version adds an agent, run setup again: it creates only the new
+agent's key and keeps every other one. `Get-KitUsage` reads each agent's own session transcripts, so it counts
+since that agent last started; a high cache share means the prompts are being reused, which is what keeps turns
+cheap.
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 - **`NIP-AM: publish failed ... 403` in an agent's log every turn.** Expected: the relay has no owner record for
-  the agents yet (section 13). Replies are unaffected.
+  the agents yet (section 14). Replies are unaffected.
 - **An agent shows as an npub instead of its name.** Its profile did not reach Desktop yet: run setup again (it
   republishes the profiles), then reopen the channel.
 - **No reply in the thread.** Run `Get-KitStatus`: *Latest unattended run outcomes* under each agent shows each
@@ -184,10 +216,15 @@ new kit version adds an agent, run setup again: it creates only the new agent's 
   to change it, run `teardown.ps1` and delete its volumes first.
 - **"Not started cleanly".** The line for each agent names the failed check. Read `docker logs <project>-<role>`.
   On an authentication or usage-limit error, fix the token file or wait for the limit, then `Stop-Agent; Start-Agent`.
+- **A flow stops with "did not pick the step up".** The agent is not running, or it does not list Tinker Flow on
+  its allowlist (an agent started by an older kit): run setup again, then retry the flow.
+- **A flow waits a long time on one step.** That agent is still working (its 💬 reaction is on the step). Watch
+  its thread, or `@Tinker Flow stop` in the flow's thread; a step gives up after an hour.
 - **Never name a PowerShell variable `$lead`.** Names are case-insensitive, so it is `$LEAD`, the Lead's container
-  name; the kit makes `$LEAD` read-only so such an assignment fails loudly.
+  name; the kit makes `$LEAD` read-only so such an assignment fails loudly. The same holds for the kit's other
+  names: `$agents` is `$AGENTS` and `$flow` is `$FLOW`.
 
-## 11. Cleanup and token revocation
+## 12. Cleanup and token revocation
 
 ```powershell
 .\teardown.ps1                        # stops everything, then asks before deleting volumes
@@ -201,32 +238,37 @@ authorization created on setup day. If you cannot identify it, log out of all se
 the token stays valid until it expires after a year. For the API-key fallback, revoke the key in the Anthropic
 Console.
 
-## 12. Known risks
+## 13. Known risks
 
 - **Only denies protect you.** buzz-acp approves every permission prompt itself; Tinker's hooks, the image's
   deny rules and the read-only mounts are what stop consequential operations.
 - **Relayed text reaches the model.** Other members' and agents' messages in a thread are shown to each agent;
   ignoring them is model behavior.
-- **The Researcher reads the web.** A page can carry instructions aimed at agents. It treats them as data, but
-  it still has your token and its key in its environment, can read `/repo`, and can reach the internet, so an
-  injected page could try to make it leak them. It cannot write `/repo` or `/work`. Point it only at sources you
-  trust.
+- **Every agent reads the web.** A page can carry instructions aimed at agents. They treat pages as data, but each
+  still has your token and its key in its environment, can read `/repos`, and can reach the internet, so an
+  injected page could try to make one leak them. The Lead and the Tester can also write `/work`. Ask about
+  sources you trust, and mount only repositories you would show them.
+- **Tinker Flow is trusted like you, for flow steps.** Its key sits in its own volume and it acts only on your
+  messages, but anyone holding that key could post steps the agents accept. Keep the relay local, and delete its
+  volume with the others when you stop (`teardown.ps1`).
+- **Reports travel between agents in flows.** A later step quotes an earlier agent's report as data, with every
+  `@` made inert. If one agent were misled, its report still reaches the next one as quoted text.
 - **A writer's folders are not trusted by the others.** The Lead or the Tester could leave a hostile git config or
   instructions in `/work`. The kit forces `core.fsmonitor=false` and `core.hooksPath=/dev/null` for every git
   command, and the Reviewer reads diffs with `--no-ext-diff --no-textconv`; git filter drivers and a `CLAUDE.md`
   inside such a folder are still read if an agent works there.
-- **The mounted repository is fully readable** by every agent: history, untracked files, anything secret
+- **The mounted repositories are fully readable** by every agent: history, untracked files, anything secret
   in it. Mount only what you would show them, never a folder that holds credentials.
 - **Agents with the same owner pass the owner-only gate** (section 6, step 5).
 - **Secrets are in each agent's environment.** Each can read its own agent key and your Claude token, and the
   containers have internet access. Keep the relay local, and revoke the token when you stop.
 - **The harness publishes on its own**: presence, typing indicators and seen or working reactions.
-- **Claims linger**: see section 10.
+- **Claims linger**: see section 11.
 - **No media uploads**: MinIO is off.
 - **Usage limits are shared** by all the agents and your own Claude use.
 - **Policy is partly unclear** (section 3).
 
-## 13. Owner registration later (Phase 2)
+## 14. Owner registration later (Phase 2)
 
 The kit adds each agent's key directly as a relay member so it can connect today. A direct member never gets an
 owner recorded: the relay admits it before looking at any owner attestation (Buzz `buzz-relay`

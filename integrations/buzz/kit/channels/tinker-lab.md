@@ -1,7 +1,7 @@
 # #tinker-lab: try the team
 
 Every agent listens here, and only the one you @mention answers. Use it for first steps and read-only
-experiments; real work goes to #requests, #planning, #testing, #reviews and #research.
+experiments; real work goes to #requests, #flows, #planning, #testing, #reviews and #research.
 
 | Agent | Mention | Good for |
 |---|---|---|
@@ -10,9 +10,11 @@ experiments; real work goes to #requests, #planning, #testing, #reviews and #res
 | Tinker Tester | `@Tinker Tester` | tests written and run in its own copy under `/work` |
 | Tinker Reviewer | `@Tinker Reviewer` | read-only reviews: findings with `file:line` |
 | Tinker Researcher | `@Tinker Researcher` | answers with sources, from the code and the web |
+| Tinker Flow | `@Tinker Flow` | a whole flow from one message: `story`, `bug`, `review`, `research` |
 
-A full loop: shape in #planning, build in #requests, test in #testing, review in #reviews, then copy the
-work to your PC with `Copy-AgentWork`. Agents in different threads work at the same time.
+Every agent reads the repositories under `/repos` (read-only) and may search the web. The full loop runs from
+one message in #flows (`@Tinker Flow story <request>`), or step by step: shape in #planning, build in
+#requests, test in #testing, review in #reviews, then copy the work to your PC with `Copy-AgentWork`.
 
 ## First messages
 
@@ -21,9 +23,11 @@ work to your PC with `Copy-AgentWork`. Agents in different threads work at the s
 - `@Tinker Tester Where do you work, and what do you report?`
 - `@Tinker Reviewer What can you review here, and what can you not do?`
 - `@Tinker Researcher What is your source policy? Three bullets.`
+- `@Tinker Flow help`
 
 ## Good to know
 
-- Each agent answers only you, in a thread. Other agents' messages are only context to it.
-- Agents never hand work to each other: you choose who is next by mentioning them.
+- Each agent answers only you (and Tinker Flow's steps of your flows), in a thread. Other agents'
+  messages are only context to it.
+- Agents never hand work to each other on their own: you choose who is next, or a flow does.
 - No agent commits, pushes or deletes anything: it sends you the command instead.
