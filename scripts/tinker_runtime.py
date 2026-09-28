@@ -457,7 +457,7 @@ RULES = [
                         .replace("~", r"(?:\s+--?[\w-]+(?:[=\s][^\s-]\S*)?)*"))),
 ]
 UNATTENDED_RULES = [("git.push", _rx(r"\bgit\b.*\bpush\b")), ("git.commit", _rx(r"\bgit\b.*\bcommit\b"))]
-COMMIT_MESSAGE = _rx(r"(\s(?:-m|--message)(?:\s+|=))(\"(?:[^\"\\]|\\.)*\"|'[^']*')")
+COMMIT_MESSAGE = _rx(r"(\s(?:-m|--message)(?:\s+|=))(\"(?:[^\"\\$`]|\\.)*\"|'[^']*')")  # literal messages only
 BUZZ_VALUE = _rx(r"(\s--?[\w-]+(?:\s+|=))(\"(?:[^\"\\$`]|\\.)*\"|'[^']*')")  # literal option values only
 DOWNLOADERS = _rx(r"\b(?:curl|wget|iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b")
 RUNNERS = {"sh", "bash", "zsh", "iex", "invoke-expression", "pwsh", "powershell", "python", "python3",
@@ -649,7 +649,10 @@ def read_only(seg, verb, args, shell="posix"):
 
 def _classify_segment(seg, previous, verb, args, base, unattended, labels, tamper, name_rx, depth, shell="posix"):
     raw = seg["raw"]
-    text = COMMIT_MESSAGE.sub(r"\1''", raw) if verb == "git" and args[:1] == ["commit"] else raw
+    # Messages are blanked only when nothing in the command can run, since the regex's quotes can differ from the
+    # shell's: no $, backtick, <( ) or >( ), and no ( ) outside quotes (PowerShell runs those).
+    runs = re.search(r"[$`]|[<>]\(", raw) or "(" in re.sub(r"'[^']*'|\"[^\"]*\"", "", raw)
+    text = COMMIT_MESSAGE.sub(r"\1''", raw) if verb == "git" and args[:1] == ["commit"] and not runs else raw
     if verb == "buzz" and not re.search(r"[$`]", raw) and not substitutes(seg, shell):  # reply text is data;
         # any substitution anywhere keeps all of it visible
         text = BUZZ_VALUE.sub(r"\1''", raw)
