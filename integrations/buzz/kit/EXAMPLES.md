@@ -1,8 +1,10 @@
 # Working with Tinker's team in Buzz
 
-Five agents and a conductor answer you in Buzz Desktop. Each agent answers only you, only when you @mention
-it, and always in a thread under your message; Tinker Flow runs several of them in one thread for you. Setup
-creates seven channels whose canvases repeat the short version of this page.
+Five agents and a conductor answer you in Buzz Desktop. Each agent answers only you: whatever you write in its
+home channel, with no @mention needed, and wherever else you @mention it, always in a thread under your message.
+Tinker Flow runs several of them in one thread for the request you write in #flows. Setup creates seven channels
+whose canvases repeat the short version of this page. The examples below leave out the mention wherever the
+channel makes it optional.
 
 | Agent | Home channel | Can | Cannot |
 |---|---|---|---|
@@ -19,11 +21,15 @@ read it.
 
 ## How a conversation works
 
-1. Post a **new message** that mentions one agent: `@Tinker ...`. One message per task.
+1. Post a **new message** in the agent's home channel (#requests for Tinker), with no mention needed, or
+   mention it anywhere else: `@Tinker ...`. A message that mentions another agent goes only to that agent.
+   One message per task.
 2. The agent reacts, then replies **in the thread** under your message: a short status at milestones
    and a final report with the outcome, the evidence and what it could not verify.
-3. **Follow up in that thread** and mention the agent again. A thread is one session: the agent
-   remembers the thread, not other threads (setup turns agent memory off).
+3. **Follow up in that thread**: in the agent's own channel, just reply in its thread. Elsewhere, and in
+   another agent's thread there, mention it again, or turn on **Automatically mention agents** in Buzz
+   Desktop's mention picker so your thread replies keep it addressed. A thread is one session: the agent remembers the thread, not other threads (setup turns agent
+   memory off).
 4. The agent treats everything except your triggering message as data: other members' messages, other
    agents' replies, canvases and web pages. Agents never hand work to each other on their own; you decide
    who is next, or a flow does. Agents in different threads work at the same time.
@@ -34,7 +40,7 @@ read it.
 ## Example 1: the whole loop from one message (#flows)
 
 ```text
-@Tinker Flow story Warn in setup.ps1 when Docker has less than 8 GB of disk free
+story Warn in setup.ps1 when Docker has less than 8 GB of disk free
 ```
 
 Tinker Flow answers with a ▶️ line (Planner → Tinker → Tester → Reviewer), then runs them one after
@@ -48,39 +54,42 @@ Copy-AgentWork warn-in-setup-ps1-when-docker-has-less "$HOME\Downloads"
 git -C "$HOME\Downloads\warn-in-setup-ps1-when-docker-has-less" status
 ```
 
-Other flows: `@Tinker Flow bug <what is wrong>`, `@Tinker Flow review /repos/<name> master~3..master`,
-`@Tinker Flow research <question>`. `@Tinker Flow stop` in the thread stops a flow after the current step.
+Other flows: `bug <what is wrong>`, `review /repos/<name> master~3..master`, `research <question>`. Without a
+flow's name, Tinker Flow suggests one and waits for you to reply `go`, or another flow's name, in the thread.
+Replying `stop` in the thread stops a flow after the current step. In any other channel, start with
+`@Tinker Flow`, for example `@Tinker Flow story <request>`, and answer it by name there too:
+`@Tinker Flow go`, `@Tinker Flow stop`.
 
 ## Example 2: the same loop step by step
 
 Shape it in #planning:
 
 ```text
-@Tinker Planner Shape: warn in setup.ps1 when Docker Desktop has less than 8 GB of disk free.
+Shape: warn in setup.ps1 when Docker Desktop has less than 8 GB of disk free.
 Outcome, scope, acceptance criteria a test could check, open questions.
 ```
 
 Build it in #requests, pasting the Planner's acceptance criteria:
 
 ```text
-@Tinker Clone /repos/<name> into /work/disk-check and implement this on a new branch: <criteria>.
+Clone /repos/<name> into /work/disk-check and implement this on a new branch: <criteria>.
 Run the kit tests and report the folder, branch, diff summary and counts.
 ```
 
 Test it in #testing, and review it in #reviews:
 
 ```text
-@Tinker Tester Copy /work/disk-check to /work/test-disk-check and write tests for: <criteria>.
+Copy /work/disk-check to /work/test-disk-check and write tests for: <criteria>.
 Run them and the kit tests; report counts and gaps. Do not change the code under test.
 
-@Tinker Reviewer Review the uncommitted diff in /work/disk-check against its HEAD, and the tests in
+Review the uncommitted diff in /work/disk-check against its HEAD, and the tests in
 /work/test-disk-check. Findings most severe first, with file:line.
 ```
 
 ## Example 3: understand code (#requests)
 
 ```text
-@Tinker Read-only: how does the pre-tool gate decide that a command is read-only?
+Read-only: how does the pre-tool gate decide that a command is read-only?
 Cite file:line and name the tests that cover it.
 ```
 
@@ -90,7 +99,7 @@ covering tests. "Read-only" at the start keeps it from cloning or running anythi
 ## Example 4: run the suite (#testing)
 
 ```text
-@Tinker Tester Clone /repos/<name> into /work/test-suite and run the full test suite. Counts and failures.
+Clone /repos/<name> into /work/test-suite and run the full test suite. Counts and failures.
 ```
 
 It reports the exact command, the counts (run, passed, failed, skipped) and each failure's first lines.
@@ -98,7 +107,7 @@ It reports the exact command, the counts (run, passed, failed, skipped) and each
 ## Example 5: a question that needs current sources (#research)
 
 ```text
-@Tinker Researcher Which Claude Code permission modes exist today, and what does dontAsk do?
+Which Claude Code permission modes exist today, and what does dontAsk do?
 Official documentation only; one source per fact.
 ```
 
@@ -149,7 +158,10 @@ Open the `.html` file in that folder in your browser. It works offline and has e
 - Name the exact scope: the folder (`/repos/<name>`, `/work/<topic>`), the branch or range, and the files.
 - Ask for **evidence**: `file:line`, test counts, sources. Missing evidence is reported as
   `not-verified`, never invented.
-- Pick agents from the mention picker so the right one is tagged: five names start with "Tinker".
+- In an agent's own channel, and in #flows, you need no mention at all. Elsewhere, pick agents from the
+  mention picker so the right one is tagged: five names start with "Tinker".
+- In an agent's own channel every message of yours goes to that agent, replies in a flow's thread included,
+  so run flows in #flows.
 - Never paste a token, key or password into a message: every agent in the channel sees it.
 - No reply in the thread? Run `Get-KitStatus` (GUIDE.md, section 10): it shows each run's outcome.
   `Get-KitUsage` shows the tokens each agent used.

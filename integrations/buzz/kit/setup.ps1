@@ -149,7 +149,7 @@ $check = docker run --rm $image bash -c ('claude --version; claude plugin list; 
   'git hash-object /opt/tinker/scripts/tinker_runtime.py; buzz-acp --help | head -n 1; grep -c "claude-agent-acp@0.81.2" /opt/acp/npm-ls.txt; ' +
   'for r in ' + ($ROLES -join ' ') + '; do { cat /opt/tinker/integrations/buzz/protocol.md; echo; cat "/kit/roles/$r.md"; } | ' +
   'cmp -s - "/kit/prompts/$r.md" && echo "prompt $r"; done; git config --system --get core.autocrlf; ' +
-  'for f in base.md flow.py flows.json usage.py; do test -s "/kit/$f" && echo "kit $f"; done') | Out-String
+  'for f in base.md flow.py flows.json usage.py rules.py; do test -s "/kit/$f" && echo "kit $f"; done') | Out-String
 # archify as the agents run it (their user, no capabilities, no network): a bundled example through its full gate.
 $archify = docker run --rm --cap-drop ALL --security-opt no-new-privileges:true --network none $image bash -c (
   'a=~/.claude/skills/archify; test -w "$a" || echo read-only; echo "updates=${ARCHIFY_UPDATE_CHECK_DISABLED:-on}"; ' +
@@ -165,8 +165,8 @@ $ok = [ordered]@{
   'runtime matches the Tinker commit' = $check -match [regex]::Escape($blob)
   'buzz-acp runs; claude-agent-acp 0.81.2' = $check -match 'ACP harness that bridges Buzz events to AI agents\r?\n[1-9]'
   'each role prompt is the protocol, then its role file' = -not @($ROLES | Where-Object { $check -notmatch "(?m)^prompt $_\r?$" })
-  'git reads CRLF checkouts; base prompt, Tinker Flow and usage files present' = $check -match '(?m)^input\r?$' -and
-    -not @('base.md', 'flow.py', 'flows.json', 'usage.py' | Where-Object { $check -notmatch "(?m)^kit $([regex]::Escape($_))\r?$" })
+  'git reads CRLF checkouts; base prompt, Tinker Flow, usage and rules files present' = $check -match '(?m)^input\r?$' -and
+    -not @('base.md', 'flow.py', 'flows.json', 'usage.py', 'rules.py' | Where-Object { $check -notmatch "(?m)^kit $([regex]::Escape($_))\r?$" })
   'archify files root-owned, no update checks; its full gate passes offline in Chromium' =
     $archify -match '(?m)^read-only\r?\n^updates=1\r?\n^pass\r?$'
 }
@@ -321,8 +321,8 @@ if ($flowRestart) { Stop-Flow; Start-Flow } else { '  Tinker Flow is already run
 Step 'Startup check'
 Test-AgentStartup
 Test-FlowStartup
-"`nTinker's team is running. In Buzz Desktop open #tinker-lab and @mention an agent by name, or run a whole flow in"
-"#flows with '@Tinker Flow story <request>':"
+"`nTinker's team is running. In Buzz Desktop write to an agent in its own channel (#requests for Tinker), no @mention"
+"needed, or run a whole flow by writing 'story <request>' in #flows. The team:"
 foreach ($r in $IDENTITIES) { "  $((Get-Profile $r).name.PadRight(18)) $(ConvertTo-Npub $s.agents[$r])" }
 "Worked examples: EXAMPLES.md. Status: . .\kit.ps1 $KITARGS; Get-KitStatus; Get-KitUsage   (Stop-Agent and Start-Agent there too)"
 Invoke-SecretScan $s

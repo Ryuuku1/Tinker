@@ -8,4 +8,6 @@ python3 /opt/kit/deny.py "$HOME/.claude/settings.json" "$KIT_ROLE"
 for d in /repos/*/; do if [ -d "$d" ]; then git config --global --add safe.directory "${d%/}"; fi; done
 . /kit/forward.sh
 BUZZ_PRIVATE_KEY=$(cat /agentkey/agent.sec); export BUZZ_PRIVATE_KEY
+# What reaches the agent: its mentions in every kit channel and the owner's untagged messages in its home channel.
+python3 /kit/rules.py > "${BUZZ_ACP_CONFIG:?BUZZ_ACP_CONFIG is not set}"
 exec buzz-acp

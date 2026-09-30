@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 import unittest
 
 from test_hook import Fixture, PROTECTED, SCRIPT
@@ -427,6 +428,9 @@ class BuzzKitTests(unittest.TestCase):
                           "BUZZ_ACP_NO_MEMORY": "true", "BUZZ_ACP_HEARTBEAT_INTERVAL": "0"})
         # allowlist = the owner (always implied by buzz-acp) plus Tinker Flow, added per start; never anyone.
         self.assertNotIn("anyone", " ".join(settings.values()))
+        # Rules decide which of those authors' messages reach the agent (scripts/rules.py, written by agent.sh).
+        self.assertEqual((settings.get("BUZZ_ACP_SUBSCRIBE"), settings.get("BUZZ_ACP_CONFIG")),
+                         ("config", "/home/agent/buzz-acp.toml"))  # absolute: sessions start in /home/agent/chat
         self.assertFalse({"BUZZ_RELAY_URL", "BUZZ_ACP_AGENT_OWNER", "BUZZ_PRIVATE_KEY",  # set per agent at start
                           "BUZZ_ACP_SYSTEM_PROMPT_FILE", "BUZZ_ACP_RESPOND_TO_ALLOWLIST"} & set(settings))
         # Fewer tokens per session: the kit's short Buzz base prompt, no git instructions, no auto memory.
@@ -544,7 +548,11 @@ $runs | ConvertTo-Json -Depth 3""")
                                 "BUZZ_ACP_AGENT_OWNER=" + "o" * 64, "BUZZ_RELAY_URL=ws://localhost:3200"):
                     self.assertIn(setting, env)
                 value = {e.split("=", 1)[0]: e.split("=", 1)[1] for e in env}
-                self.assertEqual(value["BUZZ_ACP_CHANNELS"], "c1,c2,c3")  # sorted: a stable settings hash
+                self.assertEqual(value["KIT_CHANNELS"], "c1,c2,c3")  # sorted: a stable settings hash
+                self.assertNotIn("BUZZ_ACP_CHANNELS", value)  # buzz-acp ignores it with rules; rules.py reads these
+                home = {"lead": "c1", "reviewer": "c2"}.get(role, "")  # #requests, #reviews; the others are absent
+                self.assertEqual(value["KIT_HOME_CHANNEL"], home)
+                self.assertEqual("without a mention" in value["BUZZ_ACP_TEAM_INSTRUCTIONS"], bool(home))
                 self.assertIn("o" * 64, value["BUZZ_ACP_TEAM_INSTRUCTIONS"])  # the owner's events are tasks,
                 self.assertEqual(value["BUZZ_ACP_RESPOND_TO_ALLOWLIST"], "f" * 64)  # and those of Tinker Flow
                 self.assertIn("f" * 64, value["BUZZ_ACP_TEAM_INSTRUCTIONS"])
@@ -570,13 +578,18 @@ function docker {
   switch ($args[0]) {
     'logs' {
       if ($script:case.error -eq 'startup') { $err }
-      foreach ($m in 'agent initialized', 'connected to relay at ws://localhost:3200', "agent owner: $('o' * 64)", 'subscribed to channel c1') {
+      $started = "buzz-acp starting: relay=ws://localhost:3200 agents=1 subscribe=$($script:case.subscribe ?? 'Config') dedup=Queue"
+      $warning = if ($script:case.rules -eq 'bad') { "rule 'home': invalid filter expression: unexpected end" }
+      foreach ($m in @($started, 'agent initialized', 'connected to relay at ws://localhost:3200', "agent owner: $('o' * 64)", $warning, 'subscribed to channel c1') | Where-Object { $_ }) {
         "$e[2m2026-09-28T19:07:58Z$e[0m $e[32m INFO$e[0m $e[2mbuzz_acp$e[0m$e[2m:$e[0m $m"
       }
       if ($script:case.error -eq 'later') { $err }   # a failed turn long after startup
     }
     'ps' { 'abc123' }
     'exec' { if ($args[-1] -eq '/proc/mounts') { "v /work ext4 $($script:case.work),relatime 0 0"; "g /repos/r fuse $($script:case.repo),relatime 0 0" }
+             elseif ($args[-1] -eq '/home/agent/buzz-acp.toml') {   # the rules the agent's buzz-acp reads
+               '[[rules]]'; 'name = "mention"'; '[[rules]]'; 'name = "home"'; "channels = [`"$($script:case.home ?? 'c1')`"]"
+               "filter = 'author == `"$('o' * 64)`" && !(str_starts_with(content, `"@`"))'" }
              else { @{ permissions = @{ deny = $script:case.deny } } | ConvertTo-Json -Depth 3 } }
   }
 }
@@ -590,6 +603,9 @@ $cases = [ordered]@{
   'reviewer-writable-work' = @{ role = 'reviewer'; work = 'rw'; repo = 'ro'; deny = $readOnly }
   'reviewer-clean'         = @{ role = 'reviewer'; work = 'ro'; repo = 'ro'; deny = $readOnly }
   'researcher-may-edit'    = @{ role = 'researcher'; work = 'ro'; repo = 'ro'; deny = @('Bash(curl:*)') }
+  'mentions-only'          = @{ role = 'lead'; work = 'rw'; repo = 'ro'; deny = $writerDeny; subscribe = 'Mentions' }
+  'bad-rule'               = @{ role = 'lead'; work = 'rw'; repo = 'ro'; deny = $writerDeny; rules = 'bad' }
+  'wrong-home'             = @{ role = 'lead'; work = 'rw'; repo = 'ro'; deny = $writerDeny; home = 'c9' }
 }
 $result = [ordered]@{}
 foreach ($name in $cases.Keys) {
@@ -601,7 +617,9 @@ $result | ConvertTo-Json""")
         for passing in ("later-error", "clean", "reviewer-clean"):  # a later failed turn is not a startup failure
             self.assertEqual(result[passing], "passed", passing)
         for failing, agent in (("reviewer-writable-work", "t-reviewer"), ("researcher-may-edit", "t-researcher"),
-                               ("lead-without-web", "t-lead"), ("repository-writable", "t-lead")):
+                               ("lead-without-web", "t-lead"), ("repository-writable", "t-lead"),
+                               ("mentions-only", "t-lead"), ("bad-rule", "t-lead"),  # the home rule never loaded
+                               ("wrong-home", "t-lead")):  # its file names another channel as home
             self.assertTrue(result[failing].startswith(f"Not started cleanly: {agent}"), (failing, result[failing]))
 
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
@@ -648,6 +666,9 @@ $result | ConvertTo-Json -Depth 3""")
         # The flags drive the mounts and the startup check; deny.py must agree with them for every role.
         self.assertEqual({r for r, a in tables["agents"].items() if a["web"]}, set(tables["agents"]))  # all agents
         self.assertEqual({r for r, a in tables["agents"].items() if a["writes"]}, {"lead", "tester"})
+        # One home channel each, where the owner writes without a mention; #flows and #tinker-lab are nobody's.
+        homes = [agent["home"] for agent in tables["agents"].values()]
+        self.assertEqual(sorted(homes), sorted(set(tables["channels"]) - {"flows", "tinker-lab"}))
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
         settings = Path(folder.name) / "settings.json"
@@ -684,6 +705,38 @@ $result | ConvertTo-Json -Depth 3""")
         self.assertEqual(json.loads(out.stdout), {"sessions": 1, "replies": 2, "input": 20, "output": 12,
                                                   "cache_read": 200, "cache_write": 40})
 
+    def test_agents_take_mentions_everywhere_and_the_owners_untagged_messages_at_home(self):
+        owner, home, other = "0" * 64, "11111111-2222-4333-8444-555555555555", "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+
+        def rules(**env):
+            return subprocess.run([sys.executable, str(self.KIT / "scripts" / "rules.py")], capture_output=True,
+                                  text=True, env={**os.environ, "KIT_CHANNELS": f"{home},{other}",
+                                                  "KIT_HOME_CHANNEL": home, "BUZZ_ACP_AGENT_OWNER": owner, **env})
+        out = rules()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        mention, at_home = tomllib.loads(out.stdout)["rules"]  # buzz-acp takes the first rule that matches
+        self.assertEqual(mention, {"name": "mention", "prompt_tag": "@mention", "channels": [home, other],
+                                   "kinds": [9, 46010, 40007], "require_mention": True})  # it defaults to false
+        self.assertEqual({k: v for k, v in at_home.items() if k != "filter"},
+                         {"name": "home", "prompt_tag": "home", "channels": [home], "kinds": [9],
+                          "require_mention": False})  # base.md names the `home` event type
+        # The owner's own words only: never Tinker Flow's steps or another agent, never a message that starts by
+        # addressing someone (@) or with an owner command (!), and never one that mentions an agent anywhere, so a
+        # message reaches only the agents it mentions.
+        self.assertEqual(at_home["filter"], f'author == "{owner}" && !(str_starts_with(content, "@"))'
+                                            ' && !(str_starts_with(content, "!")) && !(str_contains(content, "@Tinker"))')
+        homeless = tomllib.loads(rules(KIT_HOME_CHANNEL="").stdout)["rules"]
+        self.assertEqual([r["name"] for r in homeless], ["mention"])
+        for bad in ({"KIT_CHANNELS": f"{home},{other.upper()}"}, {"KIT_CHANNELS": ""}, {"BUZZ_ACP_AGENT_OWNER": "npub1x"},
+                    {"KIT_HOME_CHANNEL": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}):  # a home outside the kit
+            with self.subTest(bad=bad):
+                out = rules(**bad)
+                self.assertNotEqual(out.returncode, 0)
+                self.assertEqual(out.stdout, "")  # agent.sh stops, so buzz-acp never starts with half a file
+        agent_sh = (self.KIT / "scripts" / "agent.sh").read_text(encoding="utf-8")
+        self.assertIn("set -euo pipefail\n", agent_sh)  # a refused rules file stops the agent before buzz-acp
+        self.assertRegex(agent_sh, r'python3 /kit/rules\.py > "\$\{BUZZ_ACP_CONFIG:\?[^}]*\}"\nexec buzz-acp\n')
+
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")
     def test_tinker_flow_runs_without_a_model_credential_or_files(self):
         argv = self.pwsh(r"""
@@ -703,6 +756,7 @@ foreach ($r in $AGENTS.Keys) { $s.agents[$r] = "$r".PadRight(64, 'x') }
         self.assertEqual(env["PYTHONUNBUFFERED"], "1")  # its step lines reach docker logs as they happen
         self.assertEqual((env["FLOW_OWNER"], env["FLOW_SELF"]), ("o" * 64, "f" * 64))
         self.assertEqual(env["FLOW_CHANNELS"], "c1,c9")
+        self.assertEqual(env["FLOW_HOME"], "c9")  # #flows: where the owner's requests need no mention
         agents = json.loads(env["FLOW_AGENTS"])
         self.assertEqual(sorted(agents), ["lead", "planner", "researcher", "reviewer", "tester"])
         self.assertEqual(agents["planner"], {"name": "Tinker Planner", "hex": "planner".ljust(64, "x")})
@@ -743,15 +797,25 @@ class BuzzFlowTests(unittest.TestCase):
     def setUp(self):
         spec = importlib.util.spec_from_file_location("kit_flow", BuzzKitTests.KIT / "scripts" / "flow.py")
         self.flow = importlib.util.module_from_spec(spec)
+        # No __pycache__ in the kit folder: the image build and the secret scan copy that folder.
+        self.addCleanup(setattr, sys, "dont_write_bytecode", sys.dont_write_bytecode)
+        sys.dont_write_bytecode = True
         spec.loader.exec_module(self.flow)
         self.relay = FakeRelay({a["hex"]: role for role, a in self.AGENTS.items()})
-        self.conductor = self.flow.Flow(self.relay, owner=self.OWNER, me=self.ME, agents=self.AGENTS,
-                                        channels=["c1"], flows=json.loads(self.FLOWS.read_text(encoding="utf-8")),
-                                        poll=10, step_timeout=3600, pickup_timeout=300,
-                                        sleep=self.relay.tick, now=lambda: self.relay.t, log=lambda *a: None)
+        self.conductor = self.conductor_for(["c1", "c9"])  # c9 plays #flows
+
+    def conductor_for(self, channels):
+        return self.flow.Flow(self.relay, owner=self.OWNER, me=self.ME, agents=self.AGENTS, channels=channels,
+                              flows=json.loads(self.FLOWS.read_text(encoding="utf-8")), home="c9", poll=10,
+                              step_timeout=3600, pickup_timeout=300, sleep=self.relay.tick,
+                              now=lambda: self.relay.t, log=lambda *a: None)
 
     def request(self, text, author=None, mention=True):
         return self.relay.post(author or self.OWNER, text, "c1", mentions=[self.ME] if mention else [])
+
+    def home(self, text, author=None, root=None):
+        """An untagged message in #flows."""
+        return self.relay.post(author or self.OWNER, text, "c9", root=root)
 
     def test_parse_and_topic(self):
         parse, topic = self.flow.parse, self.flow.topic
@@ -759,6 +823,9 @@ class BuzzFlowTests(unittest.TestCase):
         self.assertEqual(parse("@Tinker Flow  BUG -  setup hangs"), ("bug", "setup hangs"))
         self.assertEqual(parse("@Tinker Flow stop"), ("stop", ""))
         self.assertEqual(parse("@Tinker Flow"), ("help", ""))
+        for word in ("Bug's root cause?", "Bug-free setup is the goal", "Review/merge checklist for PR 12"):
+            self.assertEqual(parse(word), ("help", ""), word)  # words, not the bug or review command
+        self.assertEqual(parse("@Tinker Flow stop.")[0], "stop")
         self.assertEqual(topic("Add a disk-space warning to setup.ps1!"), "add-a-disk-space-warning-to-setup-ps1")
         self.assertLessEqual(len(topic("x " * 100)), 40)
         self.assertEqual(topic("!!!"), "flow")
@@ -779,12 +846,179 @@ class BuzzFlowTests(unittest.TestCase):
         self.assertNotIn("@Tinker Tester", lead)
         self.assertIn("Copy-AgentWork add-a-disk-check", sent[-1]["text"])
 
-    def test_only_the_owner_starts_a_flow_and_only_by_mentioning_it(self):
+    def test_only_the_owner_starts_a_flow_and_outside_flows_only_by_naming_it(self):
         self.request("@Tinker Flow story: from an agent", author=self.AGENTS["lead"]["hex"])
         self.request("@Tinker Flow story: from a stranger", author="9" * 64)
         self.request("Tinker Flow story: no mention", mention=False)
+        self.home("story: from an agent in #flows", author=self.AGENTS["lead"]["hex"])
+        self.home("story: from a stranger in #flows", author="9" * 64)
         self.conductor.poll_once()
         self.assertEqual(self.relay.sent, [])
+
+    def test_in_flows_a_request_needs_no_mention(self):
+        root = self.home("research Which Claude Code settings cut tokens?")
+        self.conductor.poll_once()
+        sent = self.relay.sent
+        self.assertTrue(sent[0]["text"].startswith("▶️ research flow"), sent[0]["text"])
+        self.assertEqual([s["mentions"] for s in sent[1:3]],
+                         [[self.AGENTS["researcher"]["hex"]], [self.AGENTS["planner"]["hex"]]])
+        self.assertTrue(all(s["reply_to"] == root and s["channel"] == "c9" for s in sent))
+        self.assertTrue(sent[-1]["text"].startswith("✅"))
+
+    def test_a_pasted_name_is_addressed_like_a_mention(self):
+        # Text pasted into Desktop carries no mention tag; only the owner's leading "@Tinker Flow" counts.
+        self.request("@Tinker Flow story: Add a disk check", mention=False)
+        self.conductor.poll_once()
+        self.assertTrue(self.relay.sent[0]["text"].startswith("▶️ story flow"), self.relay.sent)
+
+    def test_without_a_flow_name_tinker_flow_suggests_one_and_waits_for_go(self):
+        root = self.home("The login page crashes on Safari")
+        self.conductor.poll_once()
+        self.assertEqual(len(self.relay.sent), 1)  # a suggestion only: no agent is tasked yet
+        suggestion = self.relay.sent[0]
+        self.assertIn('"The login page crashes on Safari" looks like a bug flow', suggestion["text"])  # what would run
+        self.assertIn("`go`", suggestion["text"])
+        self.assertEqual(suggestion["mentions"], [self.OWNER])  # it waits for the owner, so it notifies them
+        self.home("go", root=root)
+        self.conductor.poll_once()
+        mentioned = [s["mentions"] for s in self.relay.sent[2:5]]
+        self.assertEqual(mentioned, [[self.AGENTS[r]["hex"]] for r in ("lead", "tester", "reviewer")])
+        self.assertIn("The login page crashes on Safari", self.relay.sent[2]["text"])
+        self.assertTrue(all(s["reply_to"] == root for s in self.relay.sent))
+
+    def test_a_suggestion_takes_another_flow_name_and_ignores_other_replies(self):
+        root = self.home("Add dark mode to the canvas")
+        self.conductor.poll_once()
+        self.assertIn("story flow", self.relay.sent[0]["text"])
+        self.home("thanks, let me think", root=root)
+        self.conductor.poll_once()
+        self.assertEqual(len(self.relay.sent), 1)
+        self.home("Research", root=root)
+        self.conductor.poll_once()
+        self.assertTrue(self.relay.sent[1]["text"].startswith("▶️ research flow"), self.relay.sent[1]["text"])
+        self.assertIn("Add dark mode to the canvas", self.relay.sent[2]["text"])
+        self.home("go", root=root)  # the suggestion is spent: a late go starts nothing
+        before = len(self.relay.sent)
+        self.conductor.poll_once()
+        self.assertEqual(len(self.relay.sent), before)
+
+    def test_untagged_replies_in_flows_are_conversation_not_requests(self):
+        root = self.home("research Which settings cut tokens?")
+        self.conductor.poll_once()
+        before = len(self.relay.sent)
+        self.home("thanks, that helps", root=root)
+        self.home("story: a reply is never a new request", root=root)
+        self.conductor.poll_once()
+        self.assertEqual(len(self.relay.sent), before)
+
+    def test_a_newer_event_in_an_earlier_channel_never_hides_a_request(self):
+        # The live miss of 2026-09-29: the owner's request in #flows at 08:35:14, then an agent's reply in an
+        # earlier-polled channel at about 08:35:20, before the next poll; one shared `since` skipped the request.
+        # The gap here is longer than the overlap, as when requests wait while a flow runs.
+        conductor = self.conductor_for(["c0", "c9"])
+        self.home("research Which settings cut tokens?")
+        self.relay.tick(self.flow.OVERLAP + 30)
+        self.relay.post(self.AGENTS["lead"]["hex"], "a reply in another channel", "c0")
+        conductor.poll_once()
+        self.assertTrue(self.relay.sent and self.relay.sent[0]["text"].startswith("▶️ research flow"),
+                        self.relay.sent)
+
+    def test_in_flows_a_message_to_someone_else_is_theirs(self):
+        # "@Tinker Reviewer ..." in #flows is for the Reviewer: no suggestion, so a later "ok" or "go" there is nothing.
+        root = self.home("@Tinker Reviewer Review /repos/Tinker master~1..master for bugs")
+        self.home("!cancel")
+        self.home("Please ask @Tinker Tester to rerun the suite")  # a mention anywhere: for that agent only
+        self.conductor.poll_once()
+        self.assertEqual(self.relay.sent, [])
+        for reply in ("ok", "go"):
+            self.home(reply, root=root)
+        self.conductor.poll_once()
+        self.assertEqual(self.relay.sent, [])
+
+    def test_outside_flows_tinker_flow_is_answered_by_name(self):
+        # There an untagged reply is the task of that channel's own agent, so Tinker Flow asks to be named.
+        root = self.request("@Tinker Flow The login page crashes on Safari")
+        self.conductor.poll_once()
+        self.assertIn("`@Tinker Flow go`", self.relay.sent[0]["text"])
+        self.relay.post(self.OWNER, "go", "c1", root=root)
+        self.conductor.poll_once()
+        self.assertEqual(len(self.relay.sent), 1)  # left to the channel's agent
+        self.relay.post(self.OWNER, "@Tinker Flow go", "c1", root=root, mentions=[self.ME])
+        self.conductor.poll_once()
+        self.assertIn("`@Tinker Flow stop`", self.relay.sent[1]["text"])
+        self.assertEqual([s["mentions"] for s in self.relay.sent[2:5]],
+                         [[self.AGENTS[r]["hex"]] for r in ("lead", "tester", "reviewer")])
+
+    def test_a_stop_sent_before_the_flow_starts_still_stops_it(self):
+        root = self.home("bug Setup hangs")  # its first step is the Lead, a writer
+        self.relay.tick(5)
+        self.home("stop", root=root)  # both arrive before Tinker Flow's next poll
+        self.conductor.poll_once()
+        self.assertIn("stopped", self.relay.sent[-1]["text"])
+        self.assertEqual([m for s in self.relay.sent for m in s["mentions"] if m != self.OWNER], [])  # no step went out
+
+    def test_a_go_that_nothing_waits_for_starts_nothing(self):
+        # As after a restart, which forgets suggestions: never a new suggestion, and never a flow, for "go".
+        self.home("go")
+        root = self.request("@Tinker Flow The login page crashes on Safari")
+        self.conductor.poll_once()
+        self.conductor.pending.clear()  # Tinker Flow restarted
+        self.relay.post(self.OWNER, "@Tinker Flow go", "c1", root=root, mentions=[self.ME])
+        self.conductor.poll_once()
+        texts = [s["text"] for s in self.relay.sent]
+        self.assertEqual(sum("Nothing here is waiting for `go`" in t for t in texts), 2, texts)
+        self.assertFalse([t for t in texts if t.startswith("▶️")])
+
+    def test_a_request_that_starts_with_stop_gets_a_suggestion(self):
+        self.home("Stop setup.ps1 from asking for the port twice")
+        self.home("stop")  # a bare stop with no flow running is nothing to do
+        self.conductor.poll_once()
+        self.assertEqual(len(self.relay.sent), 1)
+        self.assertIn("Reply `go`", self.relay.sent[0]["text"])
+
+    def test_a_request_stamped_by_a_slower_clock_is_still_read(self):
+        self.relay.tick(10)
+        self.relay.post(self.AGENTS["lead"]["hex"], "an agent's reply", "c9")
+        self.conductor.poll_once()
+        self.home("research Which settings cut tokens?")
+        self.relay.events[-1]["created_at"] -= 30  # Desktop's clock 30 s behind Docker's
+        self.conductor.poll_once()
+        self.assertTrue(self.relay.sent and self.relay.sent[0]["text"].startswith("▶️ research flow"),
+                        self.relay.sent)
+
+    def test_a_restart_does_not_run_a_recent_request_again(self):
+        self.home("research Which settings cut tokens?")  # handled by the Tinker Flow that ran before the restart
+        self.relay.tick(30)
+        restarted = self.conductor_for(["c1", "c9"])
+        restarted.prime()
+        restarted.poll_once()
+        self.assertEqual(self.relay.sent, [])
+        self.home("research Is the relay local?")
+        restarted.poll_once()
+        self.assertTrue(self.relay.sent and self.relay.sent[0]["text"].startswith("▶️ research flow"))
+
+    def test_the_owner_stops_a_flow_by_replying_stop(self):
+        root = self.home("story Add a disk check")
+        self.relay.later(15, lambda: self.home("Stop", root=root))
+        self.relay.behavior["planner"] = "slow"
+        self.conductor.poll_once()
+        self.assertIn("stopped", self.relay.sent[-1]["text"])
+        self.assertNotIn([self.AGENTS["lead"]["hex"]], [s["mentions"] for s in self.relay.sent])
+
+    def test_a_reply_that_only_contains_stop_does_not_stop_the_flow(self):
+        root = self.home("story Add a disk check")
+        self.relay.later(15, lambda: self.home("stop guessing and keep going", root=root))
+        self.conductor.poll_once()
+        self.assertTrue(self.relay.sent[-1]["text"].startswith("✅"), self.relay.sent[-1]["text"])
+
+    def test_guesses_follow_the_request(self):
+        flows = json.loads(self.FLOWS.read_text(encoding="utf-8"))
+        for request, flow in (("The login page crashes on Safari", "bug"), ("Setup fails on port 3200", "bug"),
+                              ("Review /repos/Tinker master~3..master", "review"),
+                              ("Which settings cut tokens?", "research"), ("how does the gate decide", "research"),
+                              ("Add dark mode to the canvas", "story"), ("```markdown\n# A story\n```", "story")):
+            with self.subTest(request=request):
+                self.assertEqual(self.flow.guess(request, flows), flow)
 
     def test_a_failed_step_stops_the_flow(self):
         self.relay.behavior["lead"] = "fail"
@@ -813,11 +1047,14 @@ class BuzzFlowTests(unittest.TestCase):
         self.assertNotIn([self.AGENTS["lead"]["hex"]], [s["mentions"] for s in self.relay.sent])
 
     def test_help_lists_the_flows(self):
-        self.request("@Tinker Flow dance")
+        self.request("@Tinker Flow help")
+        self.home("help")
+        self.request("@Tinker Flow")
         self.conductor.poll_once()
-        self.assertEqual(len(self.relay.sent), 1)
-        for name in json.loads(self.FLOWS.read_text(encoding="utf-8")):
-            self.assertIn(name, self.relay.sent[0]["text"])
+        self.assertEqual(len(self.relay.sent), 3)
+        for sent in self.relay.sent:
+            for name in json.loads(self.FLOWS.read_text(encoding="utf-8")):
+                self.assertIn(f"`{name} <request>`", sent["text"])
 
     def test_flows_name_known_roles_and_placeholders(self):
         flows = json.loads(self.FLOWS.read_text(encoding="utf-8"))

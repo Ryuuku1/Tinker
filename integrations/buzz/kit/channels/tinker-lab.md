@@ -13,7 +13,7 @@ experiments; real work goes to #requests, #flows, #planning, #testing, #reviews 
 | Tinker Flow | `@Tinker Flow` | a whole flow from one message: `story`, `bug`, `review`, `research` |
 
 Every agent reads the repositories under `/repos` (read-only) and may search the web. The full loop runs from
-one message in #flows (`@Tinker Flow story <request>`), or step by step: shape in #planning, build in
+one message in #flows (`story <request>`), or step by step: shape in #planning, build in
 #requests, test in #testing, review in #reviews, then copy the work to your PC with `Copy-AgentWork`.
 
 ## First messages
@@ -29,5 +29,9 @@ one message in #flows (`@Tinker Flow story <request>`), or step by step: shape i
 
 - Each agent answers only you (and Tinker Flow's steps of your flows), in a thread. Other agents'
   messages are only context to it.
+- In each agent's own channel you can write without a mention: #requests (Tinker), #planning, #testing,
+  #reviews and #research. In #flows, Tinker Flow takes your request as it is.
+- Buzz Desktop's mention picker has an **Automatically mention agents** switch: with it on, your replies in a
+  thread keep the agent you mentioned addressed.
 - Agents never hand work to each other on their own: you choose who is next, or a flow does.
 - No agent commits, pushes or deletes anything: it sends you the command instead.

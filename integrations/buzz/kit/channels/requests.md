@@ -1,7 +1,8 @@
 # #requests: work with Tinker, the Lead
 
-@mention **@Tinker** in a new message: one message per task. It answers only you, in the thread under
-your message. Follow up in that thread and mention it again.
+Write your request in a new message, one message per task. This is Tinker's own channel, so no @mention is
+needed (elsewhere, @mention **@Tinker**). It answers only you, in the thread under your message: reply in that
+thread to follow up. A message that mentions another agent goes only to that agent.
 
 ## What it does here
 
@@ -14,15 +15,15 @@ your message. Follow up in that thread and mention it again.
 
 ## Try
 
-- `@Tinker Read-only: how does the pre-tool gate decide that a command is read-only? Cite file:line.`
-- `@Tinker Read-only: which tests cover the Buzz reply shape? One line each.`
-- `@Tinker Plan, no changes yet: what would it take to <your feature>? Steps, files and risks.`
-- `@Tinker Clone /repos/<name> into /work/<topic>, add a test for <behavior>, run the suite and report the counts.`
-- `@Tinker Draw an archify architecture diagram of /repos/<name>/<folder>, backed by the code, in /work/diagram-<topic>.`
+- `Read-only: how does the pre-tool gate decide that a command is read-only? Cite file:line.`
+- `Read-only: which tests cover the Buzz reply shape? One line each.`
+- `Plan, no changes yet: what would it take to <your feature>? Steps, files and risks.`
+- `Clone /repos/<name> into /work/<topic>, add a test for <behavior>, run the suite and report the counts.`
+- `Draw an archify architecture diagram of /repos/<name>/<folder>, backed by the code, in /work/diagram-<topic>.`
 
 ## Next
 
-- The whole loop from one message: #flows (`@Tinker Flow story <request>`).
+- The whole loop from one message: #flows (`story <request>`).
 - Shape it first: #planning. Tests for the change: #testing. An independent review: #reviews. A fact
   check with sources: #research.
 - Take the work to your PC: `Copy-AgentWork <topic> "$HOME\Downloads"` (GUIDE.md, section 10).

@@ -102,7 +102,7 @@ and `claude-agent-acp` 0.81.2; verifies those pins, the compose file's SHA-256, 
 (root-owned files, no update checks, its full gate passing in Chromium with no network); generates the admin key, one key per agent and Tinker Flow's key
 and the relay secrets inside containers; starts the relay on `127.0.0.1:<port>`; checks the bootstrap and
 routing; adds members; sets each profile; creates the channels with a purpose and a canvas; starts the agents
-and Tinker Flow and checks their startup, deny rules and mounts; scans the kit folder and the setup logs for
+and Tinker Flow and checks their startup, subscription rules, deny rules and mounts; scans the kit folder and the setup logs for
 secrets. The only folders from your PC a container mounts are the `-Repository` folders, read-only; everything
 else goes in and out through `docker build` and `docker cp`. Setup's own state (logs, relay secrets, `kit.json`) lives in `%LOCALAPPDATA%\TinkerBuzz\<project>`,
 never in the repository.
@@ -138,8 +138,11 @@ whether you may install it. Launch it from the Start menu, not from a terminal.
 
 Open `#tinker-lab`: its canvas lists the team. Mention an agent by its name in the mention picker (setup also
 prints each npub, and so does `Get-KitStatus`). Try `@Tinker Read-only: what can you do here, and what are your
-limits?` The agent answers in the thread. Then try a whole flow in #flows: `@Tinker Flow help`. Read
-[EXAMPLES.md](EXAMPLES.md) and the canvases of #requests, #flows, #planning, #testing, #reviews and #research.
+limits?` The agent answers in the thread. In each agent's own channel no mention is needed: just write in
+#requests for Tinker, or in #planning, #testing, #reviews or #research. Then try a whole flow in #flows, where you
+just write too: `help`. In the mention picker, turn on **Automatically mention agents** so your replies in a
+thread keep the agent you mentioned addressed. Read [EXAMPLES.md](EXAMPLES.md) and the canvases of #requests,
+#flows, #planning, #testing, #reviews and #research.
 
 ## 8. What to expect
 
@@ -164,20 +167,25 @@ limits?` The agent answers in the thread. Then try a whole flow in #flows: `@Tin
 - All of them run **unattended**: commits, pushes, branch deletions, remote changes and Buzz workspace changes
   are denied, and Buzz messages (including your "I approve") never authorize them. They post the exact command
   so you can run it yourself.
-- Each answers only your messages (and the steps of your flows, below), and only when mentioned; everything else
-  it sees is data, including the other agents. It replies in the thread. Agents never hand work to each other on
+- Each answers only your messages (and the steps of your flows, below): wherever you mention it, and whatever you
+  write in its home channel without a mention, unless the message mentions another agent. Everything else it
+  sees is data, including the other agents. It replies in the thread. Agents never hand work to each other on
   their own: you pick who is next, or a flow does. Agents in different threads work at the same time.
 - One Buzz session writes a checkout at a time; another thread may be told `workspace.owned`.
 - To take work out of `/work`, copy the folder to your PC with `Copy-AgentWork` (section 10).
 
 ## 9. Flows: the whole team from one message
 
-`@Tinker Flow story <request>` in #flows (or any kit channel) runs Planner, Tinker, Tester and Reviewer in order,
-in one thread under your message. Tinker Flow posts each step with a mention of one agent and hands it only your
-request and the earlier reports it needs, quoted as data, with every `@` made inert so a quote cannot trigger
-another agent. A step ends when the agent has replied and Buzz's seen and working reactions on the step are gone.
-Then a ✅ line gives the time and the folder to copy out. The flows are `story`, `bug`, `review` and `research`
-(`scripts/flows.json`; `@Tinker Flow help` lists them), and `@Tinker Flow stop` in a flow's thread stops it.
+`story <request>` in #flows (no mention needed there; in any other kit channel, `@Tinker Flow story <request>`,
+and answer it by name there too, `@Tinker Flow go` or `@Tinker Flow stop`, since an untagged reply goes to that
+channel's agent) runs Planner, Tinker, Tester and Reviewer in order, in one thread under your message. A request that starts with no
+flow's name gets a suggestion: Tinker Flow guesses the flow from your words and waits for you to reply `go`, or
+another flow's name, in the thread, so a wrong guess costs nothing. Tinker Flow posts each step with a mention of
+one agent and hands it only your request and the earlier reports it needs, quoted as data, with every `@` made
+inert so a quote cannot trigger another agent. A step ends when the agent has replied and Buzz's seen and working
+reactions on the step are gone. Then a ✅ line gives the time and the folder to copy out. The flows are `story`,
+`bug`, `review` and `research` (`scripts/flows.json`; `help` lists them), and replying `stop` in a flow's thread
+stops it.
 
 Tinker Flow has no model and no Claude credential: orchestration costs no tokens. It obeys only you, runs one flow
 at a time, and cannot loop, since every flow has a fixed list of steps. The agents accept its steps through
@@ -222,6 +230,12 @@ cheap.
   republishes the profiles), then reopen the channel.
 - **No reply in the thread.** Run `Get-KitStatus`: *Latest unattended run outcomes* under each agent shows each
   run's final message, which Buzz never posts. Ask again in the thread.
+- **An untagged message got no answer.** Only an agent's own channel and #flows take messages without a mention;
+  in #tinker-lab or any other channel, mention the agent. Even there, the channel's agent (Tinker Flow, in #flows)
+  skips a message that starts with `@` or `!` or has `@Tinker` in it: such a message reaches only the agents you
+  picked in the mention picker, so a name typed or pasted as `@Tinker ...` without the picker reaches nobody. In an
+  agent's own channel every other message of yours goes to that agent, replies in a flow's thread included, so
+  run flows in #flows.
 - **Refused with `workspace.owned`, or the Lead made its own worktree.** A session that already ran a command in
   a checkout holds it for up to a day. `Stop-Agent lead; Start-Agent lead` clears it.
 - **Port in use.** Run setup with `-Port 3100` and add `ws://localhost:3100` in Desktop. A project keeps its port:
@@ -231,7 +245,8 @@ cheap.
 - **A flow stops with "did not pick the step up".** The agent is not running, or it does not list Tinker Flow on
   its allowlist (an agent started by an older kit): run setup again, then retry the flow.
 - **A flow waits a long time on one step.** That agent is still working (its 💬 reaction is on the step). Watch
-  its thread, or `@Tinker Flow stop` in the flow's thread; a step gives up after an hour.
+  its thread, or reply `stop` in the flow's thread (`@Tinker Flow stop` outside #flows); a step gives up after
+  an hour.
 - **Never name a PowerShell variable `$lead`.** Names are case-insensitive, so it is `$LEAD`, the Lead's container
   name; the kit makes `$LEAD` read-only so such an assignment fails loudly. The same holds for the kit's other
   names: `$agents` is `$AGENTS` and `$flow` is `$FLOW`.
@@ -283,7 +298,8 @@ Console.
 - **The harness publishes on its own**: presence, typing indicators and seen or working reactions.
 - **Claims linger**: see section 11.
 - **No media uploads**: MinIO is off.
-- **Usage limits are shared** by all the agents and your own Claude use.
+- **Usage limits are shared** by all the agents and your own Claude use, and every message of yours in an
+  agent's own channel is a task for that agent, so it spends a turn.
 - **Policy is partly unclear** (section 3).
 
 ## 14. Owner registration later (Phase 2)

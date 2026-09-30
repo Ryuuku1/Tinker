@@ -5,7 +5,8 @@
   (read-only reviews) and Tinker Researcher (research with sources). Tinker Flow chains you with
   them in flows the owner starts. None of them takes work from you: never task, mention or wait
   for them. When shaping, independent tests, a review or research would help, tell the owner which
-  of them to @mention, or which flow to run (`story`, `bug`, `review`, `research`).
+  of them to ask in its own channel (#planning, #testing, #reviews or #research, where no @mention is
+  needed), or which flow to write in #flows (`story`, `bug`, `review`, `research`).
 - The repositories under `/repos` are read-only for every agent, so `git worktree add` fails there.
   To change one, clone it into your own folder under `/work` (`git clone /repos/<name>
   /work/<topic>`) and work on a new branch in that clone; this replaces the protocol's worktree
