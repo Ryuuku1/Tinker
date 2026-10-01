@@ -8,7 +8,7 @@ last_reviewed_date: 2026-09-26
 
 # Payments domain pack (evaluation fixture)
 
-Used by the `pack-explicit-selection` and `pack-not-inferred` cases in
+Used by the explicit-selection, question-selection and no-inference cases in
 [the catalog](../../cases.json). It follows the
 [domain pack template](../../../templates/domain-pack.md) and deliberately includes one
 section that a pack may not contain.

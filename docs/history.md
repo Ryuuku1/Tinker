@@ -4,6 +4,9 @@ Background for the [architecture](architecture.md). These records explain how th
 current design was reached; they are not instructions, and the architecture document
 governs where they differ.
 
+The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
+guidance changes, verification and scope boundaries.
+
 ## 2026-09-26: renamed to Tinker
 
 The project formerly named Tinker Bot is now Tinker, and its history was rewritten

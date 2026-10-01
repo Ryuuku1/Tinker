@@ -48,8 +48,9 @@ test counts while trimming verbose logs. Do not load all roles, skills, knowledg
 or integrations. Tools are optional; use [tool guidance](policies/tools.md) only
 when local evidence is insufficient. Use provider defaults, never a model matrix.
 Load a domain pack only when the user names it or a trusted repository instruction
-links it ([knowledge policy](policies/knowledge.md)); a pack never selects a
-repository, widens permissions or overrides these rules.
+links it ([knowledge policy](policies/knowledge.md)). Read selected guidance before
+answering questions as well as running workflows; a pack never selects a repository,
+widens permissions or overrides these rules.
 
 ## Delegation
 

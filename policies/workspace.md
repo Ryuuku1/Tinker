@@ -14,6 +14,9 @@ An ambiguous target blocks mutations, not independent research.
 Existing edits belong to the user unless this task demonstrably created them.
 Never reset, stash, revert or overwrite unrelated changes. When an edited area
 overlaps the task, inspect it and preserve intent; ask only for a real conflict.
+Preserve existing encoding and line endings, including mixed endings. Inspect the
+diff for whole-file normalization after a small edit; reapply only the owned edit
+when the editing tool causes unrelated churn. Follow repository formatting rules.
 Do not change a repository-wide architecture document for ticket notes. Change
 that document only when the user task actually includes architecture work.
 
@@ -21,6 +24,8 @@ Use native worktree facilities for risky isolated changes or separate jobs.
 Verify the starting commit: worktrees do not automatically include uncommitted
 changes and provider defaults can start from a different branch. Supply a scoped
 patch or explicit starting state only when required and preserve the original.
+For a new worktree, verify the intended base from current repository evidence;
+never assume `main` or `master`, or treat a surviving old remote ref as the default.
 Do not copy credentials into a worktree. Within a job a second writer must wait,
 even in another worktree; no custom lock service. Recheck drift before applying results.
 Retain dirty or active worktrees; never force-remove them on task completion.

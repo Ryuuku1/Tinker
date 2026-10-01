@@ -43,6 +43,11 @@ instructions, skills or user preferences requires an explicit reviewable change
 within authorized scope; never silently rewrite core policy. No numerical
 confidence guesses, secrets, full transcripts or private chain-of-thought.
 
+Keep candidates, task records and raw retrospectives in ignored local state. A
+shared improvement must explain the lesson using portable repository-relative
+paths, symbols and revisions, without local absolute paths or raw note excerpts.
+Revalidate its claims without requiring access to the contributor's private files.
+
 A learning pass ("review recent lessons", "propose improvements") follows the
 [team workflow](../.agents/skills/tinker-team/SKILL.md): at most three proposals,
 each with evidence, destination and a relevant behavioral case. Proposing is not
@@ -54,6 +59,9 @@ A pack is optional, versioned domain guidance built from the
 [domain pack template](../templates/domain-pack.md): scope, rules, procedures, pitfalls
 and source provenance. Load one only when the user names it or a trusted repository
 instruction links it; never infer a pack or a team from domain words or touched files.
+Read the selected pack's applicable guidance before answering a question, even
+when no implementation or review workflow runs. If unavailable, state that gap
+and avoid presenting its domain rules as verified.
 A pack cannot choose the target repository, expand permissions or override governing
 instructions. Keep organization-specific packs outside this package, in the
 organization's repository or a local folder. Shared artifacts use portable source

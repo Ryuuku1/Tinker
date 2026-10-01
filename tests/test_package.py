@@ -205,16 +205,11 @@ class PackageTests(unittest.TestCase):
         for cron in crons:
             self.assertTrue(tinker_runtime.cron_to_rrule(cron).startswith('FREQ='), cron)
 
-    def test_operating_files_carry_no_product_defaults(self):
-        names = ['AGENTS.md', 'README.md'] + [str(p.relative_to(ROOT)) for d in
-                                              ('scripts', 'policies', 'roles', 'templates', 'profiles', '.agents',
-                                               '.claude', '.codex', '.gemini') for p in (ROOT / d).rglob('*') if p.is_file()]
-        for name in names:
-            if '__pycache__' in name:
-                continue
-            with self.subTest(file=name):
-                found = re.search(r'(?i)\b(?:tmc2|atriis)\b', (ROOT / name).read_text(encoding='utf-8'))
-                self.assertIsNone(found, f'{name} names a product: keep product details in optional examples')
+    def test_core_has_no_builtin_product_or_team_registry(self):
+        for name in ('config/repositories.json', 'config/teams.json', 'repos', 'teams'):
+            with self.subTest(path=name):
+                self.assertFalse((ROOT / name).exists(),
+                                 f'{name} selects products or teams: keep organization guidance outside the core')
 
 
 if __name__ == "__main__":

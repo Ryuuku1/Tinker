@@ -100,13 +100,13 @@ class GraphifyProjectTests(unittest.TestCase):
 
     def test_no_repository_name_selects_a_baseline_branch(self):
         graph = helper()
-        for name in ("TMC2", "Atriis.App", "acme-widgets"):
+        for name in ("sample-web", "sample-api", "acme-widgets"):
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, "pass --baseline-branch"):
                 graph._baseline_branch(Path(name), None)
         self.assertEqual(graph._baseline_branch(self.primary, "main"), "main")
         with self.assertRaisesRegex(ValueError, "does not exist"):
             graph._baseline_branch(self.primary, "development")
-        product = self.product_repository("TMC2", ["development", "release"])
+        product = self.product_repository("sample-web", ["development", "release"])
         with self.assertRaisesRegex(ValueError, "pass --baseline-branch"):
             graph.build_graph(product, self.package, graphify_bin="missing-graphify-cli")
         # An explicit branch is honoured whatever the repository is called: selection and the clean

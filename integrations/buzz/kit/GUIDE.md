@@ -9,6 +9,9 @@ on your machine; nothing is published beyond `127.0.0.1`. The
 relay and the agents' safety settings match the lab setup the kit was built from (see the
 [integration README](../README.md) and the [Buzz protocol](../protocol.md) every agent follows).
 
+This optional kit uses Claude Code for its container agents. Tinker's main Claude Code,
+Codex and Antigravity entry points work independently of the kit.
+
 ## 1. Prerequisites
 
 - Windows 10 or 11 with **Docker Desktop** running **Linux containers** (Compose 2.24.4 or newer is included).

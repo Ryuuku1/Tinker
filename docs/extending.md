@@ -50,6 +50,8 @@ in that organization's repository or a local folder, and link one from a product
 repository's own instructions when that repository should always use it; otherwise
 the user names it in a request. Never add a pack to this package's core, and never
 let a pack choose a repository or widen permissions.
+Read selected guidance for questions too; selecting a pack does not require a
+software workflow, a particular provider or a repository registry.
 
 A verification recipe records how to run and check one application flow
 ([recipe template](../templates/verification-recipe.md)). Prefer the project's own
@@ -63,6 +65,9 @@ cases for acceptance only, and never edit one to make a change pass (a test pins
 digest). Record observed runs, write a suite manifest and run `python evals/suite.py`;
 compare two manifests with `python evals/suite.py compare` only when host, model, case
 definitions and configuration match. See the [evaluation guide](../evals/README.md).
+Structural checks verify packaging, not agent compliance. Keep failed comparisons
+visible; changing the accepted baseline cannot turn a regression into evidence of
+improvement. Report missing live runs as `not-verified` for each affected host.
 Maintenance routines are opt-in prompt templates in [routines](../templates/routines.md).
 
 ## Upgrade safely

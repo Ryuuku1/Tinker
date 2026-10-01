@@ -519,7 +519,7 @@ class BuzzKitTests(unittest.TestCase):
     def test_each_agent_has_its_own_key_and_the_specialists_mount_read_only(self):
         runs = self.pwsh(r"""
 $s = @{ port = 3200; owner = 'o' * 64; image = 'img:1'; credentialFile = 'C:\c.env'
-        repositories = @('C:\src\Tinker', 'D:\work\Atriis.App')
+        repositories = @('C:\src\Tinker', 'D:\work\sample-app')
         channels = @{ reviews = 'c2'; zeta = 'c3'; requests = 'c1' }; agents = @{ flow = 'f' * 64 } }
 foreach ($r in $AGENTS.Keys) { $s.agents[$r] = "$r".PadRight(64, 'x') }
 $runs = [ordered]@{}
@@ -559,11 +559,11 @@ $runs | ConvertTo-Json -Depth 3""")
         for role in ("lead", "planner", "tester", "reviewer", "researcher"):
             volumes = [runs[role][i + 1] for i, a in enumerate(runs[role]) if a == "-v"]
             self.assertIn(r"C:\src\Tinker:/repos/Tinker:ro", volumes)
-            self.assertIn(r"D:\work\Atriis.App:/repos/Atriis.App:ro", volumes)
+            self.assertIn(r"D:\work\sample-app:/repos/sample-app:ro", volumes)
             self.assertEqual([v for v in volumes if "/repos/" in v and not v.endswith(":ro")], [])  # never writable
             team = next(e for e in runs[role] if e.startswith("BUZZ_ACP_TEAM_INSTRUCTIONS="))
             self.assertIn("/repos/Tinker", team)
-            self.assertIn("/repos/Atriis.App", team)
+            self.assertIn("/repos/sample-app", team)
         self.assertFalse([a for a in runs["no-repository"] if "/repos/" in a])
 
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 unavailable")

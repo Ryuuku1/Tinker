@@ -25,6 +25,14 @@ does not imply tests ran. Skipped, crashed, timed-out and unavailable checks sta
 visible; inspect both process status and test-runner summary. Never filter away
 failure or skipped-test totals. After changing tested behavior, rerun affected
 checks. A pre-existing failure is still a failure, with attribution if established.
+For CI claims, inspect the current workflow, trigger and tested revision; distinguish
+checks configured to run, checks required by repository rules and observed results.
+CI success covers only its executed scope, not unrun local or application checks.
+Delivery claims need observed evidence matching the deployed revision or artifact
+to the environment. Inaccessible operational checks remain `not-verified`; provide
+scoped verification steps for someone with access without sending them unasked.
+Call a failure flaky only with matching failure/history evidence. A retry needs
+authorization if it writes remote state; retain the original failure and retry result.
 Trimming noisy output such as banners, progress lines and out-of-scope warnings
 must keep actionable errors, failure blocks, stack traces and totals, and state
 what was trimmed. Review reading may skip lockfile content only where
