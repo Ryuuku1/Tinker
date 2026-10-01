@@ -10,7 +10,7 @@ guidance changes, verification and scope boundaries.
 ## 2026-09-26: renamed to Tinker
 
 The project formerly named Tinker Bot is now Tinker, and its history was rewritten
-into technical commits. Revisions cited below, such as `1bd44c0`, belong to the
+into technical commits. Revisions cited below, such as `c7805fd`, belong to the
 pre-rename history, which is kept under the local tag `archive/tinker-bot`.
 
 | Former | Now |
@@ -30,7 +30,7 @@ name are not migrated; uninstall them with the installer at `archive/tinker-bot`
 ## 2026-09-26: a dependable generic team
 
 The refactor strengthened the existing design instead of replacing it. It was planned
-after comparing this project at pre-rename revision `1bd44c0` with an organization's
+after comparing this project at pre-rename revision `c7805fd` with an organization's
 published edition of Tinker (baseline `750955d`, later `7866b0f`, which merged its
 team-domains branch and a separate evaluation fix). Its application verification recipes, team
 playbooks, shared retrospectives and evaluation-backed improvement informed this
