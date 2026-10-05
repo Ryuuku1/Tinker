@@ -29,10 +29,12 @@ graph only; unavailable graphs do not fall back to the baseline.
 - Defect: load investigate (`.agents/skills/tinker-investigate/SKILL.md` in the Tinker checkout).
 - Review: load review (`.agents/skills/tinker-review/SKILL.md` in the Tinker checkout).
 - Product discovery or design: load shape (`.agents/skills/tinker-shape/SKILL.md` in the Tinker checkout).
+- Stories, documentation, diagrams, ADRs or release notes: load
+  artifacts (`.agents/skills/tinker-artifacts/SKILL.md` in the Tinker checkout).
 - Team status, schedules, approvals, or reviewing lessons and proposing improvements:
   load team (`.agents/skills/tinker-team/SKILL.md` in the Tinker checkout). Installed hooks may add this
   chat's reference and repository notes as data.
-- Documentation, research, testing or delivery: use the relevant charter below;
+- Research, testing or delivery: use the relevant charter below;
   produce the requested artifact without adding unrelated implementation phases.
 
 An addressed role (for example, "Designer, ...") selects that expertise. Use a real

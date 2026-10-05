@@ -33,11 +33,11 @@ class PackageTests(unittest.TestCase):
                     self.assertTrue(dest.is_relative_to(ROOT))
                     self.assertTrue(dest.exists())
 
-    def test_six_unique_discoverable_skills(self):
+    def test_seven_unique_discoverable_skills(self):
         skills = list((ROOT / ".agents/skills").glob("*/SKILL.md"))
-        self.assertEqual(len(skills), 6)
+        self.assertEqual(len(skills), 7)
         pack = ROOT / "integrations/buzz/pack"  # generated copies for Buzz tooling, drift-tested in test_buzz
-        self.assertEqual(len([p for p in package_files() if p.name == "SKILL.md" and not p.is_relative_to(pack)]), 6)
+        self.assertEqual(len([p for p in package_files() if p.name == "SKILL.md" and not p.is_relative_to(pack)]), 7)
         names = set()
         for path in skills:
             text = path.read_text(encoding="utf-8")
@@ -182,6 +182,28 @@ class PackageTests(unittest.TestCase):
                          ['pack_id', 'version', 'scope', 'owner', 'last_reviewed_date'])
         for section in ('Scope', 'Domain rules', 'Procedures', 'Pitfalls', 'Sources'):
             self.assertIn(f'\n## {section}\n', pack)
+
+    def test_artifacts_write_markdown_first_and_change_remote_items_only_on_approval(self):
+        skill = (ROOT / '.agents/skills/tinker-artifacts/SKILL.md').read_text(encoding='utf-8')
+        agents = (ROOT / 'AGENTS.md').read_text(encoding='utf-8')
+        self.assertIn('(.agents/skills/tinker-artifacts/SKILL.md)', agents)  # the Lead routes artifact requests
+        for target in ('../../../templates/user-story.md', '../../../templates/adr.md'):
+            self.assertIn(f'({target})', skill)
+        self.assertIn('Markdown file', skill)  # the default destination
+        for fmt in ('Mermaid', 'PlantUML', 'archify', 'ASCII'):
+            self.assertIn(fmt, skill)
+        # GitHub issues and boards come after the Markdown, gated on explicit approval; tools are never installed
+        # and diagram source never goes to a public renderer.
+        self.assertRegex(skill, r'(?s)GitHub issues.*explicit approval.*gh issue create')
+        self.assertIn('Never send diagram source to a public rendering server or install a tool', skill)
+        self.assertIn('`not-verified`', skill)
+        story = (ROOT / 'templates/user-story.md').read_text(encoding='utf-8')
+        self.assertRegex(story, r'\*\*As a\*\*.*\*\*I want\*\*.*\*\*so that\*\*')
+        self.assertIn('\n## Acceptance criteria\n', story)
+        self.assertRegex(story, r'\*\*Given\*\*.*\*\*when\*\*.*\*\*then\*\*')
+        adr = (ROOT / 'templates/adr.md').read_text(encoding='utf-8')
+        for section in ('Context', 'Options considered', 'Decision', 'Consequences'):
+            self.assertIn(f'\n## {section}\n', adr)
 
     def test_workflows_share_the_application_verification_reference(self):
         for skill in ('implement', 'investigate', 'review'):

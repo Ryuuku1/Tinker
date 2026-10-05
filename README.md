@@ -16,7 +16,7 @@ host normally and grant access to the product folder using its native controls.
 | Codex app | Add/open this folder as a project and start a task | Inspect loaded project instructions, skills and native agents |
 | Codex CLI | `codex --add-dir <absolute-product-path>` from this checkout | Inspect loaded project guidance and available agents |
 | Claude Code | `claude --plugin-dir . --add-dir <absolute-product-path>` from this checkout | Inspect memory, skills and agents using the installed host's views |
-| Antigravity | Open this folder as a project; grant product access through native controls | Inspect Customizations for the always-on rule, six skills and eight specialists |
+| Antigravity | Open this folder as a project; grant product access through native controls | Inspect Customizations for the always-on rule, seven skills and eight specialists |
 
 The project must be trusted for the host to load local configuration. Directory
 access alone does not load product instructions; the Lead reads them.
@@ -60,9 +60,11 @@ active helpers, one writer including the Lead, and no recursive delegation.
 Small jobs can stay with the Lead. Unavailable helpers mean transparent Lead work;
 role switching is never presented as independent review.
 
-Six canonical skills cover shaping, implementation, investigation, review,
-on-demand Graphify graph maintenance, and team status, schedules, approvals and
-learning reviews. Research, documentation, testing and delivery use their relevant
+Seven canonical skills cover shaping, implementation, investigation, review,
+engineering artifacts (user stories, documentation, diagrams, ADRs and release
+notes, saved as Markdown first, with GitHub issues or a project board only on
+approval), on-demand Graphify graph maintenance, and team status, schedules,
+approvals and learning reviews. Research, testing and delivery use their relevant
 charters directly. Changes to a running UI, API or CLI are verified per a shared
 [application verification](policies/app-verification.md) reference when relevant.
 Optional [domain packs](templates/domain-pack.md) load only when you name one or your

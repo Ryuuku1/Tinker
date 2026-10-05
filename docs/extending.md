@@ -21,7 +21,7 @@ grant by default. Adding a role never expands the worker budget.
 Create `.agents/skills/<unique-name>/SKILL.md`, with `name` matching its folder and
 a short `description` identifying when to use it. Keep workflow content focused;
 link shared policy instead of copying it. Relative links resolve from the skill
-directory. Update the Lead's routing links and the intentional six-skill package
+directory. Update the Lead's routing links and the intentional seven-skill package
 check only when the new workflow genuinely deserves expansion. The Claude manifest
 already points at the canonical parent directory.
 

@@ -17,9 +17,9 @@ database, scheduler service or simulated execution.
 | --- | --- | --- |
 | `AGENTS.md` | The Lead: routing, delegation budget, boundaries | Every session (native import or rule) |
 | `roles/` | Eight specialist charters; front matter generates native descriptors | Only the selected charter |
-| `.agents/skills/` | Six workflows: shape, implement, investigate, review, Graphify, team | Only the selected workflow |
+| `.agents/skills/` | Seven workflows: shape, implement, investigate, review, artifacts, Graphify, team | Only the selected workflow |
 | `policies/` | Evidence, delegation, safety, workspace, tools, knowledge, application verification | When the step needs them |
-| `templates/` | Checkpoint, knowledge candidate, domain pack, verification recipe, routine prompts | When producing that artifact |
+| `templates/` | Checkpoint, knowledge candidate, domain pack, verification recipe, routine prompts, user story, ADR | When producing that artifact |
 | `profiles/` | Opt-in stack conventions, subordinate to the product repository | Only for matching work |
 | `.claude/`, `.codex/`, `.agents/agents/`, `.gemini/` | Generated native descriptors: discovery and requested tools | By each host |
 | `scripts/tinker_runtime.py` | In-app runtime: lifecycle hooks, `status`, `schedule-plan` | By host hooks, once installed |
