@@ -402,7 +402,8 @@ class BuzzReplyTests(BuzzFixture):
 
 
 class BuzzKitTests(unittest.TestCase):
-    """The Windows hand-over kit's files; its live run is evidence under .tinker/evals, not a unit test."""
+    """The hand-over kit's files (PowerShell for Windows, bash for Linux: test_buzz_kit_bash covers kit.sh); its live
+    run is evidence under .tinker/evals, not a unit test."""
     KIT = ROOT / "integrations" / "buzz" / "kit"
 
     def test_kit_files_are_lf_without_secrets_machine_paths_or_a_fixed_port(self):
@@ -414,7 +415,8 @@ class BuzzKitTests(unittest.TestCase):
                 self.assertNotIn("\r", text)  # the scripts run in Linux containers; .gitattributes keeps them LF
                 self.assertNotRegex(text, r"nsec1[0-9a-z]{20,}|sk-ant-[\w-]{16,}|(?:OAUTH_TOKEN|API_KEY)=[\w-]{16,}")
                 self.assertNotRegex(text, r"(?i)\b[a-z]:\\users\\|/Users/|/home/(?!agent\b)\w+")
-                if path.suffix == ".sh":  # the port is a setting; 3000 is only the relay's port inside Docker
+                if path.suffix == ".sh" and path.parent.name == "scripts":  # in containers the port is a setting;
+                    # 3000 is only the relay's port inside Docker (setup.sh, on the host, names it as setup.ps1 does)
                     self.assertNotRegex(text, r"(?<!relay:)\b3000\b")
 
     def test_every_agent_keeps_the_safe_settings(self):
@@ -490,6 +492,12 @@ class BuzzKitTests(unittest.TestCase):
         self.assertRegex(dockerfile, r"ARCHIFY_CHROME_NO_SANDBOX=1\b")
         self.assertRegex(setup, r"--cap-drop ALL --security-opt no-new-privileges:true --network none \$image")
         self.assertIn("archify.mjs\" finalize", setup)
+        # The Linux setup verifies the same pin and runs the same offline gate.
+        setup_sh = (self.KIT / "setup.sh").read_text(encoding="utf-8")
+        self.assertIn("/kit/archify-commit.txt", setup_sh)
+        self.assertIn("$PIN_ARCHIFY_COMMIT", setup_sh)
+        self.assertRegex(setup_sh, r'--cap-drop ALL --security-opt no-new-privileges:true --network none "\$image"')
+        self.assertIn("archify.mjs\" finalize", setup_sh)
 
     def test_writers_draw_diagrams_where_copy_agent_work_reaches(self):
         roles = {p.stem: p.read_text(encoding="utf-8") for p in (self.KIT / "roles").glob("*.md")}

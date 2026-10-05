@@ -29,6 +29,7 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tinker_runtime  # noqa: E402  (shared: charter files, digest, marker, hook names)
+import tinker_platform  # noqa: E402  (this checkout's Windows or Linux script choice)
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER_FILE = ".tinker-generated"
@@ -916,7 +917,16 @@ def main(argv=None):
     parser.add_argument("--python", default=getattr(sys, "_base_executable", sys.executable),
                         help="interpreter the hooks run (never a virtual environment launcher)")
     parser.add_argument("--write-descriptors", action="store_true", help="regenerate this checkout's project descriptors and Buzz pack")
+    parser.add_argument("--platform", choices=tinker_platform.CHOICES,
+                        help="store which scripts this checkout runs: windows (PowerShell) or linux (bash); "
+                             "auto detects it (see scripts/tinker_platform.py)")
     args = parser.parse_args(argv)
+    if args.platform:
+        if args.dry_run:
+            print(f"[dry run] would store platform {args.platform} in {tinker_platform.settings_file()}")
+        else:
+            print(f"Stored platform {args.platform} in {tinker_platform.save(args.platform)}")
+        print(tinker_platform.describe())
     if args.write_descriptors:
         write_descriptors()
         return 0

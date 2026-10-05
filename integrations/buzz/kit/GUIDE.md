@@ -1,4 +1,4 @@
-# Tinker's team in Buzz on your own Windows PC
+# Tinker's team in Buzz on your own PC (Windows or Linux)
 
 This kit sets up a private Buzz relay on your PC and runs Tinker's team as five Buzz agents that answer
 only you: **Tinker** (the Lead), **Tinker Planner**, **Tinker Tester**, **Tinker Reviewer** and **Tinker
@@ -12,10 +12,18 @@ relay and the agents' safety settings match the lab setup the kit was built from
 This optional kit uses Claude Code for its container agents. Tinker's main Claude Code,
 Codex and Antigravity entry points work independently of the kit.
 
+**Windows or Linux.** The kit has two equivalent sets of scripts: PowerShell 7 for Windows (`setup.ps1`, `kit.ps1`,
+`teardown.ps1`) and bash for Debian and other Linux hosts (`setup.sh`, `kit.sh`, `teardown.sh`). They share the
+pins, the team, the agent image and every check. This guide shows the Windows commands; on Linux read
+[section 15](#15-linux-debian) first, which lists the prerequisites, the token and Desktop steps, and the bash form
+of every command. `python scripts/tinker_platform.py kit setup ...` runs whichever set this checkout is configured
+for ([README](../../../README.md#windows-or-linux)).
+
 ## 1. Prerequisites
 
 - Windows 10 or 11 with **Docker Desktop** running **Linux containers** (Compose 2.24.4 or newer is included).
 - **PowerShell 7** (`pwsh`) and **Git for Windows**.
+- On Linux instead: Docker Engine with Compose 2.24.4+ and buildx, bash, git, jq and curl (section 15).
 - **Claude Code**, only to create your token (section 3).
 - About **9 GB** of free disk space: sources, build caches, the agent image (3.1 GB) and base images.
 - About **10-30 minutes** for the first setup: about 4.9 GB of images to download, then the Rust build (97 s on
@@ -320,3 +328,92 @@ agents' owner later, for each agent:
    (`src/api/mod.rs:123-151`). `Start-Agent` does not pass an attestation yet; that is part of Phase 2. Agents
    with a recorded owner become siblings that pass each other's owner-only gate, so this also needs a rule that
    keeps them from triggering each other.
+
+## 15. Linux (Debian)
+
+The bash scripts do what the PowerShell ones do, step for step: the same twelve setup steps, image, checks, state
+(`kit.json`) and agent commands. Tested with unit tests and a preflight on Debian 12 with Docker Engine 29; a full
+setup on Linux has not yet been recorded as live evidence (the 2026-09-28 lab ran on Windows).
+
+**Prerequisites.** Docker Engine from [Docker's apt repository](https://docs.docker.com/engine/install/debian/)
+(`docker-ce`, `docker-buildx-plugin`, `docker-compose-plugin`): Debian's own `docker-compose` package is the old v1
+and does not work. Then let your user run Docker without sudo, and install the rest:
+
+```bash
+sudo usermod -aG docker "$USER"    # then log out and in again
+sudo apt install git jq curl iproute2
+```
+
+Setup checks for Compose 2.24.4 or newer and for buildx (the agent image's build uses cache mounts). The relay is
+published on `127.0.0.1` only, as on Windows. Docker Engine runs natively, so there is no Docker Desktop to start:
+the relay comes back with the Docker service after a reboot, the agents do not (`./kit.sh Start-Agent`).
+
+**Your Claude token (section 3).** Run `claude setup-token` in a terminal of your own, copy the whole token, then
+save it from the clipboard (`wl-paste` on Wayland, `xclip` on X11), never pasting it at a prompt:
+
+```bash
+read -r -p 'Copied the whole token? Press Enter'
+t=$( { wl-paste 2>/dev/null || xclip -o -selection clipboard; } | tr -d '[:space:]')
+if [[ $t =~ ^[A-Za-z0-9_-]{80,}$ ]]; then mkdir -p -m 700 ~/tinker-buzz-secrets; (umask 077; printf 'CLAUDE_CODE_OAUTH_TOKEN=%s\n' "$t" > ~/tinker-buzz-secrets/claude.env); else echo 'Copy the whole token again'; fi
+unset t; { wl-copy ' ' 2>/dev/null || printf ' ' | xclip -selection clipboard; }; clear
+```
+
+The rules of section 3 hold: never put the token in your shell history, your profile or the repository.
+
+**Buzz Desktop 0.5.25 (section 5).** The same release has a Debian package. Check it before installing (the
+SHA-256 and size are the release's published asset digest; the kit was tested with the Windows build only):
+
+```bash
+f=~/Downloads/Buzz_0.5.25_amd64.deb
+echo '0990e351453d7eb31e50a498df8efced5ede57931bb414fc50cc9ca56d672293  '"$f" | sha256sum -c - && stat -c %s "$f"   # 123075866
+sudo apt install "$f"
+```
+
+**Setup (section 4).** From `Tinker/integrations/buzz/kit`, in any shell:
+
+```bash
+./setup.sh
+```
+
+With no arguments it is the same wizard. Unattended, the options are the PowerShell parameters in kebab case (the
+PowerShell spelling, such as `-OwnerNpub`, is accepted too), and `--repository` repeats instead of taking a list:
+
+```bash
+./setup.sh --owner-npub npub1... --credential-file ~/tinker-buzz-secrets/claude.env --repository ~/src/app --repository ~/src/lib
+```
+
+State lives in `${XDG_DATA_HOME:-~/.local/share}/TinkerBuzz/<project>` instead of `%LOCALAPPDATA%\TinkerBuzz`.
+Repositories are mounted read-only as on Windows; the agents run as uid 10001, so they can read files that are
+readable by others (the usual `644` and `755`), never a folder only your user may read.
+
+**Every command.** `kit.sh` runs one command per call from any shell (zsh included), with the same names as
+`kit.ps1`; in bash you can also source it (`. ./kit.sh --project tinker-buzz`) and call the functions directly.
+
+| Windows (PowerShell 7) | Linux (bash) |
+| --- | --- |
+| `.\setup.ps1` | `./setup.sh` |
+| `. .\kit.ps1 -Project tinker-buzz; Get-KitStatus` | `./kit.sh --project tinker-buzz Get-KitStatus` (or `status`) |
+| `Get-KitUsage` | `./kit.sh Get-KitUsage` (or `usage`) |
+| `Stop-Agent; Start-Agent` | `./kit.sh Stop-Agent; ./kit.sh Start-Agent` |
+| `Stop-Agent tester; Start-Agent tester` | `./kit.sh Stop-Agent tester; ./kit.sh Start-Agent tester` |
+| `Stop-Flow; Start-Flow` | `./kit.sh Stop-Flow; ./kit.sh Start-Flow` |
+| `Copy-AgentWork docs-typos "$HOME\Downloads"` | `./kit.sh Copy-AgentWork docs-typos ~/Downloads` (or `copy`) |
+| `Invoke-Compose exec -T relay buzz-admin ...` | `./kit.sh Invoke-Compose exec -T relay buzz-admin ...` |
+| `.\teardown.ps1` | `./teardown.sh` |
+| `.\teardown.ps1 -Images -StateFolder` | `./teardown.sh --images --state-folder` (`--yes` skips the questions) |
+
+When an agent, a canvas or Tinker Flow tells you to run `Copy-AgentWork <topic>`, run
+`./kit.sh Copy-AgentWork <topic> <destination>`. The "never name a PowerShell variable `$lead`" warning
+(section 11) does not apply: bash names are case-sensitive.
+
+**Linux troubleshooting.**
+
+- **"Docker is not reachable".** Start the service (`sudo systemctl start docker`) and check that `docker ps` works
+  without sudo; after `usermod` you must log in again.
+- **"Docker buildx is required".** Install `docker-buildx-plugin`; without it the build fails on its cache mounts.
+- **A repository's files are missing inside the agents.** They are not readable by others: the agents run as
+  another user. Fix the permissions, or mount a copy.
+
+**Keeping the two in step.** A change to a `.ps1` script needs the same change in its `.sh` twin (and the other way
+round). `tests/test_buzz_kit_bash.py` runs the PowerShell kit's checks against the bash kit with Docker mocked, and
+fails when the pins, the team, the channels, the setup steps or the command names of `kit.sh` and `kit.ps1` differ.

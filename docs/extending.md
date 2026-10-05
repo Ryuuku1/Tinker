@@ -97,3 +97,14 @@ bad decision. Add only the smallest demonstrated correction and a relevant case.
 No new routine, hook, script or abstraction without a repeated concrete need. The
 in-app runtime's hooks exist for such needs (turn-one context, tool-loop
 enforcement, presence); extend them only for the same kind, with a payload test.
+
+## Change the Buzz kit on both platforms
+
+The optional Buzz kit has twin scripts: `setup.ps1`, `kit.ps1` and `teardown.ps1` for Windows, and `setup.sh`,
+`kit.sh` and `teardown.sh` for Linux. Make every change in both, keeping the PowerShell command names in `kit.sh`
+so agent replies and canvases that name them (`Copy-AgentWork`) hold on either platform. Shared files (the agent
+image, `scripts/`, `roles/`, `channels/`, `agent.env`) serve both unchanged. `tests/test_buzz_kit_bash.py` runs the
+kit checks against bash with Docker mocked and fails when the pins, team, channels, setup steps or command names
+drift; the PowerShell twins run only where `pwsh` is installed. Users pick their platform with
+`python scripts/tinker_platform.py set windows|linux` (stored in the ignored `.tinker/platform.json`).
+

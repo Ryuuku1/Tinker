@@ -136,6 +136,23 @@ deletes, remote changes, publishing and credential changes need your approval;
 scheduled runs cannot approve anything. Re-run the installer after pulling changes.
 See [per-app details and limits](docs/providers.md#optional-user-level-install).
 
+## Windows or Linux
+
+Tinker's own scripts are Python and run on both. The optional [Buzz kit](integrations/buzz/kit/GUIDE.md) has a
+PowerShell 7 version for Windows and a bash version for Debian and other Linux hosts, kept in step by tests. Tell
+this checkout which one you use, once; the choice lives in the ignored `.tinker/platform.json`, so pulling new
+versions never conflicts with it:
+
+```text
+python scripts/tinker_platform.py                 # show the platform in use (auto-detected until you set one)
+python scripts/tinker_platform.py set linux       # or windows, or auto
+python scripts/install_apps.py --platform linux   # the same, while installing into the apps
+python scripts/tinker_platform.py kit setup --owner-npub <npub> --repository <path>   # that platform's kit script
+```
+
+`kit` takes the bash spelling of the options on both platforms and turns it into PowerShell parameters on Windows.
+`TINKER_PLATFORM=windows|linux` overrides the stored choice for one command.
+
 ## Continue or switch hosts
 
 Substantial or delegated work gets an isolated checkpoint under

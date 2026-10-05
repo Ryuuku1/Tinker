@@ -9,10 +9,11 @@ with the scripted model endpoints described in [provider setup](../../docs/provi
 On 2026-09-28 a Docker lab on Windows ran the Lead end to end with a live Claude subscription token and Buzz
 Desktop 0.5.25 as the owner's client; nothing ran natively on Windows or macOS.
 
-**On Windows, use the [kit](kit/GUIDE.md):** one PowerShell 7 script sets up the relay, keys, the agent image,
+**On Windows or Linux, use the [kit](kit/GUIDE.md):** one script (PowerShell 7 on Windows, bash on Debian and other
+Linux hosts) sets up the relay, keys, the agent image,
 channels and Tinker's team (the Lead, a Tester, and a read-only Planner, Reviewer and Researcher, all with web
 access, plus Tinker Flow, which runs whole flows across them with no AI of its own), owned by your Buzz Desktop
-identity. Run `setup.ps1` with no parameters for a wizard; [EXAMPLES.md](kit/EXAMPLES.md) shows how to work with
+identity. Run `setup.ps1` (or `setup.sh`) with no parameters for a wizard; [EXAMPLES.md](kit/EXAMPLES.md) shows how to work with
 the team. The sections below describe the single-Lead setup by hand.
 
 ## What you get, and what you do not
@@ -172,6 +173,6 @@ shells. On Windows, Tinker reads the Buzz variable names case-insensitively.
 - If the first-turn context lacks "Tinker is active", the hooks are not loaded in that host (the
   Codex case): keep it read-only.
 - Teardown: `docker compose -p my-buzz -f compose.yml -f compose.local.yml down -v`, then remove the
-  image, build volume and keys you created. With the kit, run `kit/teardown.ps1`.
+  image, build volume and keys you created. With the kit, run `kit/teardown.ps1` (or `kit/teardown.sh`).
 - Tinker creates no Buzz workflows or schedules and writes no relay memory. Relay changes other than
   replying are gated (`buzz.mutate`) and are denied in Buzz sessions.
