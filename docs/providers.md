@@ -17,7 +17,7 @@ indexing. A missing or failed graph is reported while source inspection continue
 In the desktop app add/open this checkout as the project. In a terminal start
 `codex --add-dir <absolute-product-path>` here. Trust the project when appropriate
 so project configuration loads. AGENTS.md provides Lead behavior, .agents/skills/
-contains seven skills, and .codex/agents/ defines eight native specialists.
+contains eight skills, and .codex/agents/ defines nine native specialists.
 The project requests two concurrent helpers; each specialist disables its own
 multi-agent tools. Reader roles request read-only sandboxing and disable the shell
 feature; writers request workspace-write. No model is pinned.
@@ -38,15 +38,44 @@ Sources: [project instructions](https://learn.chatgpt.com/docs/agent-configurati
 Authenticate with Claude Code's own sign-in flow, then launch
 `claude --plugin-dir . --add-dir <absolute-product-path>` in this checkout.
 CLAUDE.md imports canonical company instructions. The plugin exposes the same
-physical skills; .claude/agents/ supplies eight project specialists. Inspect the
+physical skills; .claude/agents/ supplies nine project specialists. Inspect the
 installed host's memory, skills and agent views; restart existing sessions for
 discovery of new descriptors.
 
 Reader roles allow only Read, Grep and Glob; they have no web tools, so research
 that needs current documentation uses sources the Lead collects. Writers also allow
 Edit, Write and Bash, constrained by parent permissions and sole-writer assignment.
-No helper descriptor receives Agent, external MCP tools, personal memory, hooks or
-model overrides. Installed session hooks still run for helper tool calls.
+No helper descriptor receives Agent, external MCP tools, personal memory or hooks.
+The one model setting is a cost hint: the search-only Explorer (`tier: light` in its
+charter) runs on `haiku` and reads only its own charter; every other descriptor uses
+the session's model. Installed session hooks still run for helper tool calls.
+
+Chats opened in this checkout also load `.claude/settings.json`: deny rules for
+destructive Git through both the Bash and PowerShell tools (force or mirror pushes,
+`reset --hard`, `clean`, `restore`, discarding checkouts and switches, forced branch
+deletion, `stash drop|clear`, forced worktree removal, ref and reflog deletion,
+`gc --prune=now`), an approval prompt before deleting a remote branch, pre-allowed
+edits under `.tinker/` (retros, tasks, reports, evidence, patches), and the official
+Playwright plugin for [live passes](../policies/app-verification.md#live-pass-in-a-browser).
+Deny rules hold in every permission mode, including bypass; the installed hook gate
+covers other projects. Install the browser plugin once with
+`claude plugin install playwright@claude-plugins-official`. Project settings do not
+reach chats opened elsewhere, so add the same `env` block to `~/.claude/settings.json`
+for live passes there, with an absolute output folder inside this checkout:
+
+```json
+"env": {
+  "PLAYWRIGHT_MCP_ISOLATED": "true",
+  "PLAYWRIGHT_MCP_ALLOWED_ORIGINS": "http://localhost:*;https://localhost:*;http://127.0.0.1:*;https://127.0.0.1:*",
+  "PLAYWRIGHT_MCP_OUTPUT_DIR": "<absolute Tinker checkout>/.tinker/playwright",
+  "PLAYWRIGHT_MCP_CAPS": "network"
+}
+```
+
+To test a non-local URL you name in the chat, create a storage state yourself
+(`npx playwright open --save-storage <path outside every repository> <url>`, log in,
+close), then set `PLAYWRIGHT_MCP_STORAGE_STATE` and add the origin in
+`.claude/settings.local.json`; remove both afterwards. Tinker never types credentials.
 
 Loading this checkout as a plugin from another project does not load its root
 instructions or project agents; the installed plugin does that through its
@@ -66,7 +95,7 @@ Sources: [imports](https://code.claude.com/docs/en/memory),
 Open this checkout as a project. In Customizations inspect the workspace rule,
 skills and custom agents. The .agents/rules/tinker.md rule uses
 `trigger: always_on` and references `@../../AGENTS.md` relative to the rule file.
-Seven skills remain in .agents/skills/; eight descriptors live in .agents/agents/.
+Eight skills remain in .agents/skills/; nine descriptors live in .agents/agents/.
 These are distinct from the retained Gemini CLI descriptors.
 
 For Antigravity 2.0, confirm this checkout is an active Project folder, then
@@ -152,7 +181,8 @@ then registers:
 
 - Claude Code: `claude plugin marketplace add` and `claude plugin install
   tinker@tinker-local --scope user`. Skills appear as
-  `/tinker:<skill>`, teammates as `tinker:<role>`. Hooks use exec form.
+  `/tinker:<skill>` (the front door is `/tinker:tinker`), teammates as
+  `tinker:<role>`. Hooks use exec form.
 - Codex: `codex plugin marketplace add` and `codex plugin add`; root `plugin.json`
   declares the hooks and `~/.codex/agents/tinker-<role>.toml` holds the
   teammates. Trust the hooks in `/hooks` after every install. A consequential

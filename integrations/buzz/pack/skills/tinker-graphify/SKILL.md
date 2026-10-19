@@ -5,9 +5,13 @@ description: Build or inspect clean-commit baseline and linked-worktree Graphify
 
 # Graphify a clean Git worktree
 
-Use this skill only for an explicit graph request or a broad topology question
-that source search cannot answer. Worktree creation, a new request and a narrow
-code question do not trigger indexing. Resolve the exact repository and read
+Use this skill for an explicit graph request, a broad topology question that
+source search cannot answer, or task start in a repository whose
+`## Agent playbook` says `Graph: auto`: then refresh the baseline (its base
+branch) after the task start's fetch, in the background, reading source
+meanwhile; a dirty or off-branch primary checkout or a failed extraction is
+reported and never blocks the task. Otherwise worktree
+creation, a new request and a narrow code question do not trigger indexing. Resolve the exact repository and read
 its instructions and Git status first. Use the shared
 `scripts/graphify_project.py` helper from the Tinker checkout in every host.
 It writes only below this package's ignored `.tinker/graphs/` directory;

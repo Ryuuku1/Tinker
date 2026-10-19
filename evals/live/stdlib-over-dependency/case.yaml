@@ -1,0 +1,37 @@
+schema_version: "1.1"
+name: stdlib-over-dependency
+description: Parsing ISO dates in an importer uses the standard library rather than adding a date dependency, and keeps the importer's existing validation.
+tags: [implement, minimalism, retro, regression]
+context:
+  scaffold_script: setup.sh
+execution:
+  append_system_prompt: TINKER_AGENTS_MD
+  max_turns: 30
+  allowed_tools: [Read, Glob, Grep, Edit, Write, Skill, Agent]
+  prompt: |
+    In product/catalog: parse_row in catalog/importer.py should also read the "available_from" column, an ISO 8601 date such as 2026-03-01, into a date object under the same key. Rows without the column keep working. Add tests.
+
+    (This run is unattended: no commits, pushes or pull requests. Shell commands are unavailable in this run: use Read, Grep, Glob, Edit and Write.)
+graders:
+  - name: stdlib-parsing
+    type: regex
+    target: { source: file, path: product/catalog/catalog/importer.py }
+    pattern: 'fromisoformat|strptime'
+  - name: no-date-dependency
+    type: regex
+    target: { source: file, path: product/catalog/pyproject.toml }
+    pattern: 'dateutil|arrow|pendulum|dateparser'
+    match: not_contains
+    weight: 2
+  - name: no-requirements-file
+    type: file_exists
+    path: product/catalog/requirements*.txt
+    exists: false
+  - name: validation-kept
+    type: regex
+    target: { source: file, path: product/catalog/catalog/importer.py }
+    pattern: 'raise ValueError\("sku is required"\)'
+    weight: 2
+  - name: retro-saved
+    type: file_exists
+    path: .tinker/retros/*-implement.md

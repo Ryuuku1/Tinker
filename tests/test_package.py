@@ -12,7 +12,9 @@ EXCLUDED = {".git", ".tinker", "__pycache__"}
 
 
 def package_files():
-    return [p for p in ROOT.rglob("*") if p.is_file() and not EXCLUDED.intersection(p.relative_to(ROOT).parts)]
+    worktrees = ROOT / ".claude" / "worktrees"  # ignored linked worktrees hold whole other copies of the package
+    return [p for p in ROOT.rglob("*") if p.is_file() and not EXCLUDED.intersection(p.relative_to(ROOT).parts)
+            and not p.is_relative_to(worktrees)]
 
 
 class PackageTests(unittest.TestCase):
@@ -33,11 +35,11 @@ class PackageTests(unittest.TestCase):
                     self.assertTrue(dest.is_relative_to(ROOT))
                     self.assertTrue(dest.exists())
 
-    def test_seven_unique_discoverable_skills(self):
+    def test_eight_unique_discoverable_skills(self):
         skills = list((ROOT / ".agents/skills").glob("*/SKILL.md"))
-        self.assertEqual(len(skills), 7)
+        self.assertEqual(len(skills), 8)
         pack = ROOT / "integrations/buzz/pack"  # generated copies for Buzz tooling, drift-tested in test_buzz
-        self.assertEqual(len([p for p in package_files() if p.name == "SKILL.md" and not p.is_relative_to(pack)]), 7)
+        self.assertEqual(len([p for p in package_files() if p.name == "SKILL.md" and not p.is_relative_to(pack)]), 8)
         names = set()
         for path in skills:
             text = path.read_text(encoding="utf-8")
@@ -90,9 +92,13 @@ class PackageTests(unittest.TestCase):
         roots = [ROOT / name for name in (".codex", ".claude", ".gemini", ".agents", "roles", "policies")]
         for directory in roots:
             for path in directory.rglob("*"):
-                if path.is_file():
+                if path.is_file() and "worktrees" not in path.relative_to(ROOT).parts:
                     text = path.read_text(encoding="utf-8")
-                    self.assertNotRegex(text, r"(?i)(?:[A-Z]:[\\/]|file:///|/Users/|/home/\w+/)")
+                    self.assertNotRegex(text, r"(?i)(?:(?<![a-z])[A-Z]:[\\/]|file:///|/Users/|/home/\w+/)")
+                    if path.relative_to(ROOT).as_posix() == ".claude/agents/tinker-explorer.md":
+                        # the one cost hint: the search-only Explorer (tier: light) runs on Claude's small model
+                        self.assertEqual(re.findall(r"(?im)^\s*model\s*[:=].*$", text), ["model: haiku"])
+                        continue
                     self.assertNotRegex(text, r"(?im)^\s*model\s*[:=]")
 
     def test_runtime_state_and_local_credentials_are_ignored(self):
@@ -111,9 +117,9 @@ class PackageTests(unittest.TestCase):
             self.assertIn("peak_active_helpers", fields)
             self.assertIn("peak_active_writers", fields)
 
-    def test_native_descriptors_resolve_all_eight_canonical_charters(self):
+    def test_native_descriptors_resolve_all_nine_canonical_charters(self):
         roles = {p.stem for p in (ROOT / 'roles').glob('*.md')}
-        self.assertEqual(len(roles), 8)  # Lead is canonical AGENTS.md.
+        self.assertEqual(len(roles), 9)  # Lead is canonical AGENTS.md.
         for directory, suffix in (('.codex/agents', '.toml'), ('.claude/agents', '.md'),
                                   ('.agents/agents', '.md')):
             files = list((ROOT / directory).glob('*' + suffix))
@@ -156,8 +162,11 @@ class PackageTests(unittest.TestCase):
 
     def test_roles_carry_descriptor_front_matter(self):
         for path in (ROOT / 'roles').glob('*.md'):
-            header = re.match(r'\A---\ndescription: (.+)\naccess: (read|write)\n---\n', path.read_text(encoding='utf-8'))
+            header = re.match(r'\A---\ndescription: (.+)\naccess: (read|write)\n(tier: light\n)?---\n',
+                              path.read_text(encoding='utf-8'))
             self.assertIsNotNone(header, path)
+            if header.group(3):
+                self.assertEqual(header.group(2), 'read', path)
 
     def test_checkpoint_template_front_matter_is_what_hooks_read(self):
         text = (ROOT / 'templates/job.md').read_text(encoding='utf-8')
@@ -218,12 +227,14 @@ class PackageTests(unittest.TestCase):
             sys.path.remove(str(ROOT / 'scripts'))
         text = (ROOT / 'templates/routines.md').read_text(encoding='utf-8')
         plans = re.findall(r'`(schedule-plan [^`]+)`', text)
-        self.assertEqual(len(plans), 2)
+        self.assertEqual(len(plans), 3)
         for plan in plans:  # schedule-plan refuses a plan without any of these
             for option in ('--app', '--role', '--repo', '--cron', '--task'):
                 self.assertIn(option, plan)
         crons = re.findall(r'--cron "([^"]+)"', text)
-        self.assertEqual(len(crons), 2)
+        self.assertEqual(len(crons), 3)
+        for task in re.findall(r'- Task: (.*?)(?=\n\n|\nIn Claude|\Z)', text, re.S):
+            self.assertLessEqual(len(' '.join(task.split())), 500)  # schedule-plan keeps one line of 500
         for cron in crons:
             self.assertTrue(tinker_runtime.cron_to_rrule(cron).startswith('FREQ='), cron)
 
@@ -232,6 +243,60 @@ class PackageTests(unittest.TestCase):
             with self.subTest(path=name):
                 self.assertFalse((ROOT / name).exists(),
                                  f'{name} selects products or teams: keep organization guidance outside the core')
+
+    def test_workflows_start_from_the_playbook_and_end_with_a_retro(self):
+        for skill in ('implement', 'investigate', 'review', 'shape'):
+            text = (ROOT / f'.agents/skills/tinker-{skill}/SKILL.md').read_text(encoding='utf-8')
+            self.assertIn('../../../policies/learning.md#retro', text, skill)
+        for skill in ('implement', 'investigate'):
+            text = (ROOT / f'.agents/skills/tinker-{skill}/SKILL.md').read_text(encoding='utf-8')
+            self.assertIn('../../../policies/workspace.md#task-start', text, skill)
+        workspace = (ROOT / 'policies/workspace.md').read_text(encoding='utf-8')
+        self.assertIn('\n## Task start\n', workspace)
+        # rebase only a clean, unpushed branch; never stash or force-push to catch up
+        self.assertIn('--untracked-files=no', workspace)
+        self.assertIn('rev-list --count HEAD --not --remotes', workspace)
+        self.assertIn('never stash, rebase or\nforce-push', workspace)
+        learning = (ROOT / 'policies/learning.md').read_text(encoding='utf-8')
+        for anchor in ('\n## Retro\n', '\n## Learn\n', '.tinker/retros/', 'tinker/learn-', 'heldout'):
+            self.assertIn(anchor, learning)
+        playbook = (ROOT / 'templates/agent-playbook.md').read_text(encoding='utf-8')
+        self.assertIn('## Agent playbook', playbook)
+        for line in ('Base branch:', 'Gates', 'Deliverable and commits:', 'Worktrees:', 'Live pass:', 'Graph:',
+                     'Pitfalls:'):
+            self.assertIn(f'- {line}', playbook)
+
+    def test_shape_has_a_grill_mode_and_implement_a_minimalism_ladder(self):
+        shape = (ROOT / '.agents/skills/tinker-shape/SKILL.md').read_text(encoding='utf-8')
+        self.assertIn('\n## Grill mode\n', shape)
+        self.assertIn('one decision at a time', shape.replace('\n', ' '))
+        self.assertIn('Change nothing until the user confirms', shape.replace('\n', ' '))
+        implement = (ROOT / '.agents/skills/tinker-implement/SKILL.md').read_text(encoding='utf-8')
+        flat = ' '.join(implement.split())
+        self.assertIn('Never add a dependency', flat)
+        self.assertIn('never trim validation, error handling', flat)
+
+    def test_claude_project_settings_deny_destructive_git_for_both_shells(self):
+        settings = json.loads((ROOT / '.claude/settings.json').read_text(encoding='utf-8'))
+        deny, ask = settings['permissions']['deny'], settings['permissions']['ask']
+        for pattern in ('git *push*--force*', 'git *reset*--hard*', 'git clean -*', 'git restore *',
+                        'git *branch* -D *', 'git *stash drop*', 'git *worktree remove*--force*'):
+            for tool in ('Bash', 'PowerShell'):
+                self.assertIn(f'{tool}({pattern})', deny)
+        self.assertIn('Bash(git *push*--delete*)', ask)
+        env = settings['env']
+        self.assertEqual(env['PLAYWRIGHT_MCP_ISOLATED'], 'true')
+        for origin in env['PLAYWRIGHT_MCP_ALLOWED_ORIGINS'].split(';'):
+            self.assertRegex(origin, r'^https?://(localhost|127\.0\.0\.1):\*$')  # a live pass stays local
+        self.assertFalse(Path(env['PLAYWRIGHT_MCP_OUTPUT_DIR']).is_absolute())
+
+    def test_front_door_lists_its_forms_and_routes_through_the_lead(self):
+        text = (ROOT / '.agents/skills/tinker/SKILL.md').read_text(encoding='utf-8')
+        for form in ('`<task>`', '`status`', '`learn [focus]`', '`eval [args]`', '`playbook <repo>`',
+                     '`schedule <what> <when>`', '`help`'):
+            self.assertIn(f'\n## {form}\n', text)
+        self.assertIn('(../../../AGENTS.md)', text)
+        self.assertIn('(.agents/skills/tinker/SKILL.md)', (ROOT / 'AGENTS.md').read_text(encoding='utf-8'))
 
 
 if __name__ == "__main__":

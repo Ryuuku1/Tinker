@@ -44,7 +44,7 @@ CODEX_MATCHER = "^(Bash|apply_patch|automation_update)$"  # automation_update is
 # Antigravity's anchoring is undocumented, so the names stay unanchored: an extra match asks, a missed one is silent.
 # `schedule` alone is anchored so tools such as a schedule listing never reach the gate.
 ANTIGRAVITY_MATCHER = "run_command|code_action|write_to_file|replace_file_content|multi_replace_file_content|^schedule$"
-ABOUT = "Tinker software team: Lead charter, eight specialists, workflows, approvals and presence."
+ABOUT = "Tinker software team: Lead charter, nine specialists, workflows, approvals and presence."
 AUTHOR = {"name": "Tinker"}
 TOOLS = {
     "read": {"claude": "Read, Grep, Glob", "antigravity": ["view_file", "grep_search", "find_by_name", "list_dir"],
@@ -53,6 +53,9 @@ TOOLS = {
               "antigravity": ["view_file", "grep_search", "replace_file_content", "write_to_file", "run_command"],
               "sandbox": "workspace-write", "policy": "sandbox"},
 }
+# A role's optional `tier: light` marks a search-only helper: Claude runs it on its small model and every host gives it
+# only its own charter, so a lookup costs a fraction of a full specialist. A cost hint, not a model matrix.
+TIERS = {"light": {"claude": "haiku"}}
 FINAL = {"read": "Read/search and return findings only; the Lead saves any requested artifact.",
          "write": "Edit or execute writing commands only while explicitly holding sole writing ownership."}
 
@@ -65,11 +68,16 @@ def roles(root=ROOT):
         fields = tinker_runtime.front_matter(path)
         if not re.fullmatch(r"[a-z][a-z-]*", path.stem) or fields.get("access") not in TOOLS or not fields.get("description"):
             raise ValueError(f"{path} needs front matter with description and access: read|write")
+        if fields.get("tier", "light") not in TIERS or (fields.get("tier") and fields["access"] != "read"):
+            raise ValueError(f"{path}: tier must be one of {sorted(TIERS)} and only on a read role")
         found[path.stem] = fields
     return found
 
 
-def instructions(role, access, where):
+def instructions(role, access, where, tier=None):
+    if tier:
+        return (f"Read roles/{role}.md {where['place']} and follow it. Do not spawn helpers. "
+                "Use only the supplied scope; return actual evidence, never a simulated result. " + FINAL[access])
     return (f"Read {where['lead']}, policies/delegation.md and roles/{role}.md {where['place']}. "
             "Follow the canonical charter and the assigned target repository instructions. Do not spawn helpers. "
             "Use only the supplied scope and effective permissions; if a prerequisite is missing, return it to the Lead. "
@@ -77,8 +85,9 @@ def instructions(role, access, where):
 
 
 def claude_agent(name, fields, body):
+    model = f"model: {TIERS[fields['tier']]['claude']}\n" if fields.get("tier") else ""
     return (f"---\nname: {name}\ndescription: {json.dumps(fields['description'])}\n"
-            f"tools: {TOOLS[fields['access']]['claude']}\n---\n\n{body}\n")
+            f"tools: {TOOLS[fields['access']]['claude']}\n{model}---\n\n{body}\n")
 
 
 def codex_agent(name, fields, body):
@@ -103,7 +112,7 @@ def project_descriptors(root=ROOT):
     """The checked-in descriptors, generated from roles/*.md front matter (drift-tested)."""
     files = {}
     for role, fields in roles(root).items():
-        body = instructions(role, fields["access"], PROJECT_PLACE)
+        body = instructions(role, fields["access"], PROJECT_PLACE, fields.get("tier"))
         files[f".claude/agents/tinker-{role}.md"] = claude_agent(f"tinker-{role}", fields, body)
         files[f".codex/agents/tinker-{role}.toml"] = codex_agent(f"tinker-{role}", fields, body)
         files[f".agents/agents/tinker-{role}.md"] = antigravity_agent(f"tinker-{role}", fields, body)
@@ -250,7 +259,8 @@ def antigravity_hooks(python, runtime):
 def user_agents(root, charter_dir, lead):
     where = {"lead": lead, "place": f"in the installed Tinker charter at {Path(charter_dir).as_posix()} "
                                     f"(checkpoints and knowledge stay under {Path(root).as_posix()}/.tinker)"}
-    return {role: (fields, instructions(role, fields["access"], where)) for role, fields in roles(root).items()}
+    return {role: (fields, instructions(role, fields["access"], where, fields.get("tier")))
+            for role, fields in roles(root).items()}
 
 
 def bundle_files(root, home, python, version):

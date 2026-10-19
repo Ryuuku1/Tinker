@@ -51,7 +51,9 @@ Revalidate its claims without requiring access to the contributor's private file
 A learning pass ("review recent lessons", "propose improvements") follows the
 [team workflow](../.agents/skills/tinker-team/SKILL.md): at most three proposals,
 each with evidence, destination and a relevant behavioral case. Proposing is not
-applying, and a request to learn never authorizes a commit, publication or install.
+applying. Only an explicit learn pass under the [learning policy](learning.md#learn)
+applies edits, and it authorizes nothing beyond its gated commit on a learn branch:
+never a push, merge, publication or install.
 
 ## Domain packs
 

@@ -14,14 +14,17 @@ descriptors are generated from that front matter for all three primary hosts: th
 user runs `python scripts/install_apps.py --write-descriptors` in a terminal (the
 installed gate refuses the installer inside an agent); tests fail on drift.
 Never hand-edit a generated descriptor. Do not add a model, personal memory or MCP
-grant by default. Adding a role never expands the worker budget.
+grant by default. The one exception is `tier: light` (read roles only, as the
+Explorer uses): Claude runs that helper on its small model and every host gives it
+only its own charter, so keep such a role to plain search. Adding a role never expands
+the worker budget.
 
 ## Add a skill
 
 Create `.agents/skills/<unique-name>/SKILL.md`, with `name` matching its folder and
 a short `description` identifying when to use it. Keep workflow content focused;
 link shared policy instead of copying it. Relative links resolve from the skill
-directory. Update the Lead's routing links and the intentional seven-skill package
+directory. Update the Lead's routing links and the intentional eight-skill package
 check only when the new workflow genuinely deserves expansion. The Claude manifest
 already points at the canonical parent directory.
 
@@ -42,6 +45,16 @@ it. Add sample-payload tests for a consequential call, a benign one and an incom
 one. A tool the matcher sends without a contract gets a visible restriction, so the
 two lists must change together. Live behavior stays `not-verified` until observed.
 
+## Add facts about one project
+
+Project facts never go into this package. Put them in that project's own `AGENTS.md`
+(or `CLAUDE.md`) under `## Agent playbook`, following the
+[template](../templates/agent-playbook.md): base branch, gate commands, commit style,
+worktrees, a live-pass recipe, `Graph: auto|on-demand` and pitfalls. Ask
+`tinker playbook <path>` to draft it from evidence. Keep bullets verified and short,
+and change one bullet at a time; the learn pass proposes such bullets but writes them
+only on your approval in that project.
+
 ## Add a domain pack or a verification recipe
 
 A domain pack is optional guidance for one domain, built from the
@@ -60,7 +73,19 @@ product repository unless the project asks for one as a reviewable change.
 
 ## Evaluate a change
 
-Change behavior against the `regression` cases in `evals/cases.json`; keep `held-out`
+For Claude Code, measure behavior with the live cases first. A case is a folder
+`evals/live/<name>/` with a `case.yaml` (prompt, allowed tools, graders, and exactly
+one of the tags `regression` or `heldout`) and a `setup.sh` that builds its workspace
+with the helpers in `evals/live/_shared/workspace.sh`. Add or tighten a `regression`
+case when a change alters behavior no case covers; never edit a `heldout` case to fit
+a change. Iterate with `python scripts/eval_live.py run --case <name> --runs 1`, then
+run the regression and held-out sets and `python scripts/eval_live.py gate --result
+<path>`; commit `evals/live/accepted.json` with the change when you accept a new
+baseline. `tests/test_eval_live.py` checks every case's structure and scaffold without
+a model. The learn pass follows the same rules automatically
+([learning policy](../policies/learning.md)).
+
+For every host, change behavior against the `regression` cases in `evals/cases.json`; keep `held-out`
 cases for acceptance only, and never edit one to make a change pass (a test pins their
 digest). Record observed runs, write a suite manifest and run `python evals/suite.py`;
 compare two manifests with `python evals/suite.py compare` only when host, model, case
@@ -68,7 +93,8 @@ definitions and configuration match. See the [evaluation guide](../evals/README.
 Structural checks verify packaging, not agent compliance. Keep failed comparisons
 visible; changing the accepted baseline cannot turn a regression into evidence of
 improvement. Report missing live runs as `not-verified` for each affected host.
-Maintenance routines are opt-in prompt templates in [routines](../templates/routines.md).
+Maintenance routines (weekly maintenance, monthly upgrade scan, daily graph refresh)
+are opt-in prompt templates in [routines](../templates/routines.md).
 
 ## Upgrade safely
 

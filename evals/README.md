@@ -1,6 +1,6 @@
 # Evaluating Tinker
 
-There are three different claims:
+There are four different claims:
 
 1. Package checks: imports, references, native descriptor requests and skill
    layout are consistent. Run `python -m unittest discover -s tests -v`.
@@ -10,6 +10,10 @@ There are three different claims:
 3. Behavioral evaluations: real host sessions with inspected artifacts and native
    traces. The 47 cases in [cases.json](cases.json) define prompts, setup, measurable
    observations and additional human review. None is passed merely by existing.
+4. Live Claude Code evals: the cases in [live](live/) run real Claude Code sessions
+   through `claude plugin eval` and grade themselves; `scripts/eval_live.py gate`
+   compares a result with the accepted baseline. The learn pass depends on this gate
+   ([Live evals](#live-evals-claude-code)). They measure Claude Code only.
 
 Each case belongs to one set. Develop against `regression` cases. The six `held-out`
 cases are for acceptance only; never edit one to make a change pass (a package test
@@ -104,7 +108,8 @@ version difference is shown as a note. It reports case-level changes and regress
 
 ## Baseline status
 
-No accepted baseline exists. As of 2026-09-26 no suite of observed, reviewed runs has
+This section covers the offline catalog; the live Claude baseline is described under
+[Live evals](#live-evals-claude-code). No accepted baseline exists. As of 2026-09-26 no suite of observed, reviewed runs has
 been recorded for any host, so every case is `not-verified`. Establish the first
 baseline only from a complete observed suite for a host, and record it with its
 manifest under `.tinker/evals/<run-id>/`; synthetic records never establish one.
@@ -187,3 +192,65 @@ hosts; and exercise user-change preservation, denied permissions, unavailable
 helpers, failed tests and delivery boundaries. If authentication or host control
 is unavailable, record not-verified and the exact missing prerequisite. Never
 replace that run with a synthetic passing record.
+
+## Live evals (Claude Code)
+
+The cases in [live](live/) are behavioral evals the Claude Code host runs and grades
+itself through `claude plugin eval`: each `live/<case>/case.yaml` holds the prompt,
+allowed tools and graders (`file_exists`, `regex`, `tool_used`, and a few `llm`
+judgements), and its `setup.sh` builds the workspace. They complement the offline
+records above; they are not observation records and `grade.py`/`suite.py` do not read
+them. Tags put each case in exactly one set, `regression` (develop against it) or
+`heldout` (acceptance only; never edit one to make a change pass).
+
+Each workspace is a Tinker root built from the run's snapshot (charter, policies,
+roles, templates, skills, an empty `.tinker/`) with tiny invented git repositories
+under `product/<name>`, created by [live/_shared/workspace.sh](live/_shared/workspace.sh).
+Eval runs do not load `CLAUDE.md`, so each case carries `AGENTS.md` as its appended
+system prompt (the `TINKER_AGENTS_MD` placeholder, filled in per run).
+
+```text
+python scripts/eval_live.py run [--case GLOB] [--tag TAG ...] [--runs N] [--model M]
+                                [-j N] [--ablation none|with-without] [--force]
+                                [--percent-per-run F]
+python scripts/eval_live.py gate --result evals/live/results/<runId>.json [--accept]
+```
+
+`run` copies the checkout's tracked and untracked-but-not-ignored files once into
+`<temp>/tinker_eval_<runId>/tinker` (never `.tinker/` or other ignored files), renders
+the Claude plugin bundle from that copy without hooks, and runs the cases there, so
+edits made during a run never reach it; the run folder stays behind as the record of
+what was measured. Defaults: `--model opus`, 4 runs at once, one run per case unless
+the case sets `runs:`, `--ablation none` (`with-without` adds a no-plugin arm and
+doubles the runs). It prints the result path and copies the JSON to the ignored
+`evals/live/results/<runId>.json`. Its exit code is `claude plugin eval`'s (1 when a
+case scores below 1.0).
+
+`gate` scores the plugin arm per set: mean run score and mean cost per run against
+`evals/live/accepted.json`. It passes (exit 0) when each set's score is at least the
+accepted one minus 0.02 and its cost per run at most 10% higher (`--score-tolerance`,
+`--cost-tolerance`); otherwise it fails (exit 1). A result with errored or unstarted
+runs is invalid (exit 2) and cannot be accepted. A result from another model than the
+baseline never passes; it can only be accepted, which replaces the baseline. `--accept`
+records model, commit, per-set score, cost per run and run count, keeping sets the
+result did not cover; commit `accepted.json` with the change it measured.
+
+No baseline exists yet: until one does, `gate` reports `no baseline` and only `--accept`
+succeeds. The first baseline must be recorded by the user from a full, reviewed run
+(`run` with no filter, then `gate --accept`), never by an agent.
+
+Cost and usage: every agent run is a full Claude session on your own account, sharing
+one rate limit. A call that starts more than 20 agent runs first reads the five-hour
+window with one Haiku turn and refuses when the runs (assumed `--percent-per-run`, 0.6%
+of the window each) will not fit; it also refuses when the usage cannot be read.
+`--force` skips the check. A run that hits the usage limit still costs what it spent
+and is invalid. Narrow a run with `--case`, `--tag` or `--runs 1` while iterating.
+
+Requirements and limits: `claude` and `git` on PATH, and bash for the scaffolds (on
+Windows Git Bash, which the runner puts first on PATH; WSL's `bash` cannot run them).
+On Windows the eval runner cannot sandbox shell tools, so cases allow only Read, Grep,
+Glob, Write, Edit, Skill and Agent, and prompts state that shell commands are
+unavailable. Behavior that needs a shell (running gates, fetching, rebasing) is graded
+by what the agent plans and reports, not by executing it. The package tests in
+`tests/test_eval_live.py` use a fake `claude` and build every scaffold; they never run
+a model.

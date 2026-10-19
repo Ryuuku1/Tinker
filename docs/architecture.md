@@ -8,31 +8,35 @@ architecture. Earlier analyses and reversed decisions are kept in [history](hist
 
 Tinker is a portable operating agreement for an AI engineering team, executed by
 the host the user already runs: Codex, Claude Code or Antigravity. Instructions carry
-the team; native host capabilities carry execution and permissions; three small
-standard-library scripts cover what instructions cannot; offline tooling judges
-evidence. There is no daemon, model router, orchestration CLI, provider launcher,
+the team; native host capabilities carry execution and permissions; a few small
+standard-library scripts cover what instructions cannot; offline tooling and a live
+Claude Code runner judge evidence. There is no daemon, model router, orchestration CLI, provider launcher,
 database, scheduler service or simulated execution.
 
 | Part | What it is | Loaded or run |
 | --- | --- | --- |
 | `AGENTS.md` | The Lead: routing, delegation budget, boundaries | Every session (native import or rule) |
-| `roles/` | Eight specialist charters; front matter generates native descriptors | Only the selected charter |
-| `.agents/skills/` | Seven workflows: shape, implement, investigate, review, artifacts, Graphify, team | Only the selected workflow |
-| `policies/` | Evidence, delegation, safety, workspace, tools, knowledge, application verification | When the step needs them |
-| `templates/` | Checkpoint, knowledge candidate, domain pack, verification recipe, routine prompts, user story, ADR | When producing that artifact |
+| `roles/` | Nine specialist charters (the Explorer a cheap search-only helper); front matter generates native descriptors | Only the selected charter |
+| `.agents/skills/` | Eight skills: the `tinker` front door and the shape, implement, investigate, review, artifacts, Graphify and team workflows | Only the selected workflow |
+| `policies/` | Evidence, delegation, safety, workspace (including task start), tools, knowledge, learning (retros and the gated learn pass), application verification (including browser live passes) | When the step needs them |
+| `templates/` | Agent playbook section, checkpoint, knowledge candidate, domain pack, verification recipe, routine prompts, user story, ADR | When producing that artifact |
 | `profiles/` | Opt-in stack conventions, subordinate to the product repository | Only for matching work |
-| `.claude/`, `.codex/`, `.agents/agents/`, `.gemini/` | Generated native descriptors: discovery and requested tools | By each host |
+| `.claude/`, `.codex/`, `.agents/agents/`, `.gemini/` | Generated native descriptors: discovery and requested tools; `.claude/settings.json` adds destructive-Git deny rules and the Playwright configuration | By each host |
 | `scripts/tinker_runtime.py` | In-app runtime: lifecycle hooks, `status`, `schedule-plan` | By host hooks, once installed |
 | `scripts/install_apps.py` | Opt-in user-level installer and descriptor generator | By the user, in a terminal |
-| `scripts/graphify_project.py` | On-demand clean-commit Graphify graphs | On an explicit graph request |
-| `evals/` | Case catalog, evidence grader, suite acceptance, disposable fixtures | Offline, by a person |
+| `scripts/graphify_project.py` | Clean-commit Graphify graphs | On a graph request, or at task start when a playbook says `Graph: auto` |
+| `scripts/filter_test_log.py` | Keeps failures and totals of a noisy test log, states what it trimmed | By the Lead, on noisy output |
+| `scripts/eval_live.py` | Live Claude Code eval runner and gate | By the user, or `/tinker eval` and `learn` |
+| `evals/` | Case catalog, evidence grader, suite acceptance, disposable fixtures; live cases in `evals/live/` | Offline by a person; live cases through `eval_live.py` |
 | `integrations/buzz/` | Optional Buzz team surface: working protocol, setup guide, generated persona pack | Protocol: turn-one context of a Buzz-run chat and `--system-prompt-file`; the rest by the user |
 
 ## Request flow
 
 The Lead understands the request, identifies the target repository from explicit
-context, reads its trusted instructions and working state, selects only the relevant
-workflow and charter, executes with native tools, verifies and answers. Load order is
+context, reads its trusted instructions (including any `## Agent playbook` section)
+and working state, does the task start (fetch the base, start from it, rebase a
+continued branch only when clean and unpushed), selects only the relevant workflow and
+charter, executes with native tools, verifies, answers and ends with a retro. Load order is
 company agreement, target repository guidance, selected role, selected workflow, then
 task evidence: a loading strategy, not a new instruction hierarchy. Host, system and
 user authority still govern, repository conventions govern product code, and
@@ -130,9 +134,15 @@ migrates them, and missing evidence stays missing.
 Durable knowledge is optional local Markdown under the Tinker checkout's ignored
 `.tinker/knowledge/<repo-key>/`, with provenance and invalidation conditions.
 Candidates are promoted deliberately after re-verification against current source;
-conflicts and duplicates stay visible. A learning pass returns at most three
+conflicts and duplicates stay visible. A learning review returns at most three
 proposals naming evidence, destination and a behavioral case; proposing is not
-applying. Domain packs are optional versioned guidance, loaded only when the user
+applying. Each workflow ends with a retro of at most five lines, saved in ignored
+`.tinker/retros/`. An explicit learn request applies at most three of the proposed
+delta edits on a `tinker/learn-<date>` branch and commits them only when the live
+Claude evaluation gate passes against the accepted baseline; the user merges
+([learning policy](../policies/learning.md)). Repository facts never land in this
+package: they become a proposed bullet in that repository's `## Agent playbook`
+section, written only on approval there. Domain packs are optional versioned guidance, loaded only when the user
 names one or a trusted repository instruction links it, and never able to select a
 repository or widen permissions. Hooks inject only validated note paths and open
 checkpoint ids, never note text, candidates or packs.
@@ -164,6 +174,15 @@ Runs compare only when set, hosts, models, case definitions and configuration ma
 and comparison reports case-level changes, never an aggregate score. Cost, tokens
 and duration appear only as measured, with their source. No accepted baseline exists
 until complete observed evidence is recorded; see the [evaluation guide](../evals/README.md).
+
+For Claude Code there is also a live runner, `scripts/eval_live.py`: it snapshots the
+working tree into its own temporary folder, renders the plugin bundle there and runs
+`claude plugin eval` over `evals/live/<case>/case.yaml` (regression and held-out sets),
+checking the five-hour usage window before large runs. Its `gate` compares a result
+with `evals/live/accepted.json` per set (score not lower, cost per run not higher,
+within small tolerances; errored runs are invalid; another model can only be accepted
+as a new baseline). The learn pass depends on this gate. Live runs measure Claude Code
+only; other hosts keep the observed-evidence process above.
 
 ## Persistence and isolation
 
