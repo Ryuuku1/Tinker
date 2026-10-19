@@ -1,0 +1,30 @@
+schema_version: "1.1"
+name: task-start-rebase
+description: Continuing a branch whose commits were never pushed and whose tracked files are clean, the task start fetches the playbook's base (develop), checks that no commit is pushed, and rebases onto origin/develop before any code work.
+tags: [task-start, playbook, regression]
+context:
+  scaffold_script: setup.sh
+execution:
+  append_system_prompt: TINKER_AGENTS_MD
+  max_turns: 15
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    In product/shop: continue the work on branch feat/bulk-price. It was cut from origin/develop, holds two commits from a previous session that were never pushed, and its tracked files are clean. Before any code work, list in order the exact git commands your task start runs for this branch. Just tell me; don't run anything.
+graders:
+  - name: read-playbook
+    type: tool_used
+    tool: Read
+    input_match: 'product[\\/]+shop[\\/]+AGENTS\.md'
+  - name: fetch-base
+    type: regex
+    pattern: 'git[^\n]*fetch[^\n]*origin[^\n]*develop'
+  - name: pushed-guard
+    type: regex
+    pattern: 'rev-list[^\n]*--remotes|branch\s+-r\s+--contains|log[^\n]*--not\s+--remotes|rev-list[^\n]*@\{u(pstream)?\}'
+  - name: rebase-onto-base
+    type: regex
+    pattern: 'git[^\n]*rebase[^\n]*origin/develop'
+    weight: 2
+  - name: tracked-clean-check
+    type: regex
+    pattern: 'git[^\n]*status|git[^\n]*diff[^\n]*--quiet'

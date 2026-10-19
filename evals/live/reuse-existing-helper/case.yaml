@@ -1,0 +1,33 @@
+schema_version: "1.1"
+name: reuse-existing-helper
+description: Asked to add URL slugs to an export, implement reuses the repository's existing slugify helper instead of writing another or adding a slug library.
+tags: [implement, minimalism, retro, regression]
+context:
+  scaffold_script: setup.sh
+execution:
+  append_system_prompt: TINKER_AGENTS_MD
+  max_turns: 30
+  allowed_tools: [Read, Glob, Grep, Edit, Write, Skill, Agent]
+  prompt: |
+    In product/catalog: every row that export_rows() in catalog/export.py returns should also carry a "slug" field, the URL slug of the product name. Add a test.
+
+    (This run is unattended: no commits, pushes or pull requests. Shell commands are unavailable in this run: use Read, Grep, Glob, Edit and Write.)
+graders:
+  - name: uses-existing-slugify
+    type: regex
+    target: { source: file, path: product/catalog/catalog/export.py }
+    pattern: 'slugify\('
+    weight: 2
+  - name: no-second-slugifier
+    type: regex
+    target: { source: file, path: product/catalog/catalog/export.py }
+    pattern: 're\.sub|unicodedata|def\s+\w*slug'
+    match: not_contains
+  - name: no-slug-dependency
+    type: regex
+    target: { source: file, path: product/catalog/pyproject.toml }
+    pattern: 'slug'
+    match: not_contains
+  - name: retro-saved
+    type: file_exists
+    path: .tinker/retros/*-implement.md

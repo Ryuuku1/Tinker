@@ -8,3 +8,6 @@ Thumbs.db
 .env.*
 !.env.example
 .claude/worktrees/
+
+# Live eval results (scripts/eval_live.py run); the accepted baseline evals/live/accepted.json is tracked
+/evals/live/results/

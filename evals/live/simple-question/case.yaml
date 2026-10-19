@@ -1,0 +1,41 @@
+schema_version: "1.1"
+name: simple-question
+description: A plain question about product code is answered from source - no subagent, no product edits and no checkpoint.
+tags: [question, regression]
+context:
+  scaffold_script: setup.sh
+execution:
+  append_system_prompt: TINKER_AGENTS_MD
+  max_turns: 15
+  allowed_tools: [Read, Glob, Grep, Edit, Write, Skill, Agent]
+  prompt: |
+    In product/shop: what does apply_discount do with a negative price, and how does it round?
+graders:
+  - name: answers-from-source
+    type: regex
+    pattern: 'ValueError'
+  - name: half-up
+    type: regex
+    pattern: 'half[ -]up|\+\s*50'
+    flags: i
+  - name: no-subagent
+    type: tool_used
+    tool: Agent
+    min: 0
+    max: 0
+  - name: no-product-edits
+    type: tool_used
+    tool: Edit
+    input_match: 'product[\\/]'
+    min: 0
+    max: 0
+  - name: no-product-writes
+    type: tool_used
+    tool: Write
+    input_match: 'product[\\/]'
+    min: 0
+    max: 0
+  - name: no-checkpoint-for-a-question
+    type: file_exists
+    path: .tinker/tasks/*.md
+    exists: false
