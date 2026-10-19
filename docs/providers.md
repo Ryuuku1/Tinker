@@ -181,7 +181,8 @@ then registers:
 
 - Claude Code: `claude plugin marketplace add` and `claude plugin install
   tinker@tinker-local --scope user`. Skills appear as
-  `/tinker:<skill>`, teammates as `tinker:<role>`. Hooks use exec form.
+  `/tinker:<skill>` (the front door is `/tinker:tinker`), teammates as
+  `tinker:<role>`. Hooks use exec form.
 - Codex: `codex plugin marketplace add` and `codex plugin add`; root `plugin.json`
   declares the hooks and `~/.codex/agents/tinker-<role>.toml` holds the
   teammates. Trust the hooks in `/hooks` after every install. A consequential

@@ -1,6 +1,6 @@
 # Evaluating Tinker
 
-There are three different claims:
+There are four different claims:
 
 1. Package checks: imports, references, native descriptor requests and skill
    layout are consistent. Run `python -m unittest discover -s tests -v`.
@@ -10,6 +10,10 @@ There are three different claims:
 3. Behavioral evaluations: real host sessions with inspected artifacts and native
    traces. The 47 cases in [cases.json](cases.json) define prompts, setup, measurable
    observations and additional human review. None is passed merely by existing.
+4. Live Claude Code evals: the cases in [live](live/) run real Claude Code sessions
+   through `claude plugin eval` and grade themselves; `scripts/eval_live.py gate`
+   compares a result with the accepted baseline. The learn pass depends on this gate
+   ([Live evals](#live-evals-claude-code)). They measure Claude Code only.
 
 Each case belongs to one set. Develop against `regression` cases. The six `held-out`
 cases are for acceptance only; never edit one to make a change pass (a package test
@@ -104,7 +108,8 @@ version difference is shown as a note. It reports case-level changes and regress
 
 ## Baseline status
 
-No accepted baseline exists. As of 2026-09-26 no suite of observed, reviewed runs has
+This section covers the offline catalog; the live Claude baseline is described under
+[Live evals](#live-evals-claude-code). No accepted baseline exists. As of 2026-09-26 no suite of observed, reviewed runs has
 been recorded for any host, so every case is `not-verified`. Establish the first
 baseline only from a complete observed suite for a host, and record it with its
 manifest under `.tinker/evals/<run-id>/`; synthetic records never establish one.

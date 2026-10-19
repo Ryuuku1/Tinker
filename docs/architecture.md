@@ -8,9 +8,9 @@ architecture. Earlier analyses and reversed decisions are kept in [history](hist
 
 Tinker is a portable operating agreement for an AI engineering team, executed by
 the host the user already runs: Codex, Claude Code or Antigravity. Instructions carry
-the team; native host capabilities carry execution and permissions; three small
-standard-library scripts cover what instructions cannot; offline tooling judges
-evidence. There is no daemon, model router, orchestration CLI, provider launcher,
+the team; native host capabilities carry execution and permissions; a few small
+standard-library scripts cover what instructions cannot; offline tooling and a live
+Claude Code runner judge evidence. There is no daemon, model router, orchestration CLI, provider launcher,
 database, scheduler service or simulated execution.
 
 | Part | What it is | Loaded or run |
@@ -18,21 +18,25 @@ database, scheduler service or simulated execution.
 | `AGENTS.md` | The Lead: routing, delegation budget, boundaries | Every session (native import or rule) |
 | `roles/` | Nine specialist charters (the Explorer a cheap search-only helper); front matter generates native descriptors | Only the selected charter |
 | `.agents/skills/` | Eight skills: the `tinker` front door and the shape, implement, investigate, review, artifacts, Graphify and team workflows | Only the selected workflow |
-| `policies/` | Evidence, delegation, safety, workspace, tools, knowledge, application verification | When the step needs them |
-| `templates/` | Checkpoint, knowledge candidate, domain pack, verification recipe, routine prompts, user story, ADR | When producing that artifact |
+| `policies/` | Evidence, delegation, safety, workspace (including task start), tools, knowledge, learning (retros and the gated learn pass), application verification (including browser live passes) | When the step needs them |
+| `templates/` | Agent playbook section, checkpoint, knowledge candidate, domain pack, verification recipe, routine prompts, user story, ADR | When producing that artifact |
 | `profiles/` | Opt-in stack conventions, subordinate to the product repository | Only for matching work |
-| `.claude/`, `.codex/`, `.agents/agents/`, `.gemini/` | Generated native descriptors: discovery and requested tools | By each host |
+| `.claude/`, `.codex/`, `.agents/agents/`, `.gemini/` | Generated native descriptors: discovery and requested tools; `.claude/settings.json` adds destructive-Git deny rules and the Playwright configuration | By each host |
 | `scripts/tinker_runtime.py` | In-app runtime: lifecycle hooks, `status`, `schedule-plan` | By host hooks, once installed |
 | `scripts/install_apps.py` | Opt-in user-level installer and descriptor generator | By the user, in a terminal |
-| `scripts/graphify_project.py` | On-demand clean-commit Graphify graphs | On an explicit graph request |
-| `evals/` | Case catalog, evidence grader, suite acceptance, disposable fixtures | Offline, by a person |
+| `scripts/graphify_project.py` | Clean-commit Graphify graphs | On a graph request, or at task start when a playbook says `Graph: auto` |
+| `scripts/filter_test_log.py` | Keeps failures and totals of a noisy test log, states what it trimmed | By the Lead, on noisy output |
+| `scripts/eval_live.py` | Live Claude Code eval runner and gate | By the user, or `/tinker eval` and `learn` |
+| `evals/` | Case catalog, evidence grader, suite acceptance, disposable fixtures; live cases in `evals/live/` | Offline by a person; live cases through `eval_live.py` |
 | `integrations/buzz/` | Optional Buzz team surface: working protocol, setup guide, generated persona pack | Protocol: turn-one context of a Buzz-run chat and `--system-prompt-file`; the rest by the user |
 
 ## Request flow
 
 The Lead understands the request, identifies the target repository from explicit
-context, reads its trusted instructions and working state, selects only the relevant
-workflow and charter, executes with native tools, verifies and answers. Load order is
+context, reads its trusted instructions (including any `## Agent playbook` section)
+and working state, does the task start (fetch the base, start from it, rebase a
+continued branch only when clean and unpushed), selects only the relevant workflow and
+charter, executes with native tools, verifies, answers and ends with a retro. Load order is
 company agreement, target repository guidance, selected role, selected workflow, then
 task evidence: a loading strategy, not a new instruction hierarchy. Host, system and
 user authority still govern, repository conventions govern product code, and
