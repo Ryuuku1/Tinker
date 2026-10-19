@@ -159,8 +159,12 @@ class RenderTests(InstallCase):
         self.assertIn("tools: Read, Grep, Glob\n", reviewer)
         self.assertNotRegex(reviewer, r"(?m)^(memory|hooks|mcpServers|permissionMode):")
         self.assertIn(bundle.as_posix(), reviewer)
+        explorer = (bundle / "agents" / "explorer.md").read_text(encoding="utf-8")
+        self.assertIn("model: haiku\n", explorer)  # the light tier's cost hint, Claude only
+        self.assertNotIn("AGENTS.md", explorer)  # and a charter-only brief
+        self.assertNotIn("model:", reviewer)
         agents = sorted((self.home / ".codex" / "agents").glob("tinker-*.toml"))
-        self.assertEqual(len(agents), 8)
+        self.assertEqual(len(agents), 9)
         import tomllib
         for path in agents:
             data = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -171,7 +175,7 @@ class RenderTests(InstallCase):
             plugin = self.home / ".gemini" / "config" / "plugins" / "tinker"
             self.assertTrue((plugin / "rules" / "AGENTS.md").is_file())
             self.assertFalse((plugin / "AGENTS.md").exists())
-            self.assertEqual(len(list((plugin / "agents").glob("tinker-*.md"))), 8)
+            self.assertEqual(len(list((plugin / "agents").glob("tinker-*.md"))), 9)
         config = json.loads((state / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(config["root"], str(ROOT))
         record = json.loads((state / "apps.json").read_text(encoding="utf-8"))

@@ -16,7 +16,7 @@ host normally and grant access to the product folder using its native controls.
 | Codex app | Add/open this folder as a project and start a task | Inspect loaded project instructions, skills and native agents |
 | Codex CLI | `codex --add-dir <absolute-product-path>` from this checkout | Inspect loaded project guidance and available agents |
 | Claude Code | `claude --plugin-dir . --add-dir <absolute-product-path>` from this checkout | Inspect memory, skills and agents using the installed host's views |
-| Antigravity | Open this folder as a project; grant product access through native controls | Inspect Customizations for the always-on rule, seven skills and eight specialists |
+| Antigravity | Open this folder as a project; grant product access through native controls | Inspect Customizations for the always-on rule, eight skills and nine specialists |
 
 The project must be trusted for the host to load local configuration. Directory
 access alone does not load product instructions; the Lead reads them.
@@ -53,6 +53,7 @@ specialist by role in normal language.
 | [Researcher](roles/researcher.md) | Evidence-backed technical answers |
 | [Technical Writer](roles/technical-writer.md) | Usable product documentation |
 | [Delivery Engineer](roles/delivery-engineer.md) | Release preparation and authorized delivery |
+| [Explorer](roles/explorer.md) | Cheap read-only search: files, symbols, callers, conventions |
 
 These are persistent role instructions. Real workers are native host agents, used
 only when useful. Several specialists can work sequentially, with at most two
@@ -60,7 +61,9 @@ active helpers, one writer including the Lead, and no recursive delegation.
 Small jobs can stay with the Lead. Unavailable helpers mean transparent Lead work;
 role switching is never presented as independent review.
 
-Seven canonical skills cover shaping, implementation, investigation, review,
+A `tinker` front door (`/tinker status`, `learn`, `eval`, `playbook <repo>`, `schedule`,
+`help`; plain requests work too) and seven workflows cover shaping (with a grill mode
+that settles a plan one decision at a time), implementation, investigation, review,
 engineering artifacts (user stories, documentation, diagrams, ADRs and release
 notes, saved as Markdown first, with GitHub issues or a project board only on
 approval), on-demand Graphify graph maintenance, and team status, schedules,
@@ -71,6 +74,26 @@ Optional [domain packs](templates/domain-pack.md) load only when you name one or
 repository's instructions link it.
 All three hosts share the source instructions; native descriptors adapt discovery
 and requested tool access. Models and authentication remain host-owned.
+
+## Per-project playbooks, retros and learning
+
+Tinker keeps no registry of your projects. Each project can carry its own facts in a
+`## Agent playbook` section of its `AGENTS.md` or `CLAUDE.md`
+([template](templates/agent-playbook.md)): base branch, gate commands, commit style,
+worktrees, a live-pass recipe and `Graph: auto` for a big codebase. Ask
+"`/tinker playbook <path>`" to draft one from the repository's evidence; it is written
+only when you approve that change in the project.
+
+Before changing code, a task reads that section, fetches the base branch and starts
+new work from it; a continued branch is rebased only when it is clean and unpushed
+([task start](policies/workspace.md#task-start)). Every workflow ends with a short
+retro, kept in this checkout's ignored `.tinker/retros/`. `/tinker learn` turns recent
+retros into at most three small edits to Tinker on a `tinker/learn-<date>` branch and
+keeps them only when the live Claude evaluation gate passes; you review and merge
+([learning policy](policies/learning.md)). In Claude Code, chats opened here also get
+deny rules for destructive Git and a localhost-only Playwright browser for
+[live passes](policies/app-verification.md#live-pass-in-a-browser). Noisy test output
+can go through `python scripts/filter_test_log.py`, which keeps failures and totals.
 
 ## On-demand Graphify graphs
 

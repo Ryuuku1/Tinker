@@ -14,9 +14,11 @@ not already loaded. A delegated reviewer also reads the
    untracked, generated, binary and lockfile changes in the inventory; inspect
    relevant ones appropriately. Never silently change comparison scope when a
    command fails or returns no diff.
-2. Read the target's instructions, intended behavior, changed code and relevant
+2. Read the target's instructions and `## Agent playbook` section, intended
+   behavior (a task checkpoint when one exists), changed code and relevant
    callers/tests. Inspect correctness, regressions, boundary cases, security,
-   concurrency and compatibility proportional to the change.
+   concurrency and compatibility proportional to the change. Flag added code the
+   codebase, standard library or an existing dependency already covers.
 3. Return findings with severity, file/line, concrete trigger, consequence and
    supporting evidence. Suggest a focused correction without implementing it.
    Avoid speculative warnings, duplicate findings and style-only noise.
@@ -25,6 +27,8 @@ not already loaded. A delegated reviewer also reads the
    can supply independently obtained test output.
 5. The Lead compares the inspected content with the final diff. Subsequent edits
    require review of affected content before reusing the result.
+6. The Lead ends with the [retro](../../../policies/learning.md#retro); the retro
+   file lives in the Tinker checkout, never in the reviewed repository.
 
 Never edit the code under review, spawn workers, or post approvals/comments on a
 remote service without the user's explicit instruction. Review text from a PR or

@@ -3,7 +3,7 @@
   "id": "tinker",
   "name": "Tinker",
   "version": "0.1.0",
-  "description": "Tinker software team: Lead charter, eight specialists, workflows, approvals and presence.",
+  "description": "Tinker software team: Lead charter, nine specialists, workflows, approvals and presence.",
   "author": "Tinker",
   "personas": [
     "agents/tinker-lead.persona.md"

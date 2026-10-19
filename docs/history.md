@@ -7,6 +7,36 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-10-19: second comparison with the organization's edition
+
+The organization's edition was compared again, at `f21890f`, 29 commits after the
+`7866b0f` baseline below. Its user, who also owns this project, chose in an
+interview what to adopt for personal use across unrelated projects. Organization
+material (its products, work tracker, team registry, staging database server and log
+tooling) stays out.
+
+| Area | Decision |
+| --- | --- |
+| Hosts | Multi-host core kept; Claude-only parts (live evals, project settings, Playwright) form an optional layer that other hosts report as `not-verified` |
+| Repository registry and playbooks | Still no registry. Repository facts live in a `## Agent playbook` section of each product repository's own `AGENTS.md`, from a template, written only on approval there |
+| Task start | Adopted: read the playbook, fetch only the base, start new work from `origin/<base>`, rebase a continued branch only when clean and unpushed, never stash or force-push; side sessions save their work as a commit or patch |
+| Graphs | Still on demand, plus a per-repository opt-in (`Graph: auto`) that refreshes the baseline at task start; refresh failures never block a task |
+| Retros and learning | Adopted: a retro after each workflow in ignored `.tinker/retros/`, and a learn pass whose at most three edits are kept only when the live gate passes. This reverses the earlier "no automatic retrospectives" decision, keeping retros short and local |
+| Evaluation | Added a live Claude Code runner and gate next to the offline grader; the user records the first baseline |
+| Guardrails | Adopted the destructive-Git deny and ask rules as Claude project settings, complementing the installed hook gate |
+| Live passes | Adopted as a Claude layer: the official Playwright plugin, isolated profile, localhost-only origins, evidence under `.tinker/evidence/` |
+| Helpers | Added the Explorer, a search-only role whose `tier: light` gives it Claude's small model and a charter-only brief. A cost hint for one helper, not a model matrix |
+| Routines and utilities | Weekly maintenance, monthly upgrade scan and per-repository graph refresh became ready templates; a test-log filter was ported to Python and now always keeps totals and states what it trimmed |
+| Front door | A `tinker` skill offers `status`, `learn`, `eval`, `playbook`, `schedule` and `help`; natural language remains sufficient |
+| Not adopted | Headless launcher, team registry and work-item routing, fixed evaluation model, bundled database server |
+
+Two outside ideas were folded in as instructions, without their packages: a grill mode
+in shaping (one decision at a time with a recommendation, inspired by Matt Pocock's
+`grill-me` skill) and a minimalism ladder in implementation and review (does the code
+need to exist, does the codebase or standard library cover it, inspired by the
+`ponytail` ruleset). Neither package's hooks or files were installed, so nothing runs
+beside Tinker's own hook runtime.
+
 ## 2026-09-26: renamed to Tinker
 
 The project formerly named Tinker Bot is now Tinker, and its history was rewritten

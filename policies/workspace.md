@@ -11,6 +11,29 @@ For a new repository with no HEAD or a non-Git folder, record that fact and use 
 file inventory; do not interpret a failed Git command as a clean workspace.
 An ambiguous target blocks mutations, not independent research.
 
+## Task start
+
+Before changing a repository, read its `## Agent playbook` section in `AGENTS.md` or
+`CLAUDE.md` when present ([template](../templates/agent-playbook.md)): base branch,
+gates, deliverable and commit style, worktrees, live pass, graph mode, pitfalls. It
+adds repository facts only; it never widens permissions or overrides these policies.
+Without one, discover the same facts from the repository and say which you inferred.
+
+Start from the latest base unless the user said otherwise or the run is unattended
+(read-only Git there). Once the task's checkout is known, fetch only the base:
+`git -C <repo> fetch origin <base>` (a full fetch can fail on duplicate refs). A new
+branch or worktree starts from `origin/<base>`. Rebase a branch this task continues,
+`git -C <checkout> rebase origin/<base>`, only when its tracked files are clean
+(`git -C <checkout> status --porcelain --untracked-files=no` prints nothing) and none
+of its commits is pushed (`git -C <checkout> rev-list --count HEAD --not --remotes`
+equals `git -C <checkout> rev-list --count origin/<base>..HEAD`). On a conflict, run
+`git -C <checkout> rebase --abort` and report it. Otherwise never stash, rebase or
+force-push: leave the branch and report how far behind it is
+(`git -C <checkout> rev-list --count HEAD..origin/<base>`). Never move the primary
+checkout for a task whose branch lives in a worktree. A repository without a remote
+or base is reported, not guessed. When the playbook says `Graph: auto`, refresh the
+graph after this step per [Graphify](../.agents/skills/tinker-graphify/SKILL.md).
+
 Existing edits belong to the user unless this task demonstrably created them.
 Never reset, stash, revert or overwrite unrelated changes. When an edited area
 overlaps the task, inspect it and preserve intent; ask only for a real conflict.
@@ -29,6 +52,11 @@ never assume `main` or `master`, or treat a surviving old remote ref as the defa
 Do not copy credentials into a worktree. Within a job a second writer must wait,
 even in another worktree; no custom lock service. Recheck drift before applying results.
 Retain dirty or active worktrees; never force-remove them on task completion.
+A session started by another session (a side session) saves its work before its final
+message where removing its worktree cannot take it: a commit on its own branch when its
+brief asks for one, otherwise a patch (`git -C <checkout> add -A`, then
+`git -C <checkout> diff --cached --binary > <Tinker root>/.tinker/patches/<slug>.patch`)
+named in its report. It never pushes.
 
 For explicitly requested multi-repository changes, identify every target and its
 allowed mutation scope. Work and verify per repository; record dependency order

@@ -16,8 +16,8 @@ database, scheduler service or simulated execution.
 | Part | What it is | Loaded or run |
 | --- | --- | --- |
 | `AGENTS.md` | The Lead: routing, delegation budget, boundaries | Every session (native import or rule) |
-| `roles/` | Eight specialist charters; front matter generates native descriptors | Only the selected charter |
-| `.agents/skills/` | Seven workflows: shape, implement, investigate, review, artifacts, Graphify, team | Only the selected workflow |
+| `roles/` | Nine specialist charters (the Explorer a cheap search-only helper); front matter generates native descriptors | Only the selected charter |
+| `.agents/skills/` | Eight skills: the `tinker` front door and the shape, implement, investigate, review, artifacts, Graphify and team workflows | Only the selected workflow |
 | `policies/` | Evidence, delegation, safety, workspace, tools, knowledge, application verification | When the step needs them |
 | `templates/` | Checkpoint, knowledge candidate, domain pack, verification recipe, routine prompts, user story, ADR | When producing that artifact |
 | `profiles/` | Opt-in stack conventions, subordinate to the product repository | Only for matching work |
@@ -130,9 +130,15 @@ migrates them, and missing evidence stays missing.
 Durable knowledge is optional local Markdown under the Tinker checkout's ignored
 `.tinker/knowledge/<repo-key>/`, with provenance and invalidation conditions.
 Candidates are promoted deliberately after re-verification against current source;
-conflicts and duplicates stay visible. A learning pass returns at most three
+conflicts and duplicates stay visible. A learning review returns at most three
 proposals naming evidence, destination and a behavioral case; proposing is not
-applying. Domain packs are optional versioned guidance, loaded only when the user
+applying. Each workflow ends with a retro of at most five lines, saved in ignored
+`.tinker/retros/`. An explicit learn request applies at most three of the proposed
+delta edits on a `tinker/learn-<date>` branch and commits them only when the live
+Claude evaluation gate passes against the accepted baseline; the user merges
+([learning policy](../policies/learning.md)). Repository facts never land in this
+package: they become a proposed bullet in that repository's `## Agent playbook`
+section, written only on approval there. Domain packs are optional versioned guidance, loaded only when the user
 names one or a trusted repository instruction links it, and never able to select a
 repository or widen permissions. Hooks inject only validated note paths and open
 checkpoint ids, never note text, candidates or packs.

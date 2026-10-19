@@ -1,28 +1,51 @@
 # Opt-in maintenance routines
 
-Two prompt templates for a host's own scheduler. Nothing here creates a schedule: create
+Prompt templates for a host's own scheduler. Nothing here creates a schedule: create
 one only when the user asks, through the
-[team workflow](../.agents/skills/tinker-team/SKILL.md), which validates the plan
-with `schedule-plan`. Each run is unattended, so consequential operations are denied;
-it proposes and reports, and the user decides in a later, attended chat.
+[team workflow](../.agents/skills/tinker-team/SKILL.md) (or the front door's
+`schedule defaults`), which validates each plan with `schedule-plan`. Each run is
+unattended, so consequential operations are denied; it proposes and reports, and the
+user decides in a later, attended chat. Pick times when the machine is usually on: a
+laptop that sleeps at night misses night runs.
 
-## Weekly learning review
+## Weekly maintenance
 
-- Schedule: `0 9 * * 1` (Mondays at 09:00), or the user's choice.
-- Plan: `schedule-plan --app <claude|codex|antigravity> --role researcher --repo <repository> --cron "0 9 * * 1" --task "<task>"`
-- Task: Review this week's knowledge candidates for <repository> under the Tinker
-  checkout's .tinker folder. Revalidate each against current source. Propose at most
-  three improvements, each naming its evidence, its destination and the behavioral case
-  that would show it works. Apply, commit, publish and install nothing.
+- Schedule: `0 13 * * 5` (Fridays at 13:00), or the user's choice.
+- Plan: `schedule-plan --app <claude|codex|antigravity> --role researcher --repo <Tinker checkout> --cron "0 13 * * 5" --task "<task>"`
+- Task: Weekly maintenance of this Tinker checkout. Read the last 7 days of retros in
+  .tinker/retros, open checkpoints in .tinker/tasks, knowledge candidates and the newest
+  live eval result. Revalidate notes against current source and mark disproved ones
+  stale per policies/knowledge.md. Propose at most three delta edits per
+  policies/learning.md, each with evidence, destination and live eval case, in
+  .tinker/reports/weekly-<date>.md. Commit nothing.
 
-## Periodic compatibility review
+In Claude Code, also consolidate the host's own auto memory for this project when the
+`consolidate-memory` skill is available: merge duplicates and drop facts current source
+contradicts. Add that sentence to the task only for a Claude plan.
 
-- Schedule: `30 9 * * 5` (Fridays at 09:30), or the user's choice.
-- Plan: `schedule-plan --app <claude|codex|antigravity> --role researcher --repo <Tinker checkout> --cron "30 9 * * 5" --task "<task>"`
-- Task: Recheck the Codex, Claude Code and Antigravity hook and tool documentation cited
-  in docs/providers.md against TOOL_KINDS in scripts/tinker_runtime.py and the matchers in
-  scripts/install_apps.py. Report each discrepancy with its source URL and date. Change
-  no files.
+## Monthly upgrade scan
+
+- Schedule: `15 12 1 * *` is not in the supported cron subset; use `15 12 * * 1` (Mondays
+  at 12:15) and let the task skip unless it is the first Monday of the month.
+- Plan: `schedule-plan --app <claude|codex|antigravity> --role researcher --repo <Tinker checkout> --cron "15 12 * * 1" --task "<task>"`
+- Task: Skip unless today is the month's first Monday. Compare the installed Claude Code,
+  Codex and Graphify versions with their latest releases. Recheck the hook and tool docs
+  cited in docs/providers.md against TOOL_KINDS in scripts/tinker_runtime.py and the
+  installer matchers. Report each discrepancy and each new host feature that could
+  replace Tinker code, with source URL and date, in .tinker/reports/upgrade-<date>.md.
+  Change nothing else.
+
+## Daily graph refresh
+
+Only for repositories whose `## Agent playbook` says `Graph: auto`: one plan per
+repository keeps its baseline current, so the refresh at task start stays incremental.
+
+- Schedule: `30 12 * * 1-5` (weekdays at 12:30), or the user's choice.
+- Plan: `schedule-plan --app <claude|codex|antigravity> --role engineer --repo <repository> --cron "30 12 * * 1-5" --task "<task>"`
+- Task: Refresh this repository's Graphify baseline on its playbook's base branch with
+  scripts/graphify_project.py from the Tinker checkout, only if the primary checkout is
+  clean and on that branch; otherwise report why it was skipped. Fetch nothing; change
+  no product files. If the gate denies the command, report the denial.
 
 ## Creating one in each host
 
