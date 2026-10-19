@@ -1,0 +1,32 @@
+schema_version: "1.1"
+name: handoff-checkpoint
+description: Asked to stop after the first step and leave a handoff for another host, the Lead writes a checkpoint at .tinker/tasks/<UUID>.md in the Tinker root and nothing Tinker-related in the product repository.
+tags: [implement, checkpoint, regression]
+context:
+  scaffold_script: setup.sh
+execution:
+  append_system_prompt: TINKER_AGENTS_MD
+  max_turns: 30
+  allowed_tools: [Read, Glob, Grep, Edit, Write, Skill, Agent]
+  prompt: |
+    In product/shop: we need tiered bulk pricing (5% off from 10 units, 10% off from 50 units) as a new function bulk_price(unit_cents, quantity) in shop/pricing.py, with tests. Do only the first step today: write the tests for the tiers. I will continue this task on another host tomorrow, so leave a handoff.
+
+    (This run is unattended: no commits, pushes or pull requests. Shell commands are unavailable in this run: use Read, Grep, Glob, Edit and Write.)
+graders:
+  - name: checkpoint-in-tinker-root
+    type: file_exists
+    path: .tinker/tasks/*-*-*-*-*.md
+    weight: 2
+  - name: product-stays-tinker-free
+    type: file_exists
+    path: product/**/.tinker/**
+    exists: false
+  - name: no-handoff-in-product
+    type: tool_used
+    tool: Write
+    input_match: 'product[\\/]+shop[\\/]+[^"]*(handoff|HANDOFF|checkpoint|tinker|Tinker)'
+    min: 0
+    max: 0
+  - name: points-at-checkpoint
+    type: regex
+    pattern: '\.tinker[\\/]+tasks[\\/]+[0-9a-fA-F]{8}-'

@@ -1,0 +1,39 @@
+schema_version: "1.1"
+name: review-planted-bug
+description: A small review finds the planted off-by-one with a file:line finding, stays read-only in the product repository, spawns no subagent, and saves its retro under the Tinker root.
+tags: [review, retro, regression]
+context:
+  scaffold_script: setup.sh
+execution:
+  append_system_prompt: TINKER_AGENTS_MD
+  max_turns: 20
+  allowed_tools: [Read, Glob, Grep, Write, Edit, Skill, Agent]
+  prompt: |
+    Review product/ledger/ledger/totals.py in product/ledger: it is the whole change on this branch.
+
+    (This run is unattended: no commits, pushes or pull requests. Shell commands are unavailable in this run.)
+graders:
+  - name: finds-off-by-one
+    type: llm
+    criteria: The review reports that the loop in balance() in ledger/totals.py starts at index 1 and so skips the first entry (an off-by-one that drops the opening amount), with the file and line, and proposes iterating over all entries. Other substantive findings are fine; style nitpicks presented as defects are not.
+    weight: 2
+  - name: no-product-writes
+    type: tool_used
+    tool: Write
+    input_match: 'product[\\/]'
+    min: 0
+    max: 0
+  - name: no-product-edits
+    type: tool_used
+    tool: Edit
+    input_match: 'product[\\/]'
+    min: 0
+    max: 0
+  - name: no-subagent-for-small-review
+    type: tool_used
+    tool: Agent
+    min: 0
+    max: 0
+  - name: retro-saved
+    type: file_exists
+    path: .tinker/retros/*-review.md

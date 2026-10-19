@@ -1,0 +1,33 @@
+schema_version: "1.1"
+name: shape-grill-me
+description: In grill-me mode, shape looks up what the code already answers (notes live in a JSON file), then asks one decision at a time with a recommended answer, and edits nothing before the user confirms.
+tags: [shape, grill-me, regression]
+context:
+  scaffold_script: setup.sh
+execution:
+  append_system_prompt: TINKER_AGENTS_MD
+  max_turns: 20
+  allowed_tools: [Read, Glob, Grep, Edit, Write, Skill, Agent]
+  prompt: |
+    Grill me about adding tags to notes in product/notes before we build anything.
+graders:
+  - name: looks-up-the-code
+    type: tool_used
+    tool: Read
+    input_match: 'product[\\/]+notes[\\/]'
+  - name: no-product-writes
+    type: tool_used
+    tool: Write
+    input_match: 'product[\\/]'
+    min: 0
+    max: 0
+  - name: no-product-edits
+    type: tool_used
+    tool: Edit
+    input_match: 'product[\\/]'
+    min: 0
+    max: 0
+  - name: one-question-with-recommendation
+    type: llm
+    criteria: The final message asks the user exactly one decision question (a single numbered or lettered list of options for that one decision is fine) and gives its recommended answer with a short reason. It does not ask anything the code answers - such as where or in which format notes are stored (a JSON file written by notes/store.py) - and does not claim to have changed any file.
+    weight: 2

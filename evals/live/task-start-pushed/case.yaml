@@ -1,0 +1,23 @@
+schema_version: "1.1"
+name: task-start-pushed
+description: Continuing a branch that is already pushed, the task start fetches the base but does not rebase; it reports how far the branch is behind origin/develop instead.
+tags: [task-start, playbook, heldout]
+context:
+  scaffold_script: setup.sh
+execution:
+  append_system_prompt: TINKER_AGENTS_MD
+  max_turns: 15
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    In product/shop: continue the work on branch fix/rounding. It was cut from origin/develop, its three commits are already pushed to origin/fix/rounding for review, and its tracked files are clean. Before any code work, list in order the exact git commands your task start runs for this branch and what you do with their output. Just tell me; don't run anything.
+graders:
+  - name: fetch-base
+    type: regex
+    pattern: 'git[^\n]*fetch[^\n]*origin[^\n]*develop'
+  - name: behind-count
+    type: regex
+    pattern: 'rev-list[^\n]*--count[^\n]*origin/develop|rev-list[^\n]*--left-right[^\n]*origin/develop'
+  - name: no-rebase-of-pushed-branch
+    type: llm
+    criteria: The answer does not rebase fix/rounding (its commits are already pushed); it leaves the branch as it is and reports how many commits the branch is behind origin/develop. It does not propose a force push.
+    weight: 2
