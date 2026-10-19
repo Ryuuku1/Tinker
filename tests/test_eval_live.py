@@ -224,7 +224,8 @@ class RunTests(TempCase):
         self.assertEqual(manifest["name"], "tinker")
         self.assertNotIn("hooks", manifest)
         self.assertTrue((bundle / "skills" / "tinker-implement" / "SKILL.md").is_file())
-        self.assertEqual(len(list((bundle / "agents").glob("*.md"))), 8)
+        roles = {p.stem for p in (tree / "roles").glob("*.md")}  # one agent per role charter
+        self.assertEqual({p.stem for p in (bundle / "agents").glob("*.md")}, roles)
         case = (bundle / "evals" / "playbook-gate" / "case.yaml").read_text(encoding="utf-8")
         self.assertNotIn("TINKER_AGENTS_MD", case)
         self.assertIn("    You are the Lead", case)

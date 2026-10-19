@@ -171,6 +171,15 @@ and comparison reports case-level changes, never an aggregate score. Cost, token
 and duration appear only as measured, with their source. No accepted baseline exists
 until complete observed evidence is recorded; see the [evaluation guide](../evals/README.md).
 
+For Claude Code there is also a live runner, `scripts/eval_live.py`: it snapshots the
+working tree into its own temporary folder, renders the plugin bundle there and runs
+`claude plugin eval` over `evals/live/<case>/case.yaml` (regression and held-out sets),
+checking the five-hour usage window before large runs. Its `gate` compares a result
+with `evals/live/accepted.json` per set (score not lower, cost per run not higher,
+within small tolerances; errored runs are invalid; another model can only be accepted
+as a new baseline). The learn pass depends on this gate. Live runs measure Claude Code
+only; other hosts keep the observed-evidence process above.
+
 ## Persistence and isolation
 
 Identity is versioned role guidance; session history belongs to the host. A task
