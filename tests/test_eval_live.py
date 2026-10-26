@@ -280,6 +280,41 @@ class RunTests(TempCase):
         self.assertEqual({c["name"]: len(c["arms"]["with"]) for c in doc["cases"]}, {"alpha": 1, "beta": 3, "gamma": 1})
         self.assertEqual(doc["costUsd"], 0.7)
 
+    def baseline(self, cases, model="opus", adaptive=True):
+        path = self.checkout / "evals" / "live" / "accepted.json"
+        path.write_text(json.dumps({"model": model, "adaptive": adaptive, "cases": {
+            name: {"set": "regression", "score": score, "costPerRunUsd": 0.2, "runs": runs}
+            for name, (score, runs) in cases.items()}}), encoding="utf-8")
+
+    def test_adaptive_also_reruns_cases_that_fell_short_in_the_baseline(self):
+        # alpha was perfect in its one run here but not in the baseline, so it needs runs to match; gamma fell short
+        # but already has three runs, and beta was perfect on both sides.
+        def case(name, *scores):
+            return {"name": name, "arms": {"with": [{"score": s, "costUsd": 0.2, "turns": 3} for s in scores]}}
+        self.baseline({"alpha": (0.667, 3), "beta": (1.0, 1), "gamma": (1.0, 1)})
+        log = self.fake_claude(cases=[case("alpha", 1.0), case("beta", 1.0), case("gamma", 0.5, 1.0, 0.5)],
+                               rerun_score=1.0)
+        code, out = self.main("run", "--adaptive", "--force", root=self.checkout, temp=self.runs)
+        self.assertEqual(code, 0, out)
+        reruns = [c["args"] for c in self.calls(log) if c["args"][:2] == ["plugin", "eval"]][1:]
+        self.assertEqual([args[args.index("--case") + 1] for args in reruns], ["alpha"])
+        self.assertIn("1 case(s) fell short, here or in the baseline", out)
+        (kept,) = list((self.checkout / "evals" / "live" / "results").glob("*.json"))
+        doc = json.loads(kept.read_text(encoding="utf-8"))
+        self.assertEqual({c["name"]: len(c["arms"]["with"]) for c in doc["cases"]}, {"alpha": 3, "beta": 1, "gamma": 3})
+
+    def test_adaptive_ignores_a_baseline_measured_another_way(self):
+        def case(name):
+            return {"name": name, "arms": {"with": [{"score": 1.0, "costUsd": 0.2, "turns": 3}]}}
+        for model, adaptive in (("sonnet", True), ("opus", False)):
+            with self.subTest(model=model, adaptive=adaptive):
+                self.baseline({"alpha": (0.5, 3)}, model=model, adaptive=adaptive)
+                log = self.fake_claude(cases=[case("alpha")], rerun_score=1.0)
+                log.unlink(missing_ok=True)
+                code, out = self.main("run", "--adaptive", "--force", root=self.checkout, temp=self.runs)
+                self.assertEqual(code, 0, out)
+                self.assertEqual(len([c for c in self.calls(log) if c["args"][:2] == ["plugin", "eval"]]), 1)
+
     def test_no_matching_case_starts_nothing(self):
         log = self.fake_claude()
         code, out = self.main("run", "--case", "no-such-case", root=self.checkout, temp=self.runs)
@@ -362,6 +397,7 @@ class GateTests(TempCase):
         record = json.loads(self.accepted.read_text(encoding="utf-8"))
         self.assertEqual(record["model"], "sonnet")
         self.assertEqual(set(record["sets"]), {"regression"})  # the other model's sets are not comparable
+        self.assertEqual(set(record["cases"]), {"reg-case"})  # nor its cases
 
     def test_sets_average_per_case_so_reruns_do_not_weigh_more(self):
         write_case(self.tmp, "reg-two", ["review", "regression"])
@@ -394,6 +430,32 @@ class GateTests(TempCase):
         record = json.loads(self.accepted.read_text(encoding="utf-8"))
         self.assertEqual(record["sets"]["regression"]["score"], 0.9)
         self.assertEqual(record["sets"]["heldout"]["score"], 1.0)
+        self.assertEqual(record["cases"]["reg-case"]["score"], 0.9)
+        self.assertEqual(record["cases"]["held-case"]["score"], 1.0)
+
+    def test_accept_records_each_cases_means(self):
+        self.gate(self.result(cost=0.25), "--accept")
+        record = json.loads(self.accepted.read_text(encoding="utf-8"))
+        self.assertEqual(record["cases"], {
+            "held-case": {"set": "heldout", "score": 1.0, "costPerRunUsd": 0.25, "runs": 2},
+            "reg-case": {"set": "regression", "score": 1.0, "costPerRunUsd": 0.25, "runs": 2}})
+
+    def test_gate_names_cases_whose_run_counts_differ(self):
+        def doc(**cases):
+            path = self.tmp / f"doc{len(list(self.tmp.glob('doc*.json')))}.json"
+            path.write_text(json.dumps({"suite": {"modelOverride": "opus"}, "adaptive": True, "cases": [
+                {"name": name, "arms": {"with": [{"score": s, "costUsd": 0.2, "turns": 5} for s in scores]}}
+                for name, scores in cases.items()]}), encoding="utf-8")
+            return path
+        self.gate(doc(**{"reg-case": [1.0], "held-case": [1.0]}), "--accept")
+        # reg-case fell short here over three runs against one perfect baseline run; held-case was perfect on both
+        # sides, so its different count does not matter.
+        code, out = self.gate(doc(**{"reg-case": [0.5, 1.0, 0.5], "held-case": [1.0, 1.0]}))
+        self.assertEqual(code, 1)
+        self.assertIn("Uneven runs: reg-case (0.667 over 3 here, 1.0 over 1 in the baseline)", out)
+        self.assertNotIn("held-case (", out)
+        code, out = self.gate(doc(**{"reg-case": [1.0], "held-case": [1.0]}))
+        self.assertNotIn("Uneven runs", out)
 
 
 class CaseStructureTests(unittest.TestCase):

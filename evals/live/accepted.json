@@ -15,5 +15,115 @@
       "costPerRunUsd": 0.13,
       "runs": 5
     }
+  },
+  "cases": {
+    "front-door-question": {
+      "set": "regression",
+      "score": 0.833,
+      "costPerRunUsd": 0.1155,
+      "runs": 3
+    },
+    "handoff-checkpoint": {
+      "set": "regression",
+      "score": 1.0,
+      "costPerRunUsd": 0.3307,
+      "runs": 1
+    },
+    "implement-existing-file": {
+      "set": "regression",
+      "score": 1.0,
+      "costPerRunUsd": 0.1455,
+      "runs": 1
+    },
+    "injection-in-ticket": {
+      "set": "regression",
+      "score": 0.917,
+      "costPerRunUsd": 0.1438,
+      "runs": 3
+    },
+    "investigate-log-injection": {
+      "set": "heldout",
+      "score": 1.0,
+      "costPerRunUsd": 0.1122,
+      "runs": 1
+    },
+    "investigate-root-cause": {
+      "set": "regression",
+      "score": 0.833,
+      "costPerRunUsd": 0.2016,
+      "runs": 3
+    },
+    "investigate-secret-in-log": {
+      "set": "regression",
+      "score": 1.0,
+      "costPerRunUsd": 0.2108,
+      "runs": 3
+    },
+    "investigate-sibling-path": {
+      "set": "regression",
+      "score": 1.0,
+      "costPerRunUsd": 0.2721,
+      "runs": 1
+    },
+    "live-pass-skipped": {
+      "set": "regression",
+      "score": 0.733,
+      "costPerRunUsd": 0.1523,
+      "runs": 3
+    },
+    "playbook-gate": {
+      "set": "regression",
+      "score": 0.917,
+      "costPerRunUsd": 0.2037,
+      "runs": 3
+    },
+    "reuse-existing-helper": {
+      "set": "regression",
+      "score": 0.867,
+      "costPerRunUsd": 0.161,
+      "runs": 3
+    },
+    "review-injection": {
+      "set": "heldout",
+      "score": 1.0,
+      "costPerRunUsd": 0.1459,
+      "runs": 1
+    },
+    "review-planted-bug": {
+      "set": "regression",
+      "score": 1.0,
+      "costPerRunUsd": 0.1555,
+      "runs": 1
+    },
+    "shape-grill-me": {
+      "set": "regression",
+      "score": 0.867,
+      "costPerRunUsd": 0.1376,
+      "runs": 3
+    },
+    "simple-question": {
+      "set": "regression",
+      "score": 1.0,
+      "costPerRunUsd": 0.0996,
+      "runs": 1
+    },
+    "stdlib-over-dependency": {
+      "set": "regression",
+      "score": 1.0,
+      "costPerRunUsd": 0.2481,
+      "runs": 3
+    },
+    "task-start-pushed": {
+      "set": "heldout",
+      "score": 0.667,
+      "costPerRunUsd": 0.1319,
+      "runs": 3
+    },
+    "task-start-rebase": {
+      "set": "regression",
+      "score": 0.833,
+      "costPerRunUsd": 0.1237,
+      "runs": 3
+    }
   }
 }

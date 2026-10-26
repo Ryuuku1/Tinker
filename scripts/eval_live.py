@@ -6,12 +6,12 @@ run   Snapshots this checkout once (tracked and untracked files, never ignored o
       scaffold builds its workspace as a Tinker root from the snapshot, so an edit made during a run never reaches a
       case and runs can go in parallel. The run folder stays behind as the record of what was measured; the JSON
       result is copied to evals/live/results/<runId>.json. Defaults: --model opus, -j 4, one run per case unless the
-      case says `runs:`, --ablation none. --adaptive then runs each case that fell short twice more and merges those
-      runs into the result, so one unlucky run does not decide a gate. A call that starts more than 20 agent runs
-      first reads the account's five-hour usage (one Haiku turn) and refuses when the runs likely won't fit; --force
-      skips the check.
+      case says `runs:`, --ablation none. --adaptive then runs each case that fell short, in this run or in the
+      accepted baseline, twice more and merges those runs into the result, so one unlucky run on either side does
+      not decide a gate. A call that starts more than 20 agent runs first reads the account's five-hour usage (one
+      Haiku turn) and refuses when the runs likely won't fit; --force skips the check.
 gate  Compares a result with evals/live/accepted.json per set (regression, heldout), averaging per case: exit 0 pass,
-      1 fail, 2 invalid. --accept records the result as the new baseline.
+      1 fail, 2 invalid. --accept records the result as the new baseline, with each case's means.
 
 Eval runs cannot sandbox shell tools on Windows, so cases get Read/Grep/Glob, Write/Edit, Skill and Agent only.
 Scaffolds are bash: they need bash (Git Bash on Windows) and git on PATH.
@@ -160,16 +160,18 @@ def with_runs(case):
     return (case.get("arms") or {}).get("with") or []
 
 
-def rerun_short(args, claude, base, bundle, env, result):
-    """--adaptive: run each case that fell short RERUNS more times and merge those runs into the result."""
-    def fell_short(runs):  # an errored run keeps the result invalid whatever follows, so only complete cases re-run
-        return bool(runs) and all(r.get("turns") and not r.get("error") for r in runs) and \
-            sum(float(r.get("score") or 0) for r in runs) < len(runs)
+def rerun_short(args, claude, base, bundle, env, result, short_before=()):
+    """--adaptive: run each case that fell short here or in the baseline (short_before) RERUNS more times, unless it
+    already has more than RERUNS runs, and merge those runs into the result."""
+    def fell_short(case):  # an errored run keeps the result invalid whatever follows, so only complete cases re-run
+        runs = with_runs(case)
+        return bool(runs) and all(r.get("turns") and not r.get("error") for r in runs) and len(runs) <= RERUNS and (
+            sum(float(r.get("score") or 0) for r in runs) < len(runs) or case.get("name") in short_before)
     doc = json.loads(result.read_text(encoding="utf-8-sig"))
-    short = [case for case in doc.get("cases") or [] if fell_short(with_runs(case))]
+    short = [case for case in doc.get("cases") or [] if fell_short(case)]
     doc["adaptive"], doc["mergedFrom"] = True, []
     if short:
-        print(f"Adaptive: {len(short)} case(s) fell short, each runs {RERUNS} more times: "
+        print(f"Adaptive: {len(short)} case(s) fell short, here or in the baseline; each runs {RERUNS} more times: "
               f"{', '.join(c['name'] for c in short)}", flush=True)
     refusal = (None if args.force or RERUNS * len(short) <= USAGE_CHECK_ABOVE
                else usage_refusal(claude, RERUNS * len(short), args.percent_per_run))
@@ -268,6 +270,22 @@ def scaffold_env():
     return env
 
 
+def accepted_file(args, root):
+    return Path(args.accepted) if args.accepted else Path(root) / LIVE / "accepted.json"
+
+
+def short_in_baseline(args, root):
+    """The cases the accepted baseline recorded below 1.0, when it was measured the way this run measures."""
+    path = accepted_file(args, root)
+    try:
+        accepted = json.loads(path.read_text(encoding="utf-8-sig")) if path.is_file() else {}
+    except (OSError, ValueError):
+        return set()
+    if str(accepted.get("model")) != str(args.model) or not accepted.get("adaptive"):
+        return set()
+    return {name for name, means in (accepted.get("cases") or {}).items() if float(means.get("score", 1)) < 1}
+
+
 def run(args, root, temp=None):
     claude = shutil.which("claude")
     if not claude:
@@ -302,7 +320,7 @@ def run(args, root, temp=None):
         print(f"No result was written ({result}); claude exited with {code}.", file=sys.stderr)
         return code or 1
     if args.adaptive:
-        rerun_short(args, claude, base, bundle, env, result)
+        rerun_short(args, claude, base, bundle, env, result, short_in_baseline(args, root))
     kept = Path(root) / LIVE / "results" / f"{run_id}.json"
     kept.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(result, kept)
@@ -312,43 +330,63 @@ def run(args, root, temp=None):
 
 # ---------------------------------------------------------------- gate
 
-def summarize(result, root):
-    """Per-set score and cost per run of the plugin arm, averaged per case so a case that --adaptive re-ran weighs
-    what a case run once does, the set's run count, and the cases with errored runs."""
-    cases, errored = {}, []
+def mean(values):
+    return sum(values) / len(values)
+
+
+def case_means(result, root):
+    """Each case's set, mean score, mean cost per run and run count on the plugin arm, and the cases with errored or
+    unstarted runs."""
+    means, errored = {}, []
     for case in result.get("cases") or []:
         name = case.get("name")
         yaml = Path(root) / LIVE / str(name) / "case.yaml"
         if not yaml.is_file():
             raise EvalError(f"Case '{name}' in the result has no {LIVE.as_posix()}/{name}/case.yaml.")
-        with_arm, bucket = with_runs(case), case_set(read_case(yaml))
-        if not with_arm:
+        runs = with_runs(case)
+        if not runs or any(r.get("error") or not r.get("turns") for r in runs):
             errored.append(name)
-        else:
-            cases.setdefault(bucket, []).append(with_arm)
-        for r in with_arm:
-            if r.get("error") or not r.get("turns"):
-                errored.append(name)
-    if not cases and not errored:
+        if runs:
+            means[name] = {"set": case_set(read_case(yaml)), "score": mean([float(r.get("score") or 0) for r in runs]),
+                           "costPerRunUsd": mean([float(r.get("costUsd") or 0) for r in runs]), "runs": len(runs)}
+    return means, list(dict.fromkeys(errored))
+
+
+def summarize(result, root):
+    """Per-set score and cost per run of the plugin arm, averaged per case so a case that --adaptive re-ran weighs
+    what a case run once does, the set's run count, and the cases with errored runs."""
+    means, errored = case_means(result, root)
+    if not means and not errored:
         raise EvalError("The result holds no case runs.")
-    def mean(values):
-        return sum(values) / len(values)
     summary = {}
-    for name in [s for s in SETS if s in cases]:
-        items = cases[name]
-        summary[name] = {"score": round(mean([mean([float(r.get("score") or 0) for r in runs]) for runs in items]), 3),
-                         "costPerRunUsd": round(mean([mean([float(r.get("costUsd") or 0) for r in runs])
-                                                      for runs in items]), 4),
-                         "runs": sum(len(runs) for runs in items)}
-    return summary, list(dict.fromkeys(errored))
+    for name in SETS:
+        items = [m for m in means.values() if m["set"] == name]
+        if items:
+            summary[name] = {"score": round(mean([m["score"] for m in items]), 3),
+                             "costPerRunUsd": round(mean([m["costPerRunUsd"] for m in items]), 4),
+                             "runs": sum(m["runs"] for m in items)}
+    return summary, errored
+
+
+def uneven_cases(means, accepted):
+    """Cases that fell short on one side and ran a different number of times on each, so their means compare runs
+    of unequal weight; a baseline case perfect in its one adaptive run is the usual one."""
+    lines = []
+    for name, now in sorted(means.items()):
+        before = ((accepted or {}).get("cases") or {}).get(name)
+        if before and (now["score"] < 1 or before["score"] < 1) and now["runs"] != before["runs"]:
+            lines.append(f"{name} ({round(now['score'], 3)} over {now['runs']} here, {before['score']} over "
+                         f"{before['runs']} in the baseline)")
+    return lines
 
 
 def gate(args, root):
     result_path = Path(args.result)
-    accepted_path = Path(args.accepted) if args.accepted else Path(root) / LIVE / "accepted.json"
+    accepted_path = accepted_file(args, root)
     try:
         result = json.loads(result_path.read_text(encoding="utf-8-sig"))
         summary, errored = summarize(result, root)
+        means, _ = case_means(result, root)
     except (OSError, ValueError, EvalError) as error:
         print(f"INVALID: {error}")
         return 2
@@ -391,13 +429,22 @@ def gate(args, root):
               "this result cannot pass the gate; --accept makes it the new baseline.")
     if not accepted:
         print(f"No baseline at {accepted_path}: review the result, then --accept records the first one.")
+    uneven = [] if new_model or new_mode else uneven_cases(means, accepted)
+    if uneven:
+        print("Uneven runs: " + "; ".join(uneven) + ". A mean over fewer runs is the weaker estimate; measure that "
+              "side to the same count before trusting a verdict these cases decide.")
     if args.accept:
-        sets = dict((accepted or {}).get("sets") or {}) if not (new_model or new_mode) else {}
+        kept = not (new_model or new_mode)
+        sets = dict((accepted or {}).get("sets") or {}) if kept else {}
         sets.update(summary)
+        cases = dict((accepted or {}).get("cases") or {}) if kept else {}
+        cases.update({name: {"set": m["set"], "score": round(m["score"], 3),
+                             "costPerRunUsd": round(m["costPerRunUsd"], 4), "runs": m["runs"]}
+                      for name, m in means.items()})
         commit = subprocess.run(["git", "-C", str(root), "rev-parse", "--short", "HEAD"], capture_output=True, text=True)
         record = {"acceptedAt": result.get("startedAt"), "result": result_path.name,
                   "commit": commit.stdout.strip() if commit.returncode == 0 else "", "model": model,
-                  "adaptive": adaptive, "sets": sets}
+                  "adaptive": adaptive, "sets": sets, "cases": dict(sorted(cases.items()))}
         accepted_path.parent.mkdir(parents=True, exist_ok=True)
         accepted_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8", newline="\n")
         print(f"Accepted as the new baseline: {accepted_path}")
@@ -418,7 +465,10 @@ def parser():
     r.add_argument("-j", "--jobs", type=int, default=4, help="agent runs at once (1-8)")
     r.add_argument("--ablation", choices=("none", "with-without"), default="none")
     r.add_argument("--adaptive", action="store_true",
-                   help=f"run each case that falls short {RERUNS} more times and merge those runs into the result")
+                   help=f"run each case that falls short here or in the baseline {RERUNS} more times and merge those "
+                        "runs into the result")
+    r.add_argument("--accepted", help=f"baseline whose short cases --adaptive re-runs (default {LIVE.as_posix()}/"
+                                      "accepted.json)")
     r.add_argument("--force", action="store_true", help="skip the five-hour usage check")
     r.add_argument("--percent-per-run", type=float, default=0.4,
                    help="share of the five-hour window one agent run is assumed to use (default 0.4)")
