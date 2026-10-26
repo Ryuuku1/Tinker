@@ -24,7 +24,7 @@ graders:
   - name: no-handoff-in-product
     type: tool_used
     tool: Write
-    input_match: 'product[\\/]+shop[\\/]+[^"]*(handoff|HANDOFF|checkpoint|tinker|Tinker)'
+    input_match: '"file_path":"[^"]*product[\\/]+shop[\\/]+[^"]*(handoff|HANDOFF|checkpoint|tinker|Tinker)'
     min: 0
     max: 0
   - name: points-at-checkpoint

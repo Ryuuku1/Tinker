@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-10-26T19:57:56.790Z",
+  "result": "20261026-195754-6c0a90-even.json",
+  "commit": "cd82973",
+  "model": "opus",
+  "adaptive": true,
+  "sets": {
+    "regression": {
+      "score": 0.875,
+      "costPerRunUsd": 0.1678,
+      "runs": 34
+    },
+    "heldout": {
+      "score": 0.889,
+      "costPerRunUsd": 0.129,
+      "runs": 5
+    }
+  }
+}
