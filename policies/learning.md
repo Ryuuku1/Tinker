@@ -50,13 +50,14 @@ needs the `claude` CLI; see the [evaluation guide](../evals/README.md).
    covers, first add or tighten one `regression` case and run it on the base branch: it
    must fall short there, or it does not measure the edit. Never edit a `heldout` case
    to fit a change. Run the regression and held-out sets with the accepted baseline's
-   arguments (with `--adaptive`, a case that falls short here or in the baseline runs
-   twice more, so one unlucky run on either side does not decide the gate), then the
-   gate; measure any case it lists under `Uneven runs` to the same count on both sides
-   before trusting a verdict that case decides. A result with errored runs is invalid:
-   rerun it. If the gate fails, undo your own edits, switch back, delete the branch with
-   `git branch -d` and report why. Without the `claude` CLI, leave the edits uncommitted
-   on the branch, report the gate `not-verified` and stop.
+   arguments, then the gate. With `--adaptive`, a case that falls short on either side
+   ends with the same number of runs on both, measuring the baseline again at its own
+   commit when needed, so one unlucky run does not decide the gate. Measure any case the
+   gate still lists under `Uneven runs` to the same count on both sides before trusting
+   a verdict that case decides. A result with errored runs is invalid: rerun it. If the
+   gate fails, undo your own edits, switch back, delete the branch with `git branch -d`
+   and report why. Without the `claude` CLI, leave the edits uncommitted on the branch,
+   report the gate `not-verified` and stop.
 5. **Record.** Accept the result as the new baseline, then commit the edits with the
    baseline file. The message names the evidence for each edit in words another reader
    can check without the retros, and includes the gate table. Never push or merge: the

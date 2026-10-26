@@ -7,11 +7,14 @@ run   Snapshots this checkout once (tracked and untracked files, never ignored o
       case and runs can go in parallel. The run folder stays behind as the record of what was measured; the JSON
       result is copied to evals/live/results/<runId>.json. Defaults: --model opus, -j 4, one run per case unless the
       case says `runs:`, --ablation none. --adaptive then runs each case that fell short, in this run or in the
-      accepted baseline, twice more and merges those runs into the result, so one unlucky run on either side does
-      not decide a gate. A call that starts more than 20 agent runs first reads the account's five-hour usage (one
-      Haiku turn) and refuses when the runs likely won't fit; --force skips the check.
-gate  Compares a result with evals/live/accepted.json per set (regression, heldout), averaging per case: exit 0 pass,
-      1 fail, 2 invalid. --accept records the result as the new baseline, with each case's means.
+      accepted baseline, twice more and merges those runs into the result; a case that fell short here but has fewer
+      baseline runs runs again at the baseline's own commit (found by its tree fingerprint), so both sides end with
+      the same count and one unlucky run on either side does not decide a gate. A call that starts more than 20
+      agent runs first reads the account's five-hour usage (one Haiku turn) and refuses when the runs likely won't
+      fit; --force skips the check.
+gate  Compares a result with evals/live/accepted.json per set (regression, heldout), averaging per case and pooling
+      any baseline runs --adaptive measured again: exit 0 pass, 1 fail, 2 invalid. --accept records the result as
+      the new baseline, with each case's means and the measured tree's fingerprint.
 
 Eval runs cannot sandbox shell tools on Windows, so cases get Read/Grep/Glob, Write/Edit, Skill and Agent only.
 Scaffolds are bash: they need bash (Git Bash on Windows) and git on PATH.
@@ -19,6 +22,8 @@ Scaffolds are bash: they need bash (Git Bash on Windows) and git on PATH.
 import argparse
 from datetime import datetime, timezone
 import fnmatch
+import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -26,6 +31,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import uuid
 
@@ -160,14 +166,20 @@ def with_runs(case):
     return (case.get("arms") or {}).get("with") or []
 
 
-def rerun_short(args, claude, base, bundle, env, result, short_before=()):
+def complete(runs):  # an errored run keeps a result invalid whatever follows, so only complete cases run again
+    return bool(runs) and all(r.get("turns") and not r.get("error") for r in runs)
+
+
+def below_one(runs):
+    return sum(float(r.get("score") or 0) for r in runs) < len(runs)
+
+
+def rerun_short(args, claude, base, bundle, env, doc, run_dir, short_before=()):
     """--adaptive: run each case that fell short here or in the baseline (short_before) RERUNS more times, unless it
-    already has more than RERUNS runs, and merge those runs into the result."""
-    def fell_short(case):  # an errored run keeps the result invalid whatever follows, so only complete cases re-run
+    already has more than RERUNS runs, and merge those runs into the result document."""
+    def fell_short(case):
         runs = with_runs(case)
-        return bool(runs) and all(r.get("turns") and not r.get("error") for r in runs) and len(runs) <= RERUNS and (
-            sum(float(r.get("score") or 0) for r in runs) < len(runs) or case.get("name") in short_before)
-    doc = json.loads(result.read_text(encoding="utf-8-sig"))
+        return complete(runs) and len(runs) <= RERUNS and (below_one(runs) or case.get("name") in short_before)
     short = [case for case in doc.get("cases") or [] if fell_short(case)]
     doc["adaptive"], doc["mergedFrom"] = True, []
     if short:
@@ -179,7 +191,7 @@ def rerun_short(args, claude, base, bundle, env, result, short_before=()):
         print(f"{refusal} The first runs stand.", file=sys.stderr)
         short = []
     for case in short:
-        again_path = result.with_name(f"rerun-{case['name']}.json")
+        again_path = run_dir / f"rerun-{case['name']}.json"
         subprocess.run(base + ["--ablation", "none", "--json", str(again_path), "--case", case["name"],
                                "--runs", str(RERUNS)], cwd=bundle, env=env)
         try:
@@ -192,7 +204,96 @@ def rerun_short(args, claude, base, bundle, env, result, short_before=()):
                 case.setdefault("arms", {}).setdefault("with", []).extend(with_runs(other))
         doc["costUsd"] = round(float(doc.get("costUsd") or 0) + float(again.get("costUsd") or 0), 4)
         doc["mergedFrom"].append(again_path.name)
-    result.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+
+def baseline_topup(args, root, claude, env, doc, run_dir, accepted):
+    """--adaptive: run each case that fell short here but has fewer runs in the baseline again at the baseline's own
+    measured tree until the counts match, and record those runs as baselineTopUp for the gate to pool. A baseline
+    case perfect in its one adaptive run otherwise weighs against three runs here."""
+    if not measured_alike(accepted, args) or not accepted.get("tree"):
+        return
+    needs = {}
+    for case in doc.get("cases") or []:
+        runs, before = with_runs(case), (accepted.get("cases") or {}).get(case.get("name"))
+        if before and complete(runs) and below_one(runs) and before["runs"] < len(runs):
+            needs[case["name"]] = len(runs) - before["runs"]
+    if not needs:
+        return
+    commit, tree = baseline_commit(root, accepted["tree"], run_dir / "baseline")
+    if not commit:
+        print(f"Adaptive: no recent commit holds the baseline's measured tree ({accepted['tree']}), so "
+              f"{', '.join(needs)} keep their baseline runs; the gate lists them as uneven.", file=sys.stderr)
+        return
+    total = sum(needs.values())
+    refusal = None if args.force or total <= USAGE_CHECK_ABOVE else usage_refusal(claude, total, args.percent_per_run)
+    if refusal:
+        print(f"{refusal} The baseline keeps its runs.", file=sys.stderr)
+        return
+    print(f"Adaptive: at the baseline's commit {commit[:7]}, {len(needs)} case(s) run until both sides have the "
+          f"same count: {', '.join(f'{name} +{extra}' for name, extra in needs.items())}", flush=True)
+    bundle = render_bundle(tree, run_dir / "baseline" / "home")
+    topup = {}
+    for name, extra in needs.items():
+        path = run_dir / f"baseline-{name}.json"
+        subprocess.run(eval_command(claude, args) + ["--ablation", "none", "--json", str(path), "--case", name,
+                                                     "--runs", str(extra)], cwd=bundle, env=env)
+        try:
+            more = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            print(f"Adaptive: the baseline run of {name} wrote no result; it keeps its runs.", file=sys.stderr)
+            continue
+        runs = [r for c in more.get("cases") or [] if c.get("name") == name for r in with_runs(c) if complete([r])]
+        if runs:
+            topup[name] = runs
+        doc["costUsd"] = round(float(doc.get("costUsd") or 0) + float(more.get("costUsd") or 0), 4)
+    if topup:
+        doc["baselineTopUp"] = {"commit": commit, "cases": topup}
+
+
+def tree_fingerprint(tree):
+    """A short SHA-256 of the files under tree, paths and contents with CRLF read as LF, leaving out the baseline
+    file, results and Python's bytecode caches (rendering a bundle writes them into the tree), so a committed tree
+    can be matched with the snapshot a result was measured on."""
+    tree, skip = Path(tree), (LIVE / "accepted.json").as_posix()
+    digest = hashlib.sha256()
+    for rel in sorted(p.relative_to(tree).as_posix() for p in tree.rglob("*") if p.is_file()):
+        if rel == skip or rel.startswith((LIVE / "results").as_posix() + "/") or "__pycache__" in rel.split("/"):
+            continue
+        digest.update(rel.encode("utf-8") + b"\0" + (tree / rel).read_bytes().replace(b"\r\n", b"\n") + b"\0")
+    return digest.hexdigest()[:16]
+
+
+def extract_commit(root, commit, dest):
+    """The files of commit as git stores them (LF), written under dest."""
+    archive = subprocess.run(["git", "-C", str(root), "-c", "core.autocrlf=false", "archive", "--format=tar", commit],
+                             capture_output=True)
+    if archive.returncode != 0:
+        raise EvalError(f"git archive {commit} failed: {archive.stderr.decode('utf-8', 'replace').strip()}")
+    Path(dest).mkdir(parents=True, exist_ok=True)
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
+        if hasattr(tarfile, "data_filter"):
+            tar.extractall(dest, filter="data")
+        else:  # Pythons without extraction filters; git's own archive holds no links outside the tree
+            tar.extractall(dest)
+
+
+def baseline_commit(root, fingerprint, scratch):
+    """(commit, extracted tree) for the commit whose files match the baseline's measured tree: HEAD, else one of the
+    last ten commits that changed the baseline file; (None, None) when none does."""
+    head = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True)
+    log = subprocess.run(["git", "-C", str(root), "log", "--format=%H", "-n", "10", "--",
+                          (LIVE / "accepted.json").as_posix()], capture_output=True, text=True)
+    candidates = [c for c in dict.fromkeys([head.stdout.strip(), *log.stdout.split()]) if c]
+    for index, commit in enumerate(candidates):
+        dest = Path(scratch) / f"candidate-{index}"
+        try:
+            extract_commit(root, commit, dest)
+        except EvalError:
+            continue
+        if tree_fingerprint(dest) == fingerprint:
+            return commit, dest
+        shutil.rmtree(dest, ignore_errors=True)
+    return None, None
 
 
 def snapshot(root, dest):
@@ -274,16 +375,29 @@ def accepted_file(args, root):
     return Path(args.accepted) if args.accepted else Path(root) / LIVE / "accepted.json"
 
 
-def short_in_baseline(args, root):
-    """The cases the accepted baseline recorded below 1.0, when it was measured the way this run measures."""
+def read_accepted(args, root):
     path = accepted_file(args, root)
     try:
-        accepted = json.loads(path.read_text(encoding="utf-8-sig")) if path.is_file() else {}
+        return json.loads(path.read_text(encoding="utf-8-sig")) if path.is_file() else {}
     except (OSError, ValueError):
-        return set()
-    if str(accepted.get("model")) != str(args.model) or not accepted.get("adaptive"):
+        return {}
+
+
+def measured_alike(accepted, args):
+    """Whether the baseline was measured the way this run measures: same model, --adaptive."""
+    return bool(accepted) and str(accepted.get("model")) == str(args.model) and bool(accepted.get("adaptive"))
+
+
+def short_in_baseline(accepted, args):
+    """The cases the accepted baseline recorded below 1.0, when it was measured the way this run measures."""
+    if not measured_alike(accepted, args):
         return set()
     return {name for name, means in (accepted.get("cases") or {}).items() if float(means.get("score", 1)) < 1}
+
+
+def eval_command(claude, args):
+    return [claude, "plugin", "eval", ".", "--eval-dir", BUNDLE_EVALS, "--scaffold", "--allow-tools", "Write", "Edit",
+            "--trust-plugin", "--no-publish", "--model", args.model, "--concurrency", str(args.jobs)]
 
 
 def run(args, root, temp=None):
@@ -303,10 +417,10 @@ def run(args, root, temp=None):
     run_dir = Path(temp or tempfile.gettempdir()) / f"tinker_eval_{run_id}"
     tree = run_dir / "tinker"
     snapshot(root, tree)
+    fingerprint = tree_fingerprint(tree)
     bundle = render_bundle(tree, run_dir / "home")
     result = run_dir / "result.json"
-    base = [claude, "plugin", "eval", ".", "--eval-dir", BUNDLE_EVALS, "--scaffold", "--allow-tools", "Write", "Edit",
-            "--trust-plugin", "--no-publish", "--model", args.model, "--concurrency", str(args.jobs)]
+    base = eval_command(claude, args)
     command = base + ["--json", str(result), "--ablation", args.ablation]
     if args.case:
         command += ["--case", args.case]
@@ -319,8 +433,13 @@ def run(args, root, temp=None):
     if not result.is_file():
         print(f"No result was written ({result}); claude exited with {code}.", file=sys.stderr)
         return code or 1
+    doc = json.loads(result.read_text(encoding="utf-8-sig"))
+    doc["tree"] = fingerprint  # what --accept records, so a later --adaptive run can find this tree's commit
     if args.adaptive:
-        rerun_short(args, claude, base, bundle, env, result, short_in_baseline(args, root))
+        accepted = read_accepted(args, root)
+        rerun_short(args, claude, base, bundle, env, doc, run_dir, short_in_baseline(accepted, args))
+        baseline_topup(args, root, claude, env, doc, run_dir, accepted)
+    result.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8", newline="\n")
     kept = Path(root) / LIVE / "results" / f"{run_id}.json"
     kept.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(result, kept)
@@ -368,6 +487,31 @@ def summarize(result, root):
     return summary, errored
 
 
+def pooled_baseline(accepted, topup):
+    """The baseline with the runs --adaptive measured again at its own commit: each such case's means pool its
+    accepted runs with the new ones, and its set's means move by that case's change over the set's case count. Also
+    the lines that say what was pooled."""
+    sets = {name: dict(means) for name, means in (accepted.get("sets") or {}).items()}
+    cases = {name: dict(means) for name, means in (accepted.get("cases") or {}).items()}
+    lines = []
+    for name, runs in sorted(((topup or {}).get("cases") or {}).items()):
+        before = cases.get(name)
+        if not before or not runs:
+            continue
+        count = before["runs"] + len(runs)
+        score = (before["score"] * before["runs"] + sum(float(r.get("score") or 0) for r in runs)) / count
+        cost = (before["costPerRunUsd"] * before["runs"] + sum(float(r.get("costUsd") or 0) for r in runs)) / count
+        peers = sum(1 for other in cases.values() if other.get("set") == before["set"])
+        if before["set"] in sets and peers:
+            totals = sets[before["set"]]
+            totals["score"] = round(totals["score"] + (score - before["score"]) / peers, 3)
+            totals["costPerRunUsd"] = round(totals["costPerRunUsd"] + (cost - before["costPerRunUsd"]) / peers, 4)
+            totals["runs"] += len(runs)
+        cases[name] = {**before, "score": round(score, 3), "costPerRunUsd": round(cost, 4), "runs": count}
+        lines.append(f"{name} {before['score']} over {before['runs']} -> {round(score, 3)} over {count}")
+    return {**accepted, "sets": sets, "cases": cases}, lines
+
+
 def uneven_cases(means, accepted):
     """Cases that fell short on one side and ran a different number of times on each, so their means compare runs
     of unequal weight; a baseline case perfect in its one adaptive run is the usual one."""
@@ -395,10 +539,12 @@ def gate(args, root):
     new_model = bool(accepted) and str(accepted.get("model")) != str(model)
     new_mode = bool(accepted) and bool(accepted.get("adaptive")) != adaptive  # re-runs lift a flaky case's score
     passed = not errored and not new_model and not new_mode and bool(summary)
+    compare, pooled = (pooled_baseline(accepted, result.get("baselineTopUp")) if accepted and not (new_model or new_mode)
+                       else (accepted, []))
     print("| Set | Runs | Score | Accepted | Cost/run (USD) | Accepted | Verdict |")
     print("| --- | --- | --- | --- | --- | --- | --- |")
     for name, now in summary.items():
-        base = ((accepted or {}).get("sets") or {}).get(name)
+        base = ((compare or {}).get("sets") or {}).get(name)
         if errored:
             verdict = "INVALID"
         elif new_model:
@@ -429,7 +575,10 @@ def gate(args, root):
               "this result cannot pass the gate; --accept makes it the new baseline.")
     if not accepted:
         print(f"No baseline at {accepted_path}: review the result, then --accept records the first one.")
-    uneven = [] if new_model or new_mode else uneven_cases(means, accepted)
+    if pooled:
+        print(f"Baseline runs measured again at {str(result['baselineTopUp'].get('commit'))[:7]} and pooled: "
+              + "; ".join(pooled) + ".")
+    uneven = [] if new_model or new_mode else uneven_cases(means, compare)
     if uneven:
         print("Uneven runs: " + "; ".join(uneven) + ". A mean over fewer runs is the weaker estimate; measure that "
               "side to the same count before trusting a verdict these cases decide.")
@@ -443,8 +592,8 @@ def gate(args, root):
                       for name, m in means.items()})
         commit = subprocess.run(["git", "-C", str(root), "rev-parse", "--short", "HEAD"], capture_output=True, text=True)
         record = {"acceptedAt": result.get("startedAt"), "result": result_path.name,
-                  "commit": commit.stdout.strip() if commit.returncode == 0 else "", "model": model,
-                  "adaptive": adaptive, "sets": sets, "cases": dict(sorted(cases.items()))}
+                  "commit": commit.stdout.strip() if commit.returncode == 0 else "", "tree": result.get("tree"),
+                  "model": model, "adaptive": adaptive, "sets": sets, "cases": dict(sorted(cases.items()))}
         accepted_path.parent.mkdir(parents=True, exist_ok=True)
         accepted_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8", newline="\n")
         print(f"Accepted as the new baseline: {accepted_path}")

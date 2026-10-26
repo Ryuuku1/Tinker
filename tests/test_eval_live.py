@@ -280,11 +280,52 @@ class RunTests(TempCase):
         self.assertEqual({c["name"]: len(c["arms"]["with"]) for c in doc["cases"]}, {"alpha": 1, "beta": 3, "gamma": 1})
         self.assertEqual(doc["costUsd"], 0.7)
 
-    def baseline(self, cases, model="opus", adaptive=True):
+    def baseline(self, cases, model="opus", adaptive=True, tree=None):
         path = self.checkout / "evals" / "live" / "accepted.json"
-        path.write_text(json.dumps({"model": model, "adaptive": adaptive, "cases": {
+        path.write_text(json.dumps({"model": model, "adaptive": adaptive, "tree": tree, "cases": {
             name: {"set": "regression", "score": score, "costPerRunUsd": 0.2, "runs": runs}
             for name, (score, runs) in cases.items()}}), encoding="utf-8")
+
+    def committed_fingerprint(self):
+        """Commit the checkout as the baseline's measured tree; (HEAD, the fingerprint its snapshot has)."""
+        git(self.checkout, "add", "-A")
+        git(self.checkout, "-c", "user.name=eval", "-c", "user.email=eval@example.invalid", "-c",
+            "commit.gpgsign=false", "commit", "-qm", "baseline")
+        head = subprocess.run(["git", "-C", str(self.checkout), "rev-parse", "HEAD"], capture_output=True, text=True)
+        eval_live.snapshot(self.checkout, self.tmp / "measured")
+        return head.stdout.strip(), eval_live.tree_fingerprint(self.tmp / "measured")
+
+    def test_adaptive_measures_the_baseline_again_at_its_own_commit(self):
+        # alpha fell short here over three runs, but its baseline mean rests on one perfect run: two more runs at the
+        # baseline's commit even the counts.
+        head, fingerprint = self.committed_fingerprint()
+        self.baseline({"alpha": (1.0, 1)}, tree=fingerprint)
+        log = self.fake_claude(cases=[{"name": "alpha", "arms": {"with": [{"score": 0.5, "costUsd": 0.2, "turns": 3}]}}],
+                               rerun_score=0.5)
+        code, out = self.main("run", "--adaptive", "--force", root=self.checkout, temp=self.runs)
+        self.assertEqual(code, 0, out)
+        calls = [c for c in self.calls(log) if c["args"][:2] == ["plugin", "eval"]]
+        self.assertEqual(len(calls), 3)  # the first pass, alpha's re-runs here, alpha at the baseline's commit
+        self.assertIn("baseline", Path(calls[-1]["cwd"]).parts)
+        self.assertEqual(calls[-1]["args"][calls[-1]["args"].index("--runs") + 1], "2")
+        self.assertIn(f"at the baseline's commit {head[:7]}", out)
+        (kept,) = list((self.checkout / "evals" / "live" / "results").glob("*.json"))
+        doc = json.loads(kept.read_text(encoding="utf-8"))
+        self.assertEqual(doc["tree"], fingerprint)  # accepted.json, untracked here, is left out of the fingerprint
+        self.assertEqual(doc["baselineTopUp"]["commit"], head)
+        self.assertEqual(len(doc["baselineTopUp"]["cases"]["alpha"]), 2)
+
+    def test_adaptive_keeps_the_baseline_when_no_commit_holds_its_tree(self):
+        self.committed_fingerprint()
+        self.baseline({"alpha": (1.0, 1)}, tree="0" * 16)
+        log = self.fake_claude(cases=[{"name": "alpha", "arms": {"with": [{"score": 0.5, "costUsd": 0.2, "turns": 3}]}}],
+                               rerun_score=0.5)
+        code, out = self.main("run", "--adaptive", "--force", root=self.checkout, temp=self.runs)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len([c for c in self.calls(log) if c["args"][:2] == ["plugin", "eval"]]), 2)
+        self.assertIn("no recent commit holds the baseline's measured tree", out)
+        (kept,) = list((self.checkout / "evals" / "live" / "results").glob("*.json"))
+        self.assertNotIn("baselineTopUp", json.loads(kept.read_text(encoding="utf-8")))
 
     def test_adaptive_also_reruns_cases_that_fell_short_in_the_baseline(self):
         # alpha was perfect in its one run here but not in the baseline, so it needs runs to match; gamma fell short
@@ -434,11 +475,39 @@ class GateTests(TempCase):
         self.assertEqual(record["cases"]["held-case"]["score"], 1.0)
 
     def test_accept_records_each_cases_means(self):
-        self.gate(self.result(cost=0.25), "--accept")
+        path = self.result(cost=0.25)
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        path.write_text(json.dumps({**doc, "tree": "0123456789abcdef"}), encoding="utf-8")
+        self.gate(path, "--accept")
         record = json.loads(self.accepted.read_text(encoding="utf-8"))
         self.assertEqual(record["cases"], {
             "held-case": {"set": "heldout", "score": 1.0, "costPerRunUsd": 0.25, "runs": 2},
             "reg-case": {"set": "regression", "score": 1.0, "costPerRunUsd": 0.25, "runs": 2}})
+        self.assertEqual(record["tree"], "0123456789abcdef")  # how a later --adaptive run finds the measured commit
+
+    def adaptive_doc(self, cases, **extra):
+        self.count += 1
+        path = self.tmp / f"adaptive{self.count}.json"
+        path.write_text(json.dumps({"suite": {"modelOverride": "opus"}, "adaptive": True, **extra, "cases": [
+            {"name": name, "arms": {"with": [{"score": s, "costUsd": 0.2, "turns": 5} for s in scores]}}
+            for name, scores in cases.items()]}), encoding="utf-8")
+        return path
+
+    def test_gate_pools_baseline_runs_measured_again_at_its_commit(self):
+        self.gate(self.adaptive_doc({"reg-case": [1.0], "held-case": [1.0]}), "--accept")
+        # reg-case fell short here over three runs; two more runs at the baseline's commit scored 0.5 each, so the
+        # pooled baseline mean is 0.667 over three runs, the same rate.
+        topup = {"commit": "abc1234def", "cases": {"reg-case": [{"score": 0.5, "costUsd": 0.2, "turns": 5}] * 2}}
+        result = self.adaptive_doc({"reg-case": [0.5, 1.0, 0.5], "held-case": [1.0]}, baselineTopUp=topup)
+        code, out = self.gate(result)
+        self.assertEqual(code, 0, out)
+        self.assertIn("| regression | 3 | 0.667 | 0.667 | 0.2 | 0.2 | pass |", out)
+        self.assertIn("measured again at abc1234 and pooled: reg-case 1.0 over 1 -> 0.667 over 3.", out)
+        self.assertNotIn("Uneven runs", out)
+        self.gate(result, "--accept")  # the new baseline holds this result's own runs, not the pooled old ones
+        record = json.loads(self.accepted.read_text(encoding="utf-8"))
+        self.assertEqual(record["cases"]["reg-case"], {"set": "regression", "score": 0.667, "costPerRunUsd": 0.2,
+                                                       "runs": 3})
 
     def test_gate_names_cases_whose_run_counts_differ(self):
         def doc(**cases):
@@ -456,6 +525,41 @@ class GateTests(TempCase):
         self.assertNotIn("held-case (", out)
         code, out = self.gate(doc(**{"reg-case": [1.0], "held-case": [1.0]}))
         self.assertNotIn("Uneven runs", out)
+
+
+class FingerprintTests(TempCase):
+    def test_line_endings_and_the_baseline_file_leave_the_fingerprint_alone(self):
+        a, b = self.tmp / "a", self.tmp / "b"
+        for tree, eol in ((a, b"\n"), (b, b"\r\n")):
+            (tree / "evals" / "live" / "results").mkdir(parents=True)
+            (tree / "skill.md").write_bytes(b"one" + eol + b"two" + eol)
+            (tree / "evals" / "live" / "accepted.json").write_bytes(b"{}" + eol + eol)
+            (tree / "evals" / "live" / "results" / "r.json").write_bytes(eol)
+        self.assertEqual(eval_live.tree_fingerprint(a), eval_live.tree_fingerprint(b))
+        (b / "skill.md").write_bytes(b"one\nthree\n")
+        self.assertNotEqual(eval_live.tree_fingerprint(a), eval_live.tree_fingerprint(b))
+
+    @unittest.skipUnless(shutil.which("git"), "git is not on PATH")
+    def test_baseline_commit_finds_the_commit_that_holds_the_measured_tree(self):
+        repo = self.tmp / "repo"
+        (repo / "evals" / "live").mkdir(parents=True)
+        git(repo, "init", "-q")
+        def commit(message):
+            git(repo, "add", "-A")
+            git(repo, "-c", "user.name=eval", "-c", "user.email=eval@example.invalid", "-c", "commit.gpgsign=false",
+                "commit", "-qm", message)
+            return subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        (repo / "skill.md").write_text("first\n", encoding="utf-8")
+        (repo / "evals" / "live" / "accepted.json").write_text("{}\n", encoding="utf-8")
+        measured = commit("measured, with its baseline")
+        eval_live.snapshot(repo, self.tmp / "snapshot")
+        fingerprint = eval_live.tree_fingerprint(self.tmp / "snapshot")
+        (repo / "skill.md").write_text("second\n", encoding="utf-8")
+        commit("a later change")  # HEAD no longer holds the measured tree; the commit that changed accepted.json does
+        found, tree = eval_live.baseline_commit(repo, fingerprint, self.tmp / "scratch")
+        self.assertEqual(found, measured)
+        self.assertEqual((tree / "skill.md").read_text(encoding="utf-8"), "first\n")
+        self.assertEqual(eval_live.baseline_commit(repo, "0" * 16, self.tmp / "scratch-2"), (None, None))
 
 
 class CaseStructureTests(unittest.TestCase):

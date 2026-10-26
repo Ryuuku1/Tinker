@@ -234,10 +234,17 @@ which records `adaptive` and `mergedFrom`.
 - Only the plugin arm re-runs.
 - A case with an errored run is left as it is, since the result is invalid anyway.
 - A case that already has three runs is not re-run.
+- A case that fell short here but has fewer runs in the baseline runs again at the
+  baseline's own commit until the counts match. Usually that is a baseline case perfect
+  in its one run. The runs are recorded under `baselineTopUp`, for `gate` to pool.
+- The baseline's commit is found by the `tree` fingerprint the baseline recorded: a hash
+  of the measured files, leaving out `accepted.json`, results and bytecode caches. The
+  runner tries HEAD, then the last ten commits that changed `accepted.json`. With no
+  match the baseline keeps its runs, and `gate` lists the case as uneven.
 
 One unlucky run then costs a case a third of its score instead of all of it, while a
-real regression still fails three times. A case that fell short in the baseline also
-gets the runs it had there.
+real regression still fails three times. Both sides of the comparison end with the same
+number of runs for every case that fell short on either.
 
 `gate` scores the plugin arm per set against `evals/live/accepted.json`: each case's
 mean score and mean cost per run, averaged over the set's cases (a case run three times
@@ -249,13 +256,17 @@ the accepted one minus 0.02 and its cost per run at most 10% higher
 - **Another model or mode:** a result from another model or another adaptive mode than
   the baseline never passes, since re-runs lift a flaky case's score. It can only be
   accepted, which replaces the baseline.
-- **Uneven runs:** the gate lists a case that fell short on one side and ran a different
-  number of times on each. The usual one is a baseline case that was perfect in its one
-  run; its mean is the weaker estimate, so measure it to the same count before trusting
-  a verdict it decides.
-- **Accepting:** `--accept` records model, adaptive mode, commit, and the per-set and
-  per-case score, cost per run and run count. It keeps the sets and cases the result did
-  not cover. Commit `accepted.json` with the change it measured.
+- **Pooled baseline runs:** the gate pools a result's `baselineTopUp` runs into that
+  case's baseline mean, and moves the set's mean by the change. It prints which cases it
+  pooled.
+- **Uneven runs:** the gate lists a case that still fell short on one side and ran a
+  different number of times on each, such as one whose baseline commit was not found.
+  Its mean over fewer runs is the weaker estimate, so measure it to the same count
+  before trusting a verdict it decides.
+- **Accepting:** `--accept` records model, adaptive mode, commit, the measured tree's
+  fingerprint, and the per-set and per-case score, cost per run and run count. It keeps
+  the sets and cases the result did not cover. Commit `accepted.json` with the change it
+  measured, so the commit that holds it also holds the measured tree.
 
 Without a baseline, `gate` reports `no baseline` and only `--accept` succeeds. The first
 baseline is the user's call, from a full, reviewed run (`run --adaptive` with no
