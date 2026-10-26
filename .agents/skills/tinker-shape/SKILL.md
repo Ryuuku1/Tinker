@@ -25,7 +25,10 @@ an idea discussion does not authorize implementation.
    to [implement](../tinker-implement/SKILL.md) and continue without requesting
    the same permission again. Stop only for a material unresolved decision or
    an action outside the authorization. For design-only work, deliver the design.
-6. End with the [retro](../../../policies/learning.md#retro).
+6. End with the [retro](../../../policies/learning.md#retro): first save its lines, with
+   the policy's front matter, to the Tinker checkout's
+   `.tinker/retros/<yyyy-mm-dd>-<slug>-shape.md`, then close the final message with
+   them.
 
 ## Grill mode
 

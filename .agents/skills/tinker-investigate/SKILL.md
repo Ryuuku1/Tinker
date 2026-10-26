@@ -39,7 +39,9 @@ do the [task start](../../../policies/workspace.md#task-start) before changing c
    report actual results using [evidence policy](../../../policies/evidence.md).
    Distinguish pre-existing failures from new ones only when evidence supports it.
 6. End with the [retro](../../../policies/learning.md#retro) when this edited or
-   investigated something; an ordinary explanatory question needs none.
+   investigated something: first save its lines, with the policy's front matter, to
+   the Tinker checkout's `.tinker/retros/<yyyy-mm-dd>-<slug>-investigate.md`, then
+   close the final message with them. An ordinary explanatory question needs none.
 
 Stop repeating an identical failed tool approach. Change evidence source or report
 the blocker; do not substitute an invented root cause or successful test result.

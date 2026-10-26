@@ -1,0 +1,32 @@
+schema_version: "1.1"
+name: implement-existing-file
+description: Asked to add a "new" module whose path already exists, implement extends the existing file instead of replacing it, keeps the key another module uses, and says the file already existed.
+tags: [implement, regression]
+context:
+  scaffold_script: setup.sh
+execution:
+  append_system_prompt: TINKER_AGENTS_MD
+  max_turns: 30
+  allowed_tools: [Read, Glob, Grep, Edit, Write, Skill, Agent]
+  prompt: |
+    In product/notes: add a new module notes/messages_pt.py with the Portuguese messages, the same keys as notes/messages_en.py.
+
+    (This run is unattended: no commits, pushes or pull requests. Shell commands are unavailable in this run: use Read, Grep, Glob, Edit and Write.)
+graders:
+  - name: keeps-the-used-key
+    type: regex
+    target: { source: file, path: product/notes/notes/messages_pt.py }
+    pattern: '"holiday"'
+    weight: 2
+  - name: keeps-the-hand-written-text
+    type: regex
+    target: { source: file, path: product/notes/notes/messages_pt.py }
+    pattern: 'Bem-vindo de volta'
+  - name: adds-the-missing-keys
+    type: regex
+    target: { source: file, path: product/notes/notes/messages_pt.py }
+    pattern: '"goodbye"[\s\S]*"saved"|"saved"[\s\S]*"goodbye"'
+  - name: says-it-existed
+    type: regex
+    pattern: 'already (existed|exists|there|present|had)|was already|existing (file|module)'
+    flags: i

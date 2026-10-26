@@ -37,6 +37,9 @@ graph after this step per [Graphify](../.agents/skills/tinker-graphify/SKILL.md)
 Existing edits belong to the user unless this task demonstrably created them.
 Never reset, stash, revert or overwrite unrelated changes. When an edited area
 overlaps the task, inspect it and preserve intent; ask only for a real conflict.
+Before creating a file, check that its path is free, even when the request calls it
+new: a tool or script never overwrites a file this task did not create. Extend that
+file and keep what its callers use, or report the conflict.
 Preserve existing encoding and line endings, including mixed endings. Inspect the
 diff for whole-file normalization after a small edit; reapply only the owned edit
 when the editing tool causes unrelated churn. Follow repository formatting rules.

@@ -1,18 +1,18 @@
 {
-  "acceptedAt": "2026-10-26T19:57:56.790Z",
-  "result": "20261026-195754-6c0a90-even.json",
-  "commit": "cd82973",
+  "acceptedAt": "2026-10-26T19:57:57.710Z",
+  "result": "20261026-195756-ed4f14-even.json",
+  "commit": "c3f20ef",
   "model": "opus",
   "adaptive": true,
   "sets": {
     "regression": {
-      "score": 0.875,
-      "costPerRunUsd": 0.1678,
-      "runs": 34
+      "score": 0.92,
+      "costPerRunUsd": 0.1801,
+      "runs": 35
     },
     "heldout": {
       "score": 0.889,
-      "costPerRunUsd": 0.129,
+      "costPerRunUsd": 0.13,
       "runs": 5
     }
   }
