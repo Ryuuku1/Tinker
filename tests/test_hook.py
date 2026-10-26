@@ -1005,6 +1005,7 @@ class CommandTests(Fixture):
         plan = json.loads(out)
         self.assertEqual((code, plan["rrule"]), (0, "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=7;BYMINUTE=0"))
         self.assertTrue(plan["prompt"].startswith(MARKER))
+        self.assertIn("needs an approval nobody can give stalls the run", plan["prompt"])  # no shell or fetch prompts
         self.assertEqual(plan["agent"], "tinker-reviewer")
         code, out, _ = self.cli("schedule-plan", "--app", "antigravity", "--role", "reviewer", "--repo", str(self.repo),
                                 "--cron", "30 18 * * *", "--task", "x")

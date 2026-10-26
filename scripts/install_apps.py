@@ -53,9 +53,10 @@ TOOLS = {
               "antigravity": ["view_file", "grep_search", "replace_file_content", "write_to_file", "run_command"],
               "sandbox": "workspace-write", "policy": "sandbox"},
 }
-# A role's optional `tier: light` marks a search-only helper: Claude runs it on its small model and every host gives it
-# only its own charter, so a lookup costs a fraction of a full specialist. A cost hint, not a model matrix.
-TIERS = {"light": {"claude": "haiku"}}
+# A role's optional `tier: light` marks a search-only helper: Claude runs it on its small model at low effort, and every
+# host gives it only its own charter (on Claude also without CLAUDE.md, which would load the Lead charter), so a lookup
+# costs a fraction of a full specialist. A cost hint, not a model matrix.
+TIERS = {"light": {"claude": "model: haiku\neffort: low\nomitClaudeMd: true\n"}}
 FINAL = {"read": "Read/search and return findings only; the Lead saves any requested artifact.",
          "write": "Edit or execute writing commands only while explicitly holding sole writing ownership."}
 
@@ -85,9 +86,9 @@ def instructions(role, access, where, tier=None):
 
 
 def claude_agent(name, fields, body):
-    model = f"model: {TIERS[fields['tier']]['claude']}\n" if fields.get("tier") else ""
+    tier = TIERS[fields["tier"]]["claude"] if fields.get("tier") else ""
     return (f"---\nname: {name}\ndescription: {json.dumps(fields['description'])}\n"
-            f"tools: {TOOLS[fields['access']]['claude']}\n{model}---\n\n{body}\n")
+            f"tools: {TOOLS[fields['access']]['claude']}\n{tier}---\n\n{body}\n")
 
 
 def codex_agent(name, fields, body):

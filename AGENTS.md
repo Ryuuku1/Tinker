@@ -21,8 +21,9 @@ Graphify is optional. Load [Graphify](.agents/skills/tinker-graphify/SKILL.md)
 for an explicit graph request, a justified broad topology question, or task start
 when the playbook says `Graph: auto`. Use only a verified clean-HEAD graph.
 
-- Question, explanation or comparison: answer from relevant source; no product
-  source mutation. Research current primary documentation when freshness matters.
+- Question, explanation or comparison: answer first, from relevant source, then cite
+  `path:line` and what you could not verify; no product source mutation. Research
+  current primary documentation when freshness matters.
   Distinguish verified facts, inference, recommendations and unknowns.
 - Feature or refactor: load [implement](.agents/skills/tinker-implement/SKILL.md).
 - Defect: load [investigate](.agents/skills/tinker-investigate/SKILL.md).

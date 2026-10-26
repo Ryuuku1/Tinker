@@ -42,8 +42,13 @@ if args[:1] == ["-p"]:
     sys.exit(0)
 if args[:2] == ["plugin", "eval"]:
     result = Path(args[args.index("--json") + 1])
-    result.write_text(json.dumps({"startedAt": "2026-10-19T00:00:00Z", "suite": {"modelOverride": "opus"},
-                                  "cases": []}), encoding="utf-8")
+    doc = {"startedAt": "2026-10-19T00:00:00Z", "suite": {"modelOverride": "opus"}, "costUsd": 0.5,
+           "cases": config.get("cases") or []}
+    if config.get("rerun_score") is not None and "--case" in args and "--runs" in args:  # an --adaptive re-run
+        runs = int(args[args.index("--runs") + 1])
+        run = {"score": config["rerun_score"], "costUsd": 0.1, "turns": 3}
+        doc = {"costUsd": 0.1 * runs, "cases": [{"name": args[args.index("--case") + 1], "arms": {"with": [run] * runs}}]}
+    result.write_text(json.dumps(doc), encoding="utf-8")
 sys.exit(config.get("exit", 0))
 '''
 
@@ -72,11 +77,12 @@ class TempCase(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="tinker_evaltest_"))
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
 
-    def fake_claude(self, usage=None, exit_code=0):
+    def fake_claude(self, usage=None, exit_code=0, cases=None, rerun_score=None):
         bin_dir = self.tmp / "bin"
         bin_dir.mkdir(exist_ok=True)
         (bin_dir / "fake_claude.py").write_text(FAKE_CLAUDE, encoding="utf-8")
-        (bin_dir / "fake.json").write_text(json.dumps({"usage": usage, "exit": exit_code}), encoding="utf-8")
+        (bin_dir / "fake.json").write_text(json.dumps({"usage": usage, "exit": exit_code, "cases": cases,
+                                                       "rerun_score": rerun_score}), encoding="utf-8")
         if os.name == "nt":
             (bin_dir / "claude.cmd").write_text(f'@"{PYTHON}" "%~dp0fake_claude.py" %*\r\n'
                                                 "@exit /b %errorlevel%\r\n", encoding="utf-8")
@@ -147,7 +153,7 @@ class UsageCheckTests(TempCase):
         code, out, probed, went_on = self.outcome("--runs", "30", usage=0.1)
         self.assertTrue(probed)
         self.assertTrue(went_on)
-        self.assertIn("10% used, this run needs ~18% (30 runs)", out)
+        self.assertIn("10% used, this run needs ~12% (30 runs)", out)
 
     def test_unreadable_usage_refuses_unless_forced(self):
         code, out, probed, went_on = self.outcome("--runs", "30", usage=None)
@@ -253,6 +259,27 @@ class RunTests(TempCase):
         self.assertNotIn("--case", args)
         self.assertEqual(len(list((self.checkout / "evals" / "live" / "results").glob("*.json"))), 1)
 
+    def test_adaptive_reruns_only_complete_cases_that_fell_short_and_merges_them(self):
+        def case(name, score, error=None):
+            return {"name": name, "arms": {"with": [{"score": score, "costUsd": 0.2, "turns": 0 if error else 3,
+                                                     "error": error}]}}
+        log = self.fake_claude(cases=[case("alpha", 1.0), case("beta", 0.5), case("gamma", 0, "timed out")],
+                               rerun_score=1.0)
+        code, out = self.main("run", "--adaptive", "--force", "--ablation", "with-without", root=self.checkout,
+                              temp=self.runs)
+        self.assertEqual(code, 0, out)
+        first, again = [c["args"] for c in self.calls(log) if c["args"][:2] == ["plugin", "eval"]]
+        self.assertNotIn("--case", first)
+        for flag, value in (("--case", "beta"), ("--runs", "2"), ("--ablation", "none")):
+            self.assertEqual(again[again.index(flag) + 1], value, flag)
+        self.assertIn("1 case(s) fell short", out)
+        (kept,) = list((self.checkout / "evals" / "live" / "results").glob("*.json"))
+        doc = json.loads(kept.read_text(encoding="utf-8"))
+        self.assertTrue(doc["adaptive"])
+        self.assertEqual(doc["mergedFrom"], ["rerun-beta.json"])
+        self.assertEqual({c["name"]: len(c["arms"]["with"]) for c in doc["cases"]}, {"alpha": 1, "beta": 3, "gamma": 1})
+        self.assertEqual(doc["costUsd"], 0.7)
+
     def test_no_matching_case_starts_nothing(self):
         log = self.fake_claude()
         code, out = self.main("run", "--case", "no-such-case", root=self.checkout, temp=self.runs)
@@ -335,6 +362,31 @@ class GateTests(TempCase):
         record = json.loads(self.accepted.read_text(encoding="utf-8"))
         self.assertEqual(record["model"], "sonnet")
         self.assertEqual(set(record["sets"]), {"regression"})  # the other model's sets are not comparable
+
+    def test_sets_average_per_case_so_reruns_do_not_weigh_more(self):
+        write_case(self.tmp, "reg-two", ["review", "regression"])
+        def runs(*scores):
+            return [{"score": s, "costUsd": 0.1 if len(scores) == 1 else 0.3, "turns": 5} for s in scores]
+        path = self.tmp / "mixed.json"
+        path.write_text(json.dumps({"suite": {"modelOverride": "opus"}, "cases": [
+            {"name": "reg-case", "arms": {"with": runs(1.0)}},
+            {"name": "reg-two", "arms": {"with": runs(0.0, 1.0, 1.0)}}]}), encoding="utf-8")
+        summary, errored = eval_live.summarize(json.loads(path.read_text(encoding="utf-8")), self.tmp)
+        self.assertEqual(errored, [])
+        self.assertEqual(summary["regression"], {"score": 0.833, "costPerRunUsd": 0.2, "runs": 4})
+
+    def test_an_adaptive_result_never_passes_against_a_plain_baseline(self):
+        self.gate(self.result(), "--accept")
+        path = self.result()
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        path.write_text(json.dumps({**doc, "adaptive": True}), encoding="utf-8")
+        code, out = self.gate(path)
+        self.assertEqual(code, 1)
+        self.assertIn("new mode", out)
+        self.assertIn("off -> on", out)
+        self.assertEqual(self.gate(path, "--accept")[0], 0)
+        self.assertTrue(json.loads(self.accepted.read_text(encoding="utf-8"))["adaptive"])
+        self.assertEqual(self.gate(path)[0], 0)
 
     def test_accept_keeps_sets_the_result_did_not_cover(self):
         self.gate(self.result(), "--accept")

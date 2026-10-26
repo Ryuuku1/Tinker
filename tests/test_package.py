@@ -292,9 +292,10 @@ class PackageTests(unittest.TestCase):
 
     def test_front_door_lists_its_forms_and_routes_through_the_lead(self):
         text = (ROOT / '.agents/skills/tinker/SKILL.md').read_text(encoding='utf-8')
-        for form in ('`<task>`', '`status`', '`learn [focus]`', '`eval [args]`', '`playbook <repo>`',
-                     '`schedule <what> <when>`', '`help`'):
+        for form in ('`<task>`', 'No task', '`status`', '`remember <fact>`', '`learn [focus]`', '`eval [args]`',
+                     '`playbook <repo>`', '`schedule <what> <when>`', '`help`'):
             self.assertIn(f'\n## {form}\n', text)
+        self.assertIn("question route, with no workflow skill", ' '.join(text.split()))
         self.assertIn('(../../../AGENTS.md)', text)
         self.assertIn('(.agents/skills/tinker/SKILL.md)', (ROOT / 'AGENTS.md').read_text(encoding='utf-8'))
 

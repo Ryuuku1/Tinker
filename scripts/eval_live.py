@@ -6,10 +6,12 @@ run   Snapshots this checkout once (tracked and untracked files, never ignored o
       scaffold builds its workspace as a Tinker root from the snapshot, so an edit made during a run never reaches a
       case and runs can go in parallel. The run folder stays behind as the record of what was measured; the JSON
       result is copied to evals/live/results/<runId>.json. Defaults: --model opus, -j 4, one run per case unless the
-      case says `runs:`, --ablation none. A call that starts more than 20 agent runs first reads the account's
-      five-hour usage (one Haiku turn) and refuses when the runs likely won't fit; --force skips the check.
-gate  Compares a result with evals/live/accepted.json per set (regression, heldout): exit 0 pass, 1 fail, 2 invalid.
-      --accept records the result as the new baseline.
+      case says `runs:`, --ablation none. --adaptive then runs each case that fell short twice more and merges those
+      runs into the result, so one unlucky run does not decide a gate. A call that starts more than 20 agent runs
+      first reads the account's five-hour usage (one Haiku turn) and refuses when the runs likely won't fit; --force
+      skips the check.
+gate  Compares a result with evals/live/accepted.json per set (regression, heldout), averaging per case: exit 0 pass,
+      1 fail, 2 invalid. --accept records the result as the new baseline.
 
 Eval runs cannot sandbox shell tools on Windows, so cases get Read/Grep/Glob, Write/Edit, Skill and Agent only.
 Scaffolds are bash: they need bash (Git Bash on Windows) and git on PATH.
@@ -35,6 +37,7 @@ PLACEHOLDER = "  append_system_prompt: TINKER_AGENTS_MD"
 ROOT_NOTE = ("This session's working directory is the Tinker root: the charter below is its AGENTS.md, and "
              "the charter's relative links and .tinker/ paths resolve against it.")
 USAGE_CHECK_ABOVE = 20
+RERUNS = 2  # --adaptive: more runs for a case that fell short, so a single miss weighs a third of its score
 # Bundle files only another host reads, and the hooks (an eval measures the charter, not this machine's runtime).
 NOT_IN_BUNDLE = ("hooks/", "plugin.json", ".agents/plugins/")
 RENDER = r"""
@@ -136,6 +139,60 @@ def five_hour_usage(claude):
     return None
 
 
+def usage_refusal(claude, total, percent):
+    """None when `total` more agent runs fit the five-hour window, else why they do not."""
+    usage = five_hour_usage(claude)
+    if usage is None:
+        return ("Could not read the five-hour usage (no rate_limit_event from `claude -p`). "
+                "Check that claude works, or pass --force to skip the check.")
+    used, resets = usage
+    needed = total * percent
+    if used + needed > 100:
+        return (f"Not starting {total} eval runs: at about {percent}% of the five-hour window each they need "
+                f"~{round(needed)}%, and {round(used)}% is already used (the window resets at {resets:%H:%M}). "
+                "Wait for the reset or narrow the run (--case, --tag, --runs, --ablation none); --force skips this "
+                "check.")
+    print(f"Five-hour window: {round(used)}% used, this run needs ~{round(needed)}% ({total} runs).")
+    return None
+
+
+def with_runs(case):
+    return (case.get("arms") or {}).get("with") or []
+
+
+def rerun_short(args, claude, base, bundle, env, result):
+    """--adaptive: run each case that fell short RERUNS more times and merge those runs into the result."""
+    def fell_short(runs):  # an errored run keeps the result invalid whatever follows, so only complete cases re-run
+        return bool(runs) and all(r.get("turns") and not r.get("error") for r in runs) and \
+            sum(float(r.get("score") or 0) for r in runs) < len(runs)
+    doc = json.loads(result.read_text(encoding="utf-8-sig"))
+    short = [case for case in doc.get("cases") or [] if fell_short(with_runs(case))]
+    doc["adaptive"], doc["mergedFrom"] = True, []
+    if short:
+        print(f"Adaptive: {len(short)} case(s) fell short, each runs {RERUNS} more times: "
+              f"{', '.join(c['name'] for c in short)}", flush=True)
+    refusal = (None if args.force or RERUNS * len(short) <= USAGE_CHECK_ABOVE
+               else usage_refusal(claude, RERUNS * len(short), args.percent_per_run))
+    if refusal:
+        print(f"{refusal} The first runs stand.", file=sys.stderr)
+        short = []
+    for case in short:
+        again_path = result.with_name(f"rerun-{case['name']}.json")
+        subprocess.run(base + ["--ablation", "none", "--json", str(again_path), "--case", case["name"],
+                               "--runs", str(RERUNS)], cwd=bundle, env=env)
+        try:
+            again = json.loads(again_path.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            print(f"Adaptive: the re-run of {case['name']} wrote no result; its first runs stand.", file=sys.stderr)
+            continue
+        for other in again.get("cases") or []:
+            if other.get("name") == case["name"]:
+                case.setdefault("arms", {}).setdefault("with", []).extend(with_runs(other))
+        doc["costUsd"] = round(float(doc.get("costUsd") or 0) + float(again.get("costUsd") or 0), 4)
+        doc["mergedFrom"].append(again_path.name)
+    result.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+
 def snapshot(root, dest):
     """Copy the checkout's tracked and untracked-but-not-ignored files into dest."""
     listed = subprocess.run(["git", "-C", str(root), "-c", "core.quotepath=off", "ls-files", "-z", "--cached",
@@ -219,18 +276,9 @@ def run(args, root, temp=None):
     if total == 0:
         raise EvalError("No case matches --case/--tag.")
     if not args.force and total > USAGE_CHECK_ABOVE:
-        usage = five_hour_usage(claude)
-        if usage is None:
-            raise EvalError("Could not read the five-hour usage (no rate_limit_event from `claude -p`). "
-                            "Check that claude works, or pass --force to skip the check.")
-        used, resets = usage
-        needed = total * args.percent_per_run
-        if used + needed > 100:
-            raise EvalError(f"Not starting {total} eval runs: at about {args.percent_per_run}% of the five-hour window "
-                            f"each they need ~{round(needed)}%, and {round(used)}% is already used (the window resets "
-                            f"at {resets:%H:%M}). Wait for the reset or narrow the run (--case, --tag, --runs, "
-                            "--ablation none); --force skips this check.")
-        print(f"Five-hour window: {round(used)}% used, this run needs ~{round(needed)}% ({total} runs).")
+        refusal = usage_refusal(claude, total, args.percent_per_run)
+        if refusal:
+            raise EvalError(refusal)
     env = scaffold_env()
 
     run_id = f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}"
@@ -239,9 +287,9 @@ def run(args, root, temp=None):
     snapshot(root, tree)
     bundle = render_bundle(tree, run_dir / "home")
     result = run_dir / "result.json"
-    command = [claude, "plugin", "eval", ".", "--eval-dir", BUNDLE_EVALS, "--scaffold", "--allow-tools", "Write",
-               "Edit", "--trust-plugin", "--no-publish", "--json", str(result), "--model", args.model,
-               "--concurrency", str(args.jobs), "--ablation", args.ablation]
+    base = [claude, "plugin", "eval", ".", "--eval-dir", BUNDLE_EVALS, "--scaffold", "--allow-tools", "Write", "Edit",
+            "--trust-plugin", "--no-publish", "--model", args.model, "--concurrency", str(args.jobs)]
+    command = base + ["--json", str(result), "--ablation", args.ablation]
     if args.case:
         command += ["--case", args.case]
     if args.tag:
@@ -253,6 +301,8 @@ def run(args, root, temp=None):
     if not result.is_file():
         print(f"No result was written ({result}); claude exited with {code}.", file=sys.stderr)
         return code or 1
+    if args.adaptive:
+        rerun_short(args, claude, base, bundle, env, result)
     kept = Path(root) / LIVE / "results" / f"{run_id}.json"
     kept.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(result, kept)
@@ -263,28 +313,33 @@ def run(args, root, temp=None):
 # ---------------------------------------------------------------- gate
 
 def summarize(result, root):
-    """Per-set score, cost per run and run count of the plugin arm, plus the cases with errored runs."""
-    runs, errored = {}, []
+    """Per-set score and cost per run of the plugin arm, averaged per case so a case that --adaptive re-ran weighs
+    what a case run once does, the set's run count, and the cases with errored runs."""
+    cases, errored = {}, []
     for case in result.get("cases") or []:
         name = case.get("name")
         yaml = Path(root) / LIVE / str(name) / "case.yaml"
         if not yaml.is_file():
             raise EvalError(f"Case '{name}' in the result has no {LIVE.as_posix()}/{name}/case.yaml.")
-        with_arm, bucket = (case.get("arms") or {}).get("with") or [], case_set(read_case(yaml))
+        with_arm, bucket = with_runs(case), case_set(read_case(yaml))
         if not with_arm:
             errored.append(name)
+        else:
+            cases.setdefault(bucket, []).append(with_arm)
         for r in with_arm:
-            runs.setdefault(bucket, []).append(r)
             if r.get("error") or not r.get("turns"):
                 errored.append(name)
-    if not runs and not errored:
+    if not cases and not errored:
         raise EvalError("The result holds no case runs.")
+    def mean(values):
+        return sum(values) / len(values)
     summary = {}
-    for name in [s for s in SETS if s in runs]:
-        items = runs[name]
-        summary[name] = {"score": round(sum(float(r.get("score") or 0) for r in items) / len(items), 3),
-                         "costPerRunUsd": round(sum(float(r.get("costUsd") or 0) for r in items) / len(items), 4),
-                         "runs": len(items)}
+    for name in [s for s in SETS if s in cases]:
+        items = cases[name]
+        summary[name] = {"score": round(mean([mean([float(r.get("score") or 0) for r in runs]) for runs in items]), 3),
+                         "costPerRunUsd": round(mean([mean([float(r.get("costUsd") or 0) for r in runs])
+                                                      for runs in items]), 4),
+                         "runs": sum(len(runs) for runs in items)}
     return summary, list(dict.fromkeys(errored))
 
 
@@ -298,9 +353,10 @@ def gate(args, root):
         print(f"INVALID: {error}")
         return 2
     accepted = json.loads(accepted_path.read_text(encoding="utf-8-sig")) if accepted_path.is_file() else None
-    model = (result.get("suite") or {}).get("modelOverride")
+    model, adaptive = (result.get("suite") or {}).get("modelOverride"), bool(result.get("adaptive"))
     new_model = bool(accepted) and str(accepted.get("model")) != str(model)
-    passed = not errored and not new_model and bool(summary)
+    new_mode = bool(accepted) and bool(accepted.get("adaptive")) != adaptive  # re-runs lift a flaky case's score
+    passed = not errored and not new_model and not new_mode and bool(summary)
     print("| Set | Runs | Score | Accepted | Cost/run (USD) | Accepted | Verdict |")
     print("| --- | --- | --- | --- | --- | --- | --- |")
     for name, now in summary.items():
@@ -309,6 +365,8 @@ def gate(args, root):
             verdict = "INVALID"
         elif new_model:
             verdict = "new model"
+        elif new_mode:
+            verdict = "new mode"
         elif not base:
             verdict = "no baseline"
         elif now["score"] < base["score"] - args.score_tolerance:
@@ -328,14 +386,18 @@ def gate(args, root):
     if new_model:
         print(f"Model changed ({accepted.get('model')} -> {model}): this result cannot pass the gate; "
               "--accept makes it the new baseline.")
+    if new_mode:
+        print(f"Adaptive mode changed ({'on' if accepted.get('adaptive') else 'off'} -> {'on' if adaptive else 'off'}): "
+              "this result cannot pass the gate; --accept makes it the new baseline.")
     if not accepted:
         print(f"No baseline at {accepted_path}: review the result, then --accept records the first one.")
     if args.accept:
-        sets = dict((accepted or {}).get("sets") or {}) if not new_model else {}
+        sets = dict((accepted or {}).get("sets") or {}) if not (new_model or new_mode) else {}
         sets.update(summary)
         commit = subprocess.run(["git", "-C", str(root), "rev-parse", "--short", "HEAD"], capture_output=True, text=True)
         record = {"acceptedAt": result.get("startedAt"), "result": result_path.name,
-                  "commit": commit.stdout.strip() if commit.returncode == 0 else "", "model": model, "sets": sets}
+                  "commit": commit.stdout.strip() if commit.returncode == 0 else "", "model": model,
+                  "adaptive": adaptive, "sets": sets}
         accepted_path.parent.mkdir(parents=True, exist_ok=True)
         accepted_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8", newline="\n")
         print(f"Accepted as the new baseline: {accepted_path}")
@@ -355,9 +417,11 @@ def parser():
     r.add_argument("--model", default="opus")
     r.add_argument("-j", "--jobs", type=int, default=4, help="agent runs at once (1-8)")
     r.add_argument("--ablation", choices=("none", "with-without"), default="none")
+    r.add_argument("--adaptive", action="store_true",
+                   help=f"run each case that falls short {RERUNS} more times and merge those runs into the result")
     r.add_argument("--force", action="store_true", help="skip the five-hour usage check")
-    r.add_argument("--percent-per-run", type=float, default=0.6,
-                   help="share of the five-hour window one agent run is assumed to use (default 0.6)")
+    r.add_argument("--percent-per-run", type=float, default=0.4,
+                   help="share of the five-hour window one agent run is assumed to use (default 0.4)")
     g = sub.add_parser("gate", help="compare a result with the accepted baseline")
     g.add_argument("--result", required=True)
     g.add_argument("--accept", action="store_true", help="record this result as the new baseline")

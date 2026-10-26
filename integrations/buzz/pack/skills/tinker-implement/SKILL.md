@@ -10,9 +10,13 @@ if not already loaded. Read the target repository's rules and existing user diff
 then do the task start (`policies/workspace.md` in the Tinker checkout): its
 `## Agent playbook` section, the latest base and the graph when it says `auto`.
 
-1. Translate the request into observable acceptance criteria. Inspect the owning
-   symbols, relevant callers and an existing analogous implementation. Ask only
-   for missing information that blocks a safe result.
+1. Translate the request into observable acceptance criteria and list them before
+   coding, with every attached design (mockup, screenshot, design file) opened before
+   the first change. When a design and the text disagree, ask now; unattended, follow
+   the design and record the disagreement. Inspect the owning symbols, relevant
+   callers and an existing analogous implementation. Ask only for missing information
+   that blocks a safe result. Check any access outside the repository (a database, a
+   design file, a cloud resource) now with one cheap call and report a failure at once.
 2. Choose the smallest safe change, climbing this ladder and stopping at the first
    rung that holds: does the code need to exist at all; does the codebase already
    have it; does the standard library or an existing dependency cover it; only then
@@ -29,7 +33,9 @@ then do the task start (`policies/workspace.md` in the Tinker checkout): its
    "done" claim. Use evidence policy (`policies/evidence.md` in the Tinker checkout). For a
    changed UI, API or CLI flow, verify the running application when relevant and
    possible, per application verification (`policies/app-verification.md` in the Tinker checkout).
-5. Inspect the final diff against criteria and the original user changes. Request
+5. Tick each criterion with its evidence (a test, a command result, a screenshot
+   compared with the design at the same viewport); one without evidence is unverified,
+   never done. Inspect the final diff against the original user changes. Request
    an independent review only when the risk justifies it and delegation permits.
    Fix material findings and reverify affected behavior.
 6. Leave the deliverable as the playbook says; commit only when authorized. Return

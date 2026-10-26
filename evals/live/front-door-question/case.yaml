@@ -1,0 +1,45 @@
+schema_version: "1.1"
+name: front-door-question
+description: A question through the front door takes the charter's question route - answered first with path:line evidence, without a workflow skill, a subagent, product edits, a checkpoint or a retro.
+tags: [question, regression]
+context:
+  scaffold_script: setup.sh
+execution:
+  append_system_prompt: TINKER_AGENTS_MD
+  max_turns: 15
+  allowed_tools: [Read, Glob, Grep, Edit, Write, Skill, Agent]
+  prompt: |
+    /tinker:tinker In product/shop: is it true that apply_discount rounds half down?
+graders:
+  - name: answers-no-first
+    type: llm
+    criteria: Right after naming the repository, the reply answers no, before its evidence - apply_discount rounds half up, because it adds 50 before the integer division.
+    weight: 2
+  - name: cites-line
+    type: regex
+    pattern: 'pricing\.py:\d+'
+  - name: no-workflow-skill
+    type: tool_used
+    tool: Skill
+    input_match: 'tinker-(implement|investigate|review|shape|artifacts)'
+    min: 0
+    max: 0
+  - name: no-subagent
+    type: tool_used
+    tool: Agent
+    min: 0
+    max: 0
+  - name: no-product-edits
+    type: tool_used
+    tool: Edit
+    input_match: 'product[\\/]'
+    min: 0
+    max: 0
+  - name: no-checkpoint
+    type: file_exists
+    path: .tinker/tasks/*.md
+    exists: false
+  - name: no-retro
+    type: file_exists
+    path: .tinker/retros/*.md
+    exists: false

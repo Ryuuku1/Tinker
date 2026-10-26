@@ -211,8 +211,8 @@ system prompt (the `TINKER_AGENTS_MD` placeholder, filled in per run).
 
 ```text
 python scripts/eval_live.py run [--case GLOB] [--tag TAG ...] [--runs N] [--model M]
-                                [-j N] [--ablation none|with-without] [--force]
-                                [--percent-per-run F]
+                                [-j N] [--ablation none|with-without] [--adaptive]
+                                [--force] [--percent-per-run F]
 python scripts/eval_live.py gate --result evals/live/results/<runId>.json [--accept]
 ```
 
@@ -226,23 +226,43 @@ doubles the runs). It prints the result path and copies the JSON to the ignored
 `evals/live/results/<runId>.json`. Its exit code is `claude plugin eval`'s (1 when a
 case scores below 1.0).
 
-`gate` scores the plugin arm per set: mean run score and mean cost per run against
-`evals/live/accepted.json`. It passes (exit 0) when each set's score is at least the
-accepted one minus 0.02 and its cost per run at most 10% higher (`--score-tolerance`,
-`--cost-tolerance`); otherwise it fails (exit 1). A result with errored or unstarted
-runs is invalid (exit 2) and cannot be accepted. A result from another model than the
-baseline never passes; it can only be accepted, which replaces the baseline. `--accept`
-records model, commit, per-set score, cost per run and run count, keeping sets the
-result did not cover; commit `accepted.json` with the change it measured.
+`--adaptive` then runs each case that fell short of 1.0 twice more (plugin arm only;
+a case with an errored run is left as it is, since the result is invalid anyway) and
+merges those runs into the result, which records `adaptive` and `mergedFrom`. One
+unlucky run then costs a case a third of its score instead of all of it, while a real
+regression still fails three times; the extra runs go only where a case fell short.
+
+`gate` scores the plugin arm per set against `evals/live/accepted.json`: each case's
+mean score and mean cost per run, averaged over the set's cases (a case run three times
+weighs what a case run once does). It passes (exit 0) when each set's score is at least
+the accepted one minus 0.02 and its cost per run at most 10% higher
+(`--score-tolerance`, `--cost-tolerance`); otherwise it fails (exit 1). A result with
+errored or unstarted runs is invalid (exit 2) and cannot be accepted. A result from another model or another
+adaptive mode than the baseline never passes (re-runs lift a flaky case's score); it can
+only be accepted, which replaces the baseline. `--accept` records model, adaptive mode,
+commit, per-set score, cost per run and run count, keeping sets the result did not
+cover; commit `accepted.json` with the change it measured.
 
 No baseline exists yet: until one does, `gate` reports `no baseline` and only `--accept`
 succeeds. The first baseline must be recorded by the user from a full, reviewed run
-(`run` with no filter, then `gate --accept`), never by an agent.
+(`run` with no filter, then `gate --accept`), never by an agent. Record it with
+`--adaptive` when learn passes will measure with it: the gate compares like with like.
+
+Writing cases: a case meant to measure a change must fall short on the base branch
+before the change (red first); one that passes there too is only a regression guard,
+worth its runs for behavior a later edit could break. Grade a fact the answer must
+state with a `regex` grader and keep an `llm` judge to one or two facts. A judge that
+fails answers meeting every clause is noise: replace it with discriminating patterns,
+checked offline against the grader evidence stored in past results. A case that edits
+code can outlast the 300-second default; give it `timeout_seconds: 600` under
+`execution`.
 
 Cost and usage: every agent run is a full Claude session on your own account, sharing
 one rate limit. A call that starts more than 20 agent runs first reads the five-hour
-window with one Haiku turn and refuses when the runs (assumed `--percent-per-run`, 0.6%
-of the window each) will not fit; it also refuses when the usage cannot be read.
+window with one Haiku turn and refuses when the runs (assumed `--percent-per-run`, 0.4%
+of the window each; measured Opus runs used about 0.2-0.6%) will not fit; it also
+refuses when the usage cannot be read. `--adaptive` checks again before more than 20
+re-runs.
 `--force` skips the check. A run that hits the usage limit still costs what it spent
 and is invalid. Narrow a run with `--case`, `--tag` or `--runs 1` while iterating.
 

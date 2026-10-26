@@ -40,6 +40,8 @@ overlaps the task, inspect it and preserve intent; ask only for a real conflict.
 Preserve existing encoding and line endings, including mixed endings. Inspect the
 diff for whole-file normalization after a small edit; reapply only the owned edit
 when the editing tool causes unrelated churn. Follow repository formatting rules.
+Unless the repository says otherwise, work-item numbers go in commits and pull
+requests, never in code comments, docs or new test names.
 Do not change a repository-wide architecture document for ticket notes. Change
 that document only when the user task actually includes architecture work.
 

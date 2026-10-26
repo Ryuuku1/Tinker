@@ -1849,6 +1849,8 @@ def schedule_plan(role, repo, cron, task, app):
     prompt = (f"{MARKER} {role}: {task}\nRepository: {repo}\n"
               f"Delegate to the {agent} teammate or apply that role's charter yourself; follow the Tinker Lead charter.\n"
               "This run is unattended: consequential commands are denied; never commit, push, publish or change remote items.\n"
+              "Prefer file read, search and write tools: a command or fetch that needs an approval nobody can give "
+              "stalls the run.\n"
               "End with a final message stating what you checked, the findings with evidence, and anything that needs the user; "
               "Tinker stores it as this run's outcome for `status`.")
     plan = {"task_id": f"tinker-{role}-{slug}", "app": app, "role": role, "agent": agent, "cron": cron.strip(),

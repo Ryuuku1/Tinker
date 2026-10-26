@@ -7,6 +7,29 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-10-26: third comparison with the organization's edition
+
+The organization's edition was compared again at `d351524`, eight commits after the
+`f21890f` comparison below. Those commits came from one working session: a study of the
+host's current documentation (release notes, model prices, prompting and skill
+guidance) and of that edition's own evidence (retros, eval history, routine runs). Its
+user asked to adopt what fits personal use. Organization material stays out: its
+products' playbook rules, team playbooks and work-item recipes.
+
+| Area | Decision |
+| --- | --- |
+| Questions | Adopted: the front door sends a question to the charter's question route instead of implementation, its "anything else" branch; the charter answers first, from source, then cites `path:line` and what was not verified |
+| Front door | Adopted: with no task it says where the user stands (branch, changed files, open checkpoints, a stale-install note) and offers up to three next steps; `remember <fact>` saves a knowledge candidate, which every host reads, unlike one host's memory |
+| Health | Adopted in `status`: the checkout behind its remote, a stale app install, a routine that stopped reporting. The organization's installed-commit check was already covered here by the per-app charter digest |
+| First-time-right | Adopted: implementation lists its acceptance criteria and every attached design before coding, asks when a design and the text disagree, checks outside access up front and ticks each criterion with evidence; investigation captures the reporter's real scenario, fixes every path that produces the symptom (callers and sibling handlers) and verifies on that scenario. The evidence was first deliveries sent back for a missed design, a sibling path or a second template block |
+| Rework | Adopted: implement and investigate retros record a `round`, and weekly maintenance reports the share above 1 |
+| Evaluation | Adopted: `run --adaptive` runs a case that fell short twice more and merges the runs; the gate averages per case and treats a changed adaptive mode like a changed model; a case that measures a change fails on the base branch first; facts are graded with patterns and judges keep to one or two facts; `--percent-per-run` 0.6 -> 0.4 from measured runs. The two new cases, a front-door question and a sibling-path fix, passed one run each before and after the change, so they are regression guards, not evidence that the change helped |
+| Routines | Adopted: every scheduled prompt asks for file tools, because a command or fetch that needs an approval nobody can give stalls the run (it stopped the organization's weekly runs); weekly maintenance also lists auto-memory facts that other hosts need; the monthly scan also checks the provider's models, prices and prompting guidance against the helpers and skills, and learn reads its report; graph refreshes run in the foreground |
+| Helpers | Adopted for the light tier only: on Claude, low effort and no `CLAUDE.md`, which imported the Lead charter into every lookup. The organization's researcher on a mid-size model was not adopted: provider defaults stay |
+| Code hygiene | Adopted as a default: work-item numbers go in commits and pull requests, not in code comments, docs or new test names, unless the repository says otherwise |
+| Not changed here | Pre-allowing the scan's documentation sites in the Claude project settings: it needs the user's explicit approval, so until then the scan fetches only sites the settings allow |
+| Not adopted | Headless-launcher hardening (no launcher here), merging guardrails into user settings (the installed hook gate covers every project), the teaching skill (a separate decision) |
+
 ## 2026-10-19: second comparison with the organization's edition
 
 The organization's edition was compared again, at `f21890f`, 29 commits after the

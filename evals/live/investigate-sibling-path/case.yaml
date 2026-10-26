@@ -1,0 +1,30 @@
+schema_version: "1.1"
+name: investigate-sibling-path
+description: A rounding defect reported on flight fares also lives in a copied sibling (hotel rates); the fix covers every path that produces the symptom and the report names the sibling.
+tags: [investigate, regression]
+context:
+  scaffold_script: setup.sh
+execution:
+  append_system_prompt: TINKER_AGENTS_MD
+  max_turns: 30
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Edit, Write, Skill, Agent]
+  prompt: |
+    In product/trips: in the trip export, a flight fare of 10.005 EUR shows as 10.00 EUR. Amounts must round half up to the cent (10.01 EUR). Fix it.
+
+    (This run is unattended: no commits, pushes or pull requests. Shell commands are unavailable in this run: use Read, Grep, Glob, Edit and Write.)
+graders:
+  - name: flights-fixed
+    type: regex
+    target: { source: file, path: product/trips/trips/exports/flights.py }
+    pattern: 'math\.floor'
+    match: not_contains
+  - name: hotels-sibling-fixed
+    type: regex
+    target: { source: file, path: product/trips/trips/exports/hotels.py }
+    pattern: 'math\.floor'
+    match: not_contains
+    weight: 2
+  - name: names-sibling
+    type: regex
+    pattern: 'hotels\.py|rate_cell|hotel_row'

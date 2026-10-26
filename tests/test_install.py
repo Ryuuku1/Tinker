@@ -160,8 +160,9 @@ class RenderTests(InstallCase):
         self.assertNotRegex(reviewer, r"(?m)^(memory|hooks|mcpServers|permissionMode):")
         self.assertIn(bundle.as_posix(), reviewer)
         explorer = (bundle / "agents" / "explorer.md").read_text(encoding="utf-8")
-        self.assertIn("model: haiku\n", explorer)  # the light tier's cost hint, Claude only
-        self.assertNotIn("AGENTS.md", explorer)  # and a charter-only brief
+        self.assertIn("model: haiku\neffort: low\n", explorer)  # the light tier's cost hint, Claude only
+        self.assertNotIn("AGENTS.md", explorer)  # and a charter-only brief,
+        self.assertIn("omitClaudeMd: true\n", explorer)  # without the CLAUDE.md that would import the Lead charter
         self.assertNotIn("model:", reviewer)
         agents = sorted((self.home / ".codex" / "agents").glob("tinker-*.toml"))
         self.assertEqual(len(agents), 9)

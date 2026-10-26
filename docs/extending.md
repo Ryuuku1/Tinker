@@ -15,8 +15,9 @@ user runs `python scripts/install_apps.py --write-descriptors` in a terminal (th
 installed gate refuses the installer inside an agent); tests fail on drift.
 Never hand-edit a generated descriptor. Do not add a model, personal memory or MCP
 grant by default. The one exception is `tier: light` (read roles only, as the
-Explorer uses): Claude runs that helper on its small model and every host gives it
-only its own charter, so keep such a role to plain search. Adding a role never expands
+Explorer uses): Claude runs that helper on its small model at low effort without
+`CLAUDE.md`, and every host gives it only its own charter, so keep such a role to plain
+search. Adding a role never expands
 the worker budget.
 
 ## Add a skill
@@ -77,8 +78,8 @@ For Claude Code, measure behavior with the live cases first. A case is a folder
 `evals/live/<name>/` with a `case.yaml` (prompt, allowed tools, graders, and exactly
 one of the tags `regression` or `heldout`) and a `setup.sh` that builds its workspace
 with the helpers in `evals/live/_shared/workspace.sh`. Add or tighten a `regression`
-case when a change alters behavior no case covers; never edit a `heldout` case to fit
-a change. Iterate with `python scripts/eval_live.py run --case <name> --runs 1`, then
+case when a change alters behavior no case covers, and see it fall short without the
+change first; never edit a `heldout` case to fit a change. Iterate with `python scripts/eval_live.py run --case <name> --runs 1`, then
 run the regression and held-out sets and `python scripts/eval_live.py gate --result
 <path>`; commit `evals/live/accepted.json` with the change when you accept a new
 baseline. `tests/test_eval_live.py` checks every case's structure and scaffold without

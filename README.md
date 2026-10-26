@@ -127,7 +127,7 @@ baseline. Record it yourself once, on the machine and Claude account you use for
 Tinker (each run is a real Claude session and uses your plan):
 
 ```bash
-python scripts/eval_live.py run                        # 15 cases, one run each
+python scripts/eval_live.py run --adaptive             # every case once, a short one twice more
 python scripts/eval_live.py gate --result evals/live/results/<runId>.json --accept
 git add evals/live/accepted.json && git commit -m "chore(evals): accept the first live baseline"
 ```
@@ -174,8 +174,10 @@ hosts, invoke the `tinker` skill or just say the form ("tinker status").
 
 | Form | Does |
 | --- | --- |
-| `/tinker <task>` | Routes the task to the right workflow in this chat |
-| `/tinker status` | Install state, open checkpoints, recent retros, the eval baseline, the latest maintenance report |
+| `/tinker <task>` | Routes the task to the right workflow in this chat; a question gets a direct answer with `path:line` evidence |
+| `/tinker` | Where you stand: branch, changed files, open checkpoints and up to three next steps |
+| `/tinker status` | Health (checkout behind its remote, stale installs, routines that stopped reporting), install state, open checkpoints, recent retros, the eval baseline, the latest maintenance report |
+| `/tinker remember <fact>` | Saves the fact as a knowledge candidate that every host reads |
 | `/tinker playbook <repo>` | Drafts that repository's `## Agent playbook` section for your approval |
 | `/tinker learn [focus]` | Turns recent retros into at most three gated edits on a `tinker/learn-<date>` branch |
 | `/tinker eval [args]` | Runs the live eval cases and the gate (asks first before more than 20 runs) |
@@ -201,8 +203,8 @@ Roles are persistent instructions; real workers are native host agents, used onl
 when useful: at most two active helpers, one writer including the Lead, no recursive
 delegation. Small jobs stay with the Lead. Unavailable helpers mean transparent Lead
 work; role switching is never presented as independent review. The Explorer is the
-one cost-tiered helper: in Claude Code it runs on the small model with only its own
-charter; everything else uses your session's model.
+one cost-tiered helper: in Claude Code it runs on the small model at low effort with
+only its own charter (no `CLAUDE.md`); everything else uses your session's model.
 
 ### Workflows
 
