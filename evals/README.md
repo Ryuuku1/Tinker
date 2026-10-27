@@ -114,13 +114,6 @@ been recorded for any host, so every case is `not-verified`. Establish the first
 baseline only from a complete observed suite for a host, and record it with its
 manifest under `.tinker/evals/<run-id>/`; synthetic records never establish one.
 
-The six `buzz-*` regression cases run through `buzz-acp` against a disposable relay
-([fixtures](fixtures/buzz/README.md)). For live acceptance, invoke `buzz-acp run --task`
-or the conversational service explicitly per host. Keep the JSON terminal record, which
-reports how the turn ended but not whether the task succeeded, together with a relay
-snapshot of the posted messages, and grade the observations as above. Runs driven by a
-scripted model endpoint exercise the harness only and never count as live.
-
 ## Measure actual concurrency and contributions
 
 The grader derives `workers_total`, `peak_active_helpers`, `peak_active_writers`

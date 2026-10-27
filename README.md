@@ -40,9 +40,7 @@ python -m unittest discover -s tests
 ```
 
 The tests take a few minutes and should end with `OK` (some are skipped on purpose,
-for example where Windows cannot create a symlink). If you use the optional Buzz kit,
-also tell this checkout your platform once: `python scripts/tinker_platform.py set
-windows` or `set linux` (see [Windows or Linux](#windows-or-linux)).
+for example where Windows cannot create a symlink).
 
 ### 3. Choose how to run it
 
@@ -286,23 +284,6 @@ is stale or waiting for a recovery command. Force pushes, protected-branch pushe
 branch deletion, discarding work, recursive deletes, remote changes, publishing and
 credential changes need your approval; scheduled runs cannot approve anything. See
 [per-app details and limits](docs/providers.md#optional-user-level-install).
-
-### Windows or Linux
-
-Tinker's own scripts are Python and run on both. The optional [Buzz kit](integrations/buzz/kit/GUIDE.md)
-has a PowerShell 7 version for Windows and a bash version for Linux, kept in step by
-tests. The choice lives in the ignored `.tinker/platform.json`:
-
-```text
-python scripts/tinker_platform.py                 # show the platform in use (auto-detected until you set one)
-python scripts/tinker_platform.py set linux       # or windows, or auto
-python scripts/install_apps.py --platform linux   # the same, while installing into the apps
-python scripts/tinker_platform.py kit setup --owner-npub <npub> --repository <path>   # that platform's kit script
-```
-
-`kit` takes the bash spelling of the options on both platforms and turns it into
-PowerShell parameters on Windows. `TINKER_PLATFORM=windows|linux` overrides the stored
-choice for one command.
 
 ### Continue or switch hosts
 

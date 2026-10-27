@@ -45,7 +45,7 @@ class Fixture(unittest.TestCase):
         (state / "plugin").mkdir(parents=True)
         (state / "plugin" / "AGENTS.md").write_text("# Lead charter snapshot\n", encoding="utf-8")
         (state / "config.json").write_text(json.dumps({"root": str(self.root)}), encoding="utf-8")
-        self.env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("CLAUDE", "CODEX", "BUZZ_"))}
+        self.env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("CLAUDE", "CODEX"))}
         self.env.update(USERPROFILE=str(self.home), HOME=str(self.home))
         patcher = mock.patch.dict(os.environ, {"USERPROFILE": str(self.home), "HOME": str(self.home)})
         patcher.start()
@@ -276,8 +276,8 @@ class ClassifierTests(Fixture):
             posix_home = self.home.as_posix().lstrip("/")
             cases += [(f"Remove-Item -Recurse -Force \\\\{posix_home.replace('/', chr(92))}\\.tinker", "pwsh"),
                       (f"rm -rf //{posix_home}/.claude/plugins/cache", "posix")]
-        # The pwsh backslash rows fail only on Linux or macOS without the fix: run this suite there too
-        # (for example in the Buzz kit's image), since Windows reads \ as a separator already.
+        # The pwsh backslash rows fail only on Linux or macOS without the fix: run this suite there too,
+        # since Windows reads \ as a separator already.
         for command, shell in cases:
             with self.subTest(command=command):
                 self.assertTrue(self.tampers(command, shell), command)

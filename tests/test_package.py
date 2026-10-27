@@ -38,8 +38,7 @@ class PackageTests(unittest.TestCase):
     def test_eight_unique_discoverable_skills(self):
         skills = list((ROOT / ".agents/skills").glob("*/SKILL.md"))
         self.assertEqual(len(skills), 8)
-        pack = ROOT / "integrations/buzz/pack"  # generated copies for Buzz tooling, drift-tested in test_buzz
-        self.assertEqual(len([p for p in package_files() if p.name == "SKILL.md" and not p.is_relative_to(pack)]), 8)
+        self.assertEqual(len([p for p in package_files() if p.name == "SKILL.md"]), 8)
         names = set()
         for path in skills:
             text = path.read_text(encoding="utf-8")
