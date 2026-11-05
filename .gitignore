@@ -9,5 +9,14 @@ Thumbs.db
 !.env.example
 .claude/worktrees/
 
+# Third-party design skills, installed per machine (README: Design skills); skills-lock.json is tracked
+/.agents/skills/*
+!/.agents/skills/tinker*/
+/.claude/skills/
+/.gemini/skills/
+/.claude/agents/impeccable-*
+/.codex/hooks.json
+/.gemini/settings.json
+
 # Live eval results (scripts/eval_live.py run); the accepted baseline evals/live/accepted.json is tracked
 /evals/live/results/

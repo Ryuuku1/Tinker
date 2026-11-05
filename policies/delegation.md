@@ -1,16 +1,40 @@
 # Delegation
 
-The concurrency budget is defined in [AGENTS.md](../AGENTS.md). Track actual native
+The delegation rules are summarized in [AGENTS.md](../AGENTS.md). Track actual native
 worker identities, assignments, running/stopped state and returned evidence.
-At most two helpers may be active; several may contribute sequentially. Reuse a
-worker when its context remains useful. Do not spawn a replacement for a timed-out
+
+## Team size
+
+Pick the number of helpers per task for the best result per cost; there is no
+fixed ceiling. Before dispatch, say in one line how many and why.
+
+- Count the independent, bounded pieces: separate areas to search or analyze,
+  changes on disjoint files, a review or test pass that needs fresh context.
+  Steps where one needs another's result, or that touch the same files, are one piece.
+- A piece gets its own helper only when running it in parallel or in a clean
+  context saves more than the helper costs: the handoff, the context it rereads
+  and the Lead's time checking and integrating its result. A few tool calls, a
+  lookup with a known target, or a step whose result the Lead needs next stays
+  with the Lead. Most tasks need 0 helpers; broad independent work gets one per piece.
+- Use the cheapest capable helper: the Explorer for search, a read-only role for
+  analysis or review, a writer only for edits.
+- Recount when the work changes: release a helper whose piece is done, add one
+  when a new independent piece appears. Several specialists may contribute in
+  sequence. The host's concurrency limit and any limit the user states apply.
+
+## Running helpers
+
+Reuse a worker when its context remains useful. Do not spawn a replacement for a timed-out
 or uncertain worker until its termination is confirmed. An idle but unfinished
 assignment still occupies capacity; completed workers can be resumed within it.
 No automatic explainer, tester or reviewer after ordinary work.
 
-Exactly one agent may hold writing ownership at a time, including the Lead.
-The Lead records the grant in the job checkpoint before dispatch and refrains
-from all file changes while a helper holds it. Helpers return evidence; they do
+Exactly one agent may hold writing ownership of a working tree at a time,
+including the Lead. Parallel writers each get their own worktree from the same
+base, with disjoint files named in the assignment; the Lead applies their results
+one at a time and reruns the gate on the combined change. The Lead records each
+grant in the job checkpoint before dispatch and refrains from file changes in a
+working tree while a helper holds it. Helpers return evidence; they do
 not update the shared checkpoint. Stop writing, obtain the actual result and
 confirm the helper's turn ended before transferring ownership. Commands that may
 write (including tests/builds) require ownership. Worktrees preserve changes but

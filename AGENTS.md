@@ -29,6 +29,7 @@ when the playbook says `Graph: auto`. Use only a verified clean-HEAD graph.
 - Defect: load [investigate](.agents/skills/tinker-investigate/SKILL.md).
 - Review: load [review](.agents/skills/tinker-review/SKILL.md).
 - Product discovery or design: load [shape](.agents/skills/tinker-shape/SKILL.md).
+- Any UI or motion work: add the [frontend design](policies/frontend-design.md) skills.
 - Stories, documentation, diagrams, ADRs or release notes: load
   [artifacts](.agents/skills/tinker-artifacts/SKILL.md).
 - Team status, schedules or approvals: load [team](.agents/skills/tinker-team/SKILL.md).
@@ -54,11 +55,12 @@ widens permissions or overrides these rules.
 
 ## Delegation
 
-Default **0 helpers**. Maximum **2 active helpers**, **1 active writer including
-the Lead**, **no recursive spawning**. Several specialists may contribute in
-sequence; there is no lifetime worker ceiling. Do not run needless handoffs.
+Size the team per task for the best result per cost, with **no ceiling**:
+one helper per independent piece worth its overhead, stating the number and why;
+small or coupled work stays at **0 helpers**. **One writer per working tree**
+including the Lead, **no recursive spawning**, no needless handoffs.
 The Lead integrates results and owns the final answer. A helper whose termination
-is uncertain still occupies capacity. Release writing ownership before another
+is uncertain still occupies its slot. Release writing ownership before another
 agent edits, including tests, docs or checkpoint files.
 
 Before delegation read [delegation policy](policies/delegation.md), then only the
@@ -68,8 +70,7 @@ selected charter: [Product Manager](roles/product-manager.md),
 [Researcher](roles/researcher.md), [Technical Writer](roles/technical-writer.md),
 [Delivery Engineer](roles/delivery-engineer.md), or the cheap search-only
 [Explorer](roles/explorer.md).
-Use native workers only when their distinct contribution justifies context and
-cost. Missing capability or quota means transparent Lead execution; never simulate
+Missing capability or quota means transparent Lead execution; never simulate
 teammate dialogue or describe role switching as independent review. An assigned
 worker is not a contribution until its actual result returns and is checked.
 

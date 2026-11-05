@@ -27,9 +27,10 @@ Use a disposable repository with no production credentials or remote write acces
 Inspect fixture commands first. Pick a case and record host/version, the Tinker
 revision or file hashes, exact prompt, initial repository state and effective tool
 permissions. Run the request through the actual host; preserve tool/worker traces,
-process exit status, test counts, final output and changed-file evidence. Do not
-exceed two active helpers or one writer including the Lead. Sequential specialist
-handoffs may involve more than two distinct workers. Independent jobs need their
+process exit status, test counts, final output and changed-file evidence. Grade
+helper counts against each case's rules; the charter itself sets no fixed ceiling,
+only one writer per working tree. Sequential specialist handoffs may involve more
+distinct workers than are ever active at once. Independent jobs need their
 own isolated package copy and target when evaluating concurrently with development.
 
 Compare user-change sentinels and final diffs yourself. Record absence (no workers,

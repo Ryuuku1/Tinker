@@ -11,10 +11,22 @@ ROOT = Path(__file__).resolve().parents[1]
 EXCLUDED = {".git", ".tinker", "__pycache__"}
 
 
+def third_party(path):
+    """Design skills and agents installed as-is by `npx skills` / `npx impeccable` (and their host copies);
+    Tinker's own are named tinker*."""
+    parts = path.relative_to(ROOT).parts
+    return len(parts) > 2 and not parts[2].startswith("tinker") and (
+        (parts[0] in (".agents", ".claude", ".gemini") and parts[1] == "skills") or parts[:2] == (".claude", "agents"))
+
+
 def package_files():
     worktrees = ROOT / ".claude" / "worktrees"  # ignored linked worktrees hold whole other copies of the package
     return [p for p in ROOT.rglob("*") if p.is_file() and not EXCLUDED.intersection(p.relative_to(ROOT).parts)
-            and not p.is_relative_to(worktrees)]
+            and not p.is_relative_to(worktrees) and not third_party(p)]
+
+
+def own_skills():
+    return list((ROOT / ".agents/skills").glob("tinker*/SKILL.md"))
 
 
 class PackageTests(unittest.TestCase):
@@ -36,7 +48,7 @@ class PackageTests(unittest.TestCase):
                     self.assertTrue(dest.exists())
 
     def test_eight_unique_discoverable_skills(self):
-        skills = list((ROOT / ".agents/skills").glob("*/SKILL.md"))
+        skills = own_skills()
         self.assertEqual(len(skills), 8)
         self.assertEqual(len([p for p in package_files() if p.name == "SKILL.md"]), 8)
         names = set()
@@ -66,9 +78,16 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(agent["features"], {"shell_tool": False})
         self.assertTrue(agent["developer_instructions"].strip())
 
-    def test_codex_concurrency_setting_has_no_model_override(self):
-        config = tomllib.loads((ROOT / ".codex/config.toml").read_text())
-        self.assertEqual(config, {"agents": {"max_concurrent_threads_per_session": 2}})
+    def test_project_sets_no_helper_cap_and_routes_ui_work_to_installed_skills(self):
+        self.assertFalse((ROOT / ".codex/config.toml").exists())  # the Lead sizes the team; Codex's default caps
+        self.assertNotRegex((ROOT / "AGENTS.md").read_text(encoding="utf-8"), r"(?i)maximum \*\*\d+ active helpers")
+        self.assertIn("(policies/frontend-design.md)", (ROOT / "AGENTS.md").read_text(encoding="utf-8"))
+        table = (ROOT / "policies/frontend-design.md").read_text(encoding="utf-8").split("| --- | --- |")[1]
+        names = set(re.findall(r"`([a-z0-9-]+)`", table.split("\n\n")[0]))
+        self.assertGreaterEqual(len(names), 15)
+        # installed per machine, so check the pinned list; `npx impeccable` keeps no lock entry
+        pinned = set(json.loads((ROOT / "skills-lock.json").read_text(encoding="utf-8"))["skills"]) | {"impeccable"}
+        self.assertEqual(names - pinned, set())
 
     def test_claude_reviewer_has_only_file_read_tools(self):
         text = (ROOT / ".claude/agents/tinker-reviewer.md").read_text()
@@ -82,7 +101,7 @@ class PackageTests(unittest.TestCase):
 
     def test_instruction_byte_budgets_are_not_token_claims(self):
         self.assertLessEqual((ROOT / "AGENTS.md").stat().st_size, 6000)
-        for path in (ROOT / ".agents/skills").glob("*/SKILL.md"):
+        for path in own_skills():
             self.assertLessEqual(path.stat().st_size, 3500)
         for path in (ROOT / "roles").glob("*.md"):
             self.assertLessEqual(path.stat().st_size, 2000)
@@ -91,7 +110,7 @@ class PackageTests(unittest.TestCase):
         roots = [ROOT / name for name in (".codex", ".claude", ".gemini", ".agents", "roles", "policies")]
         for directory in roots:
             for path in directory.rglob("*"):
-                if path.is_file() and "worktrees" not in path.relative_to(ROOT).parts:
+                if path.is_file() and "worktrees" not in path.relative_to(ROOT).parts and not third_party(path):
                     text = path.read_text(encoding="utf-8")
                     self.assertNotRegex(text, r"(?i)(?:(?<![a-z])[A-Z]:[\\/]|file:///|/Users/|/home/\w+/)")
                     if path.relative_to(ROOT).as_posix() == ".claude/agents/tinker-explorer.md":
@@ -121,7 +140,7 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(len(roles), 9)  # Lead is canonical AGENTS.md.
         for directory, suffix in (('.codex/agents', '.toml'), ('.claude/agents', '.md'),
                                   ('.agents/agents', '.md')):
-            files = list((ROOT / directory).glob('*' + suffix))
+            files = list((ROOT / directory).glob('tinker-*' + suffix))
             self.assertEqual({p.stem for p in files}, {'tinker-' + r for r in roles})
             for path in files:
                 text = path.read_text(encoding='utf-8')

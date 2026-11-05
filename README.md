@@ -111,6 +111,18 @@ says so. Do this once per project, and let `/tinker learn` refine it over time.
   [providers](docs/providers.md#claude-code) into `~/.claude/settings.json`. A UI change
   then gets a live pass you can watch when its playbook has a `Live pass` recipe.
 
+#### Design skills
+
+UI work loads third-party design skills ([frontend design](policies/frontend-design.md)).
+They are installed per machine, not committed; `skills-lock.json` pins the list. From
+this checkout, choose project scope and symlink when asked:
+
+```bash
+npx skills add emilkowalski/skill
+npx skills add Leonxlnx/taste-skill
+npx impeccable install
+```
+
 #### Routines
 
 Ask `tinker schedule defaults` to set up, in your host's own scheduler, the weekly
@@ -198,8 +210,10 @@ hosts, invoke the `tinker` skill or just say the form ("tinker status").
 | [Explorer](roles/explorer.md) | Cheap read-only search: files, symbols, callers, conventions |
 
 Roles are persistent instructions; real workers are native host agents, used only
-when useful: at most two active helpers, one writer including the Lead, no recursive
-delegation. Small jobs stay with the Lead. Unavailable helpers mean transparent Lead
+when useful: the Lead sizes the team per task for the best result per cost, with no
+fixed ceiling, one writer per working tree and no recursive delegation. Small jobs
+stay with the Lead. UI work also loads the design skills (Impeccable, Emil Kowalski's
+motion and polish skills, Taste) that [frontend design](policies/frontend-design.md) picks. Unavailable helpers mean transparent Lead
 work; role switching is never presented as independent review. The Explorer is the
 one cost-tiered helper: in Claude Code it runs on the small model at low effort with
 only its own charter (no `CLAUDE.md`); everything else uses your session's model.

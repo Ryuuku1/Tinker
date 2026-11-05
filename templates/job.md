@@ -17,7 +17,7 @@ Keep `status` to active, paused, blocked or completed: installed hooks and
 ## Ownership and scope
 
 - Ownership: active / released / uncertain
-- Current writer: Lead / actual helper ID / none
+- Current writer per working tree: Lead / actual helper ID / none
 - Objective and acceptance criteria:
 - Authorized actions; actions still requiring authorization:
 - Package root; command working directory:

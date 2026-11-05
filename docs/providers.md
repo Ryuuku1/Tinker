@@ -18,8 +18,8 @@ In the desktop app add/open this checkout as the project. In a terminal start
 `codex --add-dir <absolute-product-path>` here. Trust the project when appropriate
 so project configuration loads. AGENTS.md provides Lead behavior, .agents/skills/
 contains eight skills, and .codex/agents/ defines nine native specialists.
-The project requests two concurrent helpers; each specialist disables its own
-multi-agent tools. Reader roles request read-only sandboxing and disable the shell
+The project sets no helper cap of its own (Codex's default applies; the Lead sizes
+the team); each specialist disables its own multi-agent tools. Reader roles request read-only sandboxing and disable the shell
 feature; writers request workspace-write. No model is pinned.
 
 Inspect available agents, skills and effective permissions. Parent overrides can

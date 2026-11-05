@@ -54,8 +54,9 @@ changes and provider defaults can start from a different branch. Supply a scoped
 patch or explicit starting state only when required and preserve the original.
 For a new worktree, verify the intended base from current repository evidence;
 never assume `main` or `master`, or treat a surviving old remote ref as the default.
-Do not copy credentials into a worktree. Within a job a second writer must wait,
-even in another worktree; no custom lock service. Recheck drift before applying results.
+Do not copy credentials into a worktree. Within a job a second writer in the same
+working tree must wait; parallel writers need their own worktrees on disjoint files
+([delegation](delegation.md)); no custom lock service. Recheck drift before applying results.
 Retain dirty or active worktrees; never force-remove them on task completion.
 A session started by another session (a side session) saves its work before its final
 message where removing its worktree cannot take it: a commit on its own branch when its
