@@ -7,12 +7,12 @@ tokens, components) and its playbook come first; these skills decide what those
 leave open and never override the user's request, repository conventions or
 [safety](safety.md).
 
-Load a skill natively by name where the host lists it; otherwise read
-`.agents/skills/<name>/SKILL.md` under the Tinker root and follow it. An installed
-Tinker bundle (`tinker:<name>`) copies only Markdown, so run a skill's scripts from
-`.agents/skills/<name>/` in the Tinker checkout. Give a helper without a skill tool
-that path. Load only what the task needs, usually one or two. A skill missing on
-this machine is reported, not improvised; the README's Design skills section installs them.
+Load a skill natively by name where the host lists it; otherwise read its `SKILL.md`
+from where it was installed: `~/.claude/skills/<name>/` or `~/.agents/skills/<name>/`
+at user level, or `.agents/skills/<name>/` in a checkout that installed it per
+project. Give a helper without a skill tool that path. Load only what the task needs,
+usually one or two. A skill missing on this machine is reported, not improvised:
+`python scripts/install_apps.py --design-skills` in the Tinker checkout installs them.
 
 | Task | Skill |
 | --- | --- |

@@ -113,15 +113,20 @@ says so. Do this once per project, and let `/tinker learn` refine it over time.
 
 #### Design skills
 
-UI work loads third-party design skills ([frontend design](policies/frontend-design.md)).
-They are installed per machine, not committed; `skills-lock.json` pins the list. From
-this checkout, choose project scope and symlink when asked:
+UI work loads third-party design skills ([frontend design](policies/frontend-design.md)):
+Emil Kowalski's motion and polish skills, Taste and Impeccable. They are not part of this
+repository; install them at user level, for every project, with Node.js 18+ (re-run to
+update them):
 
 ```bash
-npx skills add emilkowalski/skill
-npx skills add Leonxlnx/taste-skill
-npx impeccable install
+python scripts/install_apps.py --design-skills --dry-run   # shows the npx commands
+python scripts/install_apps.py --design-skills             # or: --app claude|codex|antigravity
 ```
+
+It runs the pinned `skills` and `impeccable` CLIs with telemetry off and without
+Impeccable's design hook (enable that per project with `/impeccable hooks on`). The
+skills come from their upstream repositories; `skills-lock.json` records the reviewed
+versions. Unlike the Tinker install, this works next to another Tinker installation.
 
 #### Routines
 

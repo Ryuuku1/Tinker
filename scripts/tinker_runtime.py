@@ -109,8 +109,9 @@ def charter_files(root):
         path = Path(root) / name
         if path.is_file():
             files.append(path)
-        elif path.is_dir():
-            files.extend(sorted(p for p in path.rglob("*.md") if p.is_file()))
+        elif path.is_dir():  # third-party skills installed beside Tinker's own come from their CLIs, not this bundle
+            files.extend(sorted(p for p in path.rglob("*.md") if p.is_file() and (
+                name != ".agents/skills" or p.relative_to(path).parts[0].startswith("tinker"))))
     return files
 
 

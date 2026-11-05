@@ -30,6 +30,8 @@ from pathlib import Path
 name, args = sys.argv[1], sys.argv[2:]
 here = Path(__file__).resolve().parent
 line = " ".join([name, *args])
+if name == "npx":
+    line += " DO_NOT_TRACK=" + os.environ.get("DO_NOT_TRACK", "")
 with open(here / "calls.log", "a", encoding="utf-8") as log:
     log.write(line + "\n")
 failing = (here / "fail.txt").read_text(encoding="utf-8").splitlines() if (here / "fail.txt").exists() else []
@@ -73,13 +75,13 @@ class InstallCase(unittest.TestCase):
         return [line for line in self.lines if re.search(rf"\s{re.escape(action)}\s", line)]
 
     def fake_cli(self, exit_code=0, fail=()):
-        """Fake `claude` and `codex` on PATH; commands starting with a `fail` prefix exit 1."""
+        """Fake `claude`, `codex` and `npx` on PATH; commands starting with a `fail` prefix exit 1."""
         bin_dir = self.tmp / "bin"
         bin_dir.mkdir()
         (bin_dir / "fake_cli.py").write_text(FAKE_CLI, encoding="utf-8")
         (bin_dir / "home.txt").write_text(str(self.home), encoding="utf-8")
         (bin_dir / "fail.txt").write_text("\n".join(fail or (["claude", "codex"] if exit_code else [])), encoding="utf-8")
-        for name in ("claude", "codex"):
+        for name in ("claude", "codex", "npx"):
             if os.name == "nt":
                 (bin_dir / f"{name}.cmd").write_text(f'@"{PYTHON}" "%~dp0fake_cli.py" {name} %*\r\n'
                                                      "@exit /b %errorlevel%\r\n", encoding="utf-8")
@@ -109,6 +111,14 @@ class InstallCase(unittest.TestCase):
 
 
 class GeneratorTests(unittest.TestCase):
+    def test_charter_leaves_out_third_party_skills_installed_beside_tinkers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for rel in ("AGENTS.md", ".agents/skills/tinker-x/SKILL.md", ".agents/skills/animate/SKILL.md"):
+                (Path(tmp) / rel).parent.mkdir(parents=True, exist_ok=True)
+                (Path(tmp) / rel).write_text("x\n", encoding="utf-8")
+            files = {p.relative_to(tmp).as_posix() for p in install_apps.tinker_runtime.charter_files(Path(tmp))}
+        self.assertEqual(files, {"AGENTS.md", ".agents/skills/tinker-x/SKILL.md"})
+
     def test_project_descriptors_have_no_drift(self):
         rendered = install_apps.project_descriptors(ROOT)
         self.assertEqual(len(rendered), 3 * len(install_apps.roles(ROOT)))
@@ -325,6 +335,15 @@ class OwnershipTests(InstallCase):
         self.assertEqual(list((self.home / ".codex" / "agents").glob("tinker-*.toml")), [edited])
         self.assertIn(f"claude plugin uninstall {install_apps.PLUGIN_ID} --scope user",
                       [c.strip() for c in log.read_text().splitlines()])
+
+    def test_design_skills_install_at_user_level_through_npx_without_telemetry(self):
+        log = self.fake_cli()
+        self.assertEqual(self.installer().design_skills(["claude", "codex"]), 0, "\n".join(self.lines))
+        skills = f"npx --yes {install_apps.SKILLS_CLI} add {{}} --global --skill * --yes --agent claude-code codex DO_NOT_TRACK=1"
+        self.assertEqual([c.strip() for c in log.read_text().splitlines()], [
+            skills.format("emilkowalski/skill"), skills.format("Leonxlnx/taste-skill"),
+            f"npx --yes {install_apps.IMPECCABLE_CLI} install --global --no-hooks --yes --providers=claude,codex DO_NOT_TRACK=1"])
+        self.assertFalse((self.home / ".tinker").exists())  # their files are the CLIs', never recorded as Tinker's
 
 
 class ActivationTests(InstallCase):

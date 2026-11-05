@@ -14,7 +14,8 @@ across apps. Refuses an app where another Tinker installation is enabled or its 
 read, and a home whose apps.json it did not write (another installation can share the product name).
 Run it yourself, not through an agent. --dry-run prints the plan; --uninstall removes only what
 apps.json records, after each app confirms its plugin is gone. --write-descriptors regenerates
-this checkout's project descriptors.
+this checkout's project descriptors. --design-skills instead installs the third-party design skills
+globally through their own CLIs (npx); their files are theirs, never recorded in apps.json.
 """
 import argparse
 import hashlib
@@ -58,6 +59,14 @@ TOOLS = {
 TIERS = {"light": {"claude": "model: haiku\neffort: low\nomitClaudeMd: true\n"}}
 FINAL = {"read": "Read/search and return findings only; the Lead saves any requested artifact.",
          "write": "Edit or execute writing commands only while explicitly holding sole writing ownership."}
+# The design skills policies/frontend-design.md routes UI work to. The CLI versions are pinned; the skill content is
+# upstream's (skills-lock.json records the hashes reviewed on 2026-11-04). Hooks stay off: a global install would
+# write Impeccable's hook into whatever folder the installer runs in.
+DESIGN_SOURCES = ("emilkowalski/skill", "Leonxlnx/taste-skill")
+SKILLS_CLI, IMPECCABLE_CLI = "skills@1.7.6", "impeccable@4.8.0"
+SKILL_AGENTS = {"claude": "claude-code", "codex": "codex", "antigravity": "antigravity"}
+IMPECCABLE_PROVIDERS = {"claude": "claude", "codex": "codex", "antigravity": "antigravity"}
+NO_TELEMETRY = {"DO_NOT_TRACK": "1", "DISABLE_TELEMETRY": "1", "IMPECCABLE_NO_TELEMETRY": "1"}
 
 
 # ---------------------------------------------------------------- roles and descriptors
@@ -477,7 +486,7 @@ class Installer:
         return all(removed)
 
     # ---- host CLIs and registration state
-    def cli(self, app, name, args, may_fail=False):
+    def cli(self, app, name, args, may_fail=False, env=None, timeout=180):
         shown = f"{name} {' '.join(args)}"
         if self.dry or self.skip_cli:
             self.step(app, "Would run" if self.dry else "Skipped", shown)
@@ -486,9 +495,9 @@ class Installer:
         if not exe:
             self.step(app, "Skipped", f"{name} is not on PATH; run later: {shown}")
             return False
-        env = dict(os.environ, HOME=str(self.home), USERPROFILE=str(self.home))
+        env = dict(os.environ, HOME=str(self.home), USERPROFILE=str(self.home), **(env or {}))
         try:
-            result = subprocess.run([exe, *args], capture_output=True, text=True, errors="replace", timeout=180, env=env)
+            result = subprocess.run([exe, *args], capture_output=True, text=True, errors="replace", timeout=timeout, env=env)
         except (OSError, subprocess.TimeoutExpired) as error:
             self.step(app, "Noted" if may_fail else "Failed", f"{shown} -> {error}")
             return False
@@ -802,6 +811,19 @@ class Installer:
                                      f"files stay in place for recovery: {self.recovery(app)}")
         return registered
 
+    # ---- third-party design skills
+    def design_skills(self, apps):
+        """Install the design skills for these apps at user level with their own CLIs, without telemetry."""
+        for source in DESIGN_SOURCES:
+            self.cli("design", "npx", ["--yes", SKILLS_CLI, "add", source, "--global", "--skill", "*", "--yes",
+                                       "--agent", *(SKILL_AGENTS[a] for a in apps)], env=NO_TELEMETRY, timeout=600)
+        self.cli("design", "npx", ["--yes", IMPECCABLE_CLI, "install", "--global", "--no-hooks", "--yes",
+                                   "--providers=" + ",".join(IMPECCABLE_PROVIDERS[a] for a in apps)],
+                 env=NO_TELEMETRY, timeout=600)
+        if not self.failed and not self.dry:
+            self.step("design", "Next", "Start a new chat. Re-run --design-skills to update them.")
+        return self.finish(save=False)
+
     # ---- uninstall
     def uninstall(self, apps):
         if self.unreadable:
@@ -856,8 +878,8 @@ class Installer:
         tinker_runtime.write_json(self.apps_file, {"schema": 2, "root": str(self.root), "apps": self.apps,
                                                "artifacts": self.artifacts, "files": self.files, "pending": self.pending})
 
-    def finish(self, cleanup=False):
-        if not self.dry and (self.previous or self.files or self.apps):
+    def finish(self, cleanup=False, save=True):
+        if save and not self.dry and (self.previous or self.files or self.apps):
             self.save()
         if cleanup and self.staging is not None:
             shutil.rmtree(self.staging, ignore_errors=True)  # this run's own copies; activation no longer needs them
@@ -890,6 +912,8 @@ def main(argv=None):
     parser.add_argument("--python", default=getattr(sys, "_base_executable", sys.executable),
                         help="interpreter the hooks run (never a virtual environment launcher)")
     parser.add_argument("--write-descriptors", action="store_true", help="regenerate this checkout's project descriptors")
+    parser.add_argument("--design-skills", action="store_true",
+                        help="install the third-party design skills at user level with npx (needs Node.js)")
     args = parser.parse_args(argv)
     if args.write_descriptors:
         write_descriptors()
@@ -898,6 +922,8 @@ def main(argv=None):
     installer = Installer(args.home, args.python, args.dry_run, args.skip_app_cli)
     if args.dry_run:
         print("[dry run] nothing is written and no app CLI runs")
+    if args.design_skills:
+        return installer.design_skills(apps)
     return installer.uninstall(apps) if args.uninstall else installer.install(apps)
 
 

@@ -9,14 +9,16 @@ Thumbs.db
 !.env.example
 .claude/worktrees/
 
-# Third-party design skills, installed per machine (README: Design skills); skills-lock.json is tracked
+# Third-party design skills come from `install_apps.py --design-skills` (README: Design skills);
+# skills-lock.json is tracked. A project-scope install's copies, hooks and state stay on that machine.
 /.agents/skills/*
 !/.agents/skills/tinker*/
+/.claude/agents/impeccable-*
 /.claude/skills/
 /.gemini/skills/
-/.claude/agents/impeccable-*
 /.codex/hooks.json
 /.gemini/settings.json
+/.impeccable/
 
 # Live eval results (scripts/eval_live.py run); the accepted baseline evals/live/accepted.json is tracked
 /evals/live/results/
