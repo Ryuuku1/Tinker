@@ -7,6 +7,25 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-17: fourth comparison with the organization's edition
+
+The organization's edition was compared again at `2205e0a`. Its user asked for this
+edition to match or exceed it on every host, keeping the terse working voice. The
+same study also listed what the organization's edition could take from this one; that
+list is the other edition's decision and is not recorded here.
+
+| Area | Decision |
+| --- | --- |
+| Charter | Adopted: "own the outcome" (settle goal, quality bar and constraints first; a version the user prefers is the reference; a materially better option gets a one-line reason; check the whole result before delivering, never widening scope, cost or authorization) and the voice rule: one short line per phase change or finding, optional quips, no tool narration, plan restatements or recaps. Compaction keeps the target, task, checklist, gate results and open items; unchanged files are never re-read. The charter was tightened to stay under its 6000-byte budget |
+| Triage | Adopted: before a workflow, one `Triage: <small\|standard\|broad> · <helpers and why>` line; small work keeps 0 helpers. The organization's per-size model hints and its advisor model were not adopted: provider defaults stay, never a model matrix |
+| Explorer | Adopted: it also pulls asked facts out of a long file or log |
+| Evaluation | Adopted: one pinned judge (an exact Haiku id, recorded in each result and the baseline); a paired per-case gate with a one-sided 95% bound once a set shares 8 unchanged cases with the baseline, new or changed cases (by `case.yaml` hash) listed rather than gated; learn runs each touched case once before paying for the full gate. The root-cause case's judge was replaced by two patterns after it failed 5 of 16 recorded answers that met every clause. Two regression cases, a version the user prefers and the Triage line on a small task, have not run live yet. The accepted baseline records no judge, so the next gate reports "new judge" and can only be accepted as a new baseline |
+| Cleanup and cost | Adopted: `scripts/reload.py` (fetch, remove worktrees and branches proven merged, fast-forward the default branch; the gate asks unless `--dry-run`) as the `reload` front-door form, and `scripts/usage_report.py` (tokens per workflow; Claude rows at list prices as of 2026-11, Codex rows tokens only, unknown models unpriced) in `status` and the weekly routine |
+| Routines | Adopted: weekly maintenance adds a usage check, a proposal queue with ids and ageing, and a proposed regression case for a failure seen in two or more retros; the monthly scan compares installed Claude Code, Codex and Graphify with their latest releases and rechecks the hook and tool documentation |
+| Graphs | Adopted: the Graphify release stamp (an upgrade rebuilds the baseline from scratch and worktree graphs reseed from it) and a placeholder `graph.html` for a graph too large for the interactive view. Graph-size reporting was not adopted: its limit came from one large repository |
+| Guardrails | Fixed: the colon-refspec delete ask rule never fired (`:*` is Claude Code's legacy prefix syntax); it is now `:**` |
+| Not adopted | `tinker:<action>` skill names (skills here serve three hosts and only Claude namespaces plugin skills, so the `tinker-` prefix stays); the desktop reload command and `/goal` (one host's app); the output-trimming PostToolUse hook (`filter_test_log.py` covers noisy logs, and replacing tool output is a Claude hook field not verified on the other hosts); the organization's cases, database tools and integrations; the teaching skill (still a separate decision) |
+
 ## 2026-10-26: third comparison with the organization's edition
 
 The organization's edition was compared again at `d351524`, eight commits after the

@@ -26,6 +26,8 @@ database, scheduler service or simulated execution.
 | `scripts/install_apps.py` | Opt-in user-level installer and descriptor generator | By the user, in a terminal |
 | `scripts/graphify_project.py` | Clean-commit Graphify graphs | On a graph request, or at task start when a playbook says `Graph: auto` |
 | `scripts/filter_test_log.py` | Keeps failures and totals of a noisy test log, states what it trimmed | By the Lead, on noisy output |
+| `scripts/reload.py` | Fetches, removes worktrees and branches proven merged, fast-forwards the default branch | By the user, or `/tinker reload` (the gate asks unless `--dry-run`) |
+| `scripts/usage_report.py` | Tokens and estimated cost per workflow from Claude Code and Codex session logs | By the user, `status` and the weekly routine |
 | `scripts/eval_live.py` | Live Claude Code eval runner and gate | By the user, or `/tinker eval` and `learn` |
 | `evals/` | Case catalog, evidence grader, suite acceptance, disposable fixtures; live cases in `evals/live/` | Offline by a person; live cases through `eval_live.py` |
 
@@ -158,7 +160,12 @@ Graphs are optional. `scripts/graphify_project.py` indexes only clean commits, k
 baseline and one graph per registered linked worktree under ignored
 `.tinker/graphs/`, and never falls back to a baseline for a worktree query.
 Establishing a baseline requires an explicit `--baseline-branch`, validated against
-the repository; no repository name selects one.
+the repository; no repository name selects one. `revision.json` records the Graphify
+release that built each graph, stamped only after a complete extraction: a different
+installed release makes the graph unverified, the baseline is then extracted from
+scratch and a worktree graph reseeds from it. An unreadable release never forces a
+rebuild. When Graphify refuses the interactive view of a very large graph, a
+placeholder `graph.html` keeps the graph usable for queries.
 
 ## Evaluation
 
@@ -178,8 +185,12 @@ working tree into its own temporary folder, renders the plugin bundle there and 
 `claude plugin eval` over `evals/live/<case>/case.yaml` (regression and held-out sets),
 checking the five-hour usage window before large runs. Its `gate` compares a result
 with `evals/live/accepted.json` per set (score not lower, cost per run not higher,
-within small tolerances; errored runs are invalid; another model can only be accepted
-as a new baseline). The learn pass depends on this gate. Live runs measure Claude Code
+within small tolerances; errored runs are invalid; another model, judge or adaptive
+mode can only be accepted as a new baseline). Graders run on one pinned judge, an exact
+model id recorded in the result. A set that shares at least eight unchanged cases with
+the baseline (same `case.yaml` hash) is judged pairwise, case by case, with a one-sided
+95% bound, so one flaky case cannot fail it; new or changed cases are listed, not
+gated. The learn pass depends on this gate. Live runs measure Claude Code
 only; other hosts keep the observed-evidence process above.
 
 ## Persistence and isolation

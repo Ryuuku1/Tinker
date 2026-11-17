@@ -162,6 +162,18 @@ python scripts/install_apps.py               # installed mode only; then restart
 `.tinker/` (notes, checkpoints, retros, graphs, eval results) is git-ignored and
 survives pulls.
 
+```bash
+python scripts/reload.py --dry-run [path ...]   # what a cleanup would remove; drop --dry-run to do it
+python scripts/usage_report.py --days 7         # tokens and estimated cost per workflow
+```
+
+`reload.py` fetches, removes only worktrees and branches proven merged (an ancestor of
+the default branch, every commit already upstream, or the head of a merged pull
+request), keeps anything dirty, locked or in use, and fast-forwards the default branch.
+The installed gate asks before it runs without `--dry-run`. `usage_report.py` reads
+Claude Code and Codex session logs; Claude rows are priced at list prices, Codex rows
+show tokens only, and Antigravity keeps no readable log.
+
 ## Use it
 
 Send ordinary requests, naming the product repository:
@@ -191,7 +203,8 @@ hosts, invoke the `tinker` skill or just say the form ("tinker status").
 | --- | --- |
 | `/tinker <task>` | Routes the task to the right workflow in this chat; a question gets a direct answer with `path:line` evidence |
 | `/tinker` | Where you stand: branch, changed files, open checkpoints and up to three next steps |
-| `/tinker status` | Health (checkout behind its remote, stale installs, routines that stopped reporting), install state, open checkpoints, recent retros, the eval baseline, the latest maintenance report |
+| `/tinker status` | Health (checkout behind its remote, stale installs, routines that stopped reporting), install state, open checkpoints, recent retros, the eval baseline, the latest maintenance report, cost per workflow |
+| `/tinker reload [path ...]` | Pulls the default branch and removes worktrees and branches proven merged; reports what it kept |
 | `/tinker remember <fact>` | Saves the fact as a knowledge candidate that every host reads |
 | `/tinker playbook <repo>` | Drafts that repository's `## Agent playbook` section for your approval |
 | `/tinker learn [focus]` | Turns recent retros into at most three gated edits on a `tinker/learn-<date>` branch |
@@ -289,8 +302,12 @@ python scripts/graphify_project.py <absolute-primary-path> --action cleanup --wo
 
 `status` returns graph and HTML paths only when the worktree graph matches its clean
 `HEAD` and recorded baseline commit; queries never fall back to an older graph.
-Cleanup removes only that worktree's transient `cache/`. If Graphify is missing or
-extraction fails, the Lead continues from source files and reports the graph status.
+Cleanup removes only that worktree's transient `cache/`. Each graph records the
+Graphify release that built it; after an upgrade the baseline is extracted from scratch
+and worktree graphs reseed from it, because node ids change between releases. A graph
+too large for Graphify's interactive view gets a placeholder `graph.html` and still
+answers queries. If Graphify is missing or extraction fails, the Lead continues from
+source files and reports the graph status.
 Including documents or media may need a model backend; discuss its data path first.
 
 ### Install reference
@@ -327,7 +344,7 @@ ignored `.tinker/knowledge/`; checkpoints and notes never enter product reposito
 | `roles/` | Specialist charters; their front matter generates the native agents |
 | `policies/` | Evidence, safety, workspace (task start), delegation, tools, knowledge, learning, app verification |
 | `templates/` | Agent playbook, checkpoint, ADR, user story, routines, domain pack, recipes |
-| `scripts/` | Installer, hook runtime, Graphify helper, live eval runner, test-log filter, platform helper |
+| `scripts/` | Installer, hook runtime, Graphify helper, live eval runner, test-log filter, merged-branch cleanup, usage report, platform helper |
 | `evals/` | Offline case catalog and grader; live Claude cases under `evals/live/` |
 | `.claude/`, `.codex/`, `.agents/agents/`, `.gemini/` | Generated native descriptors and Claude project settings |
 | `.tinker/` (ignored) | Your local state: checkpoints, retros, notes, graphs, reports, evidence |

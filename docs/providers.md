@@ -54,7 +54,9 @@ Chats opened in this checkout also load `.claude/settings.json`: deny rules for
 destructive Git through both the Bash and PowerShell tools (force or mirror pushes,
 `reset --hard`, `clean`, `restore`, discarding checkouts and switches, forced branch
 deletion, `stash drop|clear`, forced worktree removal, ref and reflog deletion,
-`gc --prune=now`), an approval prompt before deleting a remote branch, pre-allowed
+`gc --prune=now`), an approval prompt before deleting a remote branch (the colon
+refspec rule is `git *push* :**`: Claude Code reads a rule ending in `:*` as its legacy
+prefix syntax with every other `*` literal, so `:*` never fired), pre-allowed
 edits under `.tinker/` (retros, tasks, reports, evidence, patches), and the official
 Playwright plugin for [live passes](../policies/app-verification.md#live-pass-in-a-browser).
 Deny rules hold in every permission mode, including bypass; the installed hook gate
