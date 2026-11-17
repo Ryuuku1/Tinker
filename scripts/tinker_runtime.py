@@ -47,8 +47,31 @@ TYPED_CLAUDE_MODES = {"dontAsk"}
 
 # ---------------------------------------------------------------- locations and files
 
+# An installation is the default one (~/.tinker, marketplace tinker-local) or one named with --instance, which gets
+# its own home, marketplace, plugin id and Antigravity folder, so it can sit beside another Tinker installation.
+INSTANCE_RX = re.compile(r"^[a-z][a-z0-9]{0,19}$")
+_instance = ""
+
+
+def valid_instance(name):
+    return name == "" or bool(INSTANCE_RX.match(name)) and name != "local"  # tinker-local is the default marketplace
+
+
+def instance_names(name=None):
+    name = _instance if name is None else name
+    marketplace = f"tinker-{name}" if name else "tinker-local"
+    return {"home": f".tinker-{name}" if name else ".tinker", "marketplace": marketplace,
+            "plugin_id": f"tinker@{marketplace}", "folder": f"tinker-{name}" if name else "tinker"}
+
+
+def set_instance(name):
+    """Never raises: an invalid name keeps the default installation, whose guard still runs."""
+    global _instance
+    _instance = name if isinstance(name, str) and valid_instance(name) else ""
+
+
 def state_dir():
-    return Path.home() / ".tinker"
+    return Path.home() / instance_names()["home"]
 
 
 def read_json(path):
@@ -494,7 +517,7 @@ PY_RUNNERS = {"python", "python3", "py", "pythonw"}
 SCRIPT_RX = _rx(r"\btinker_runtime(?:\.py)?\b")
 INSTALLER_RX = _rx(r"\binstall_apps(?:\.py)?\b")
 PLUGIN_CLI_RX = _rx(r"\b(?:claude|codex)(?:\.exe|\.cmd)?\b.*\bplugins?\b.*\b(?:disable|uninstall|remove|rm)\b.*tinker")
-DISABLE_RX = _rx(r"disableAllHooks|tinker(?:@tinker-local)?[\"']?\s*[:=]\s*false"
+DISABLE_RX = _rx(r"disableAllHooks|tinker(?:@tinker-[a-z0-9]+)?[\"']?\s*[:=]\s*false"
                  r"|tinker[^}\n]{0,80}\benabled[\"']?\s*[:=]\s*false")
 HOST_CONFIG_NAME_RX = _rx(r"\.claude[\\/]+settings(?:\.local)?\.json|\.codex[\\/]+(?:config\.toml|hooks\.json)"
                           r"|\.gemini[\\/]+config\b|\.claude[\\/]+plugins\b|\.codex[\\/]+plugins\b|\.agents[\\/]+plugins\b")
@@ -504,9 +527,11 @@ PATCH_PATH = re.compile(r"(?m)^[ \t]*\*{3}[ \t]*(?:(?:Add|Update|Delete)[ \t]+Fi
 def tamper_name_rx():
     home = re.escape(str(Path.home())).replace(r"\\", r"[\\/]+")
     homes = rf"(?:~|\$HOME|\$\{{HOME\}}|%USERPROFILE%|%HOME%|\$env:USERPROFILE|\$env:HOME|\$\{{env:USERPROFILE\}}|{home})"
-    return _rx(rf"\.tinker[\\/]+(?:runtime|state|plugin|config\.json|apps\.json)\b"
+    # A named installation's marketplace must not match longer names such as a tinker-<name>-feature worktree.
+    named = rf"|{re.escape(instance_names()['marketplace'])}(?![\w-])" if _instance else ""
+    return _rx(rf"\.tinker(?:-[a-z0-9]+)?[\\/]+(?:runtime|state|plugin|config\.json|apps\.json)\b"
                rf"|{homes}[\\/]+\.tinker\b|\.gemini[\\/]+config[\\/]+plugins[\\/]+tinker\b"
-               rf"|tinker-local\b|\.codex[\\/]+agents[\\/]+tinker-")
+               rf"|tinker-local\b{named}|\.codex[\\/]+agents[\\/]+tinker-")
 
 
 # ---------------------------------------------------------------- paths
@@ -568,23 +593,28 @@ _ROOTS = {}
 
 
 def _roots():
-    """Protected and host-config roots, normalized once per home directory."""
+    """Protected and host-config roots, normalized once per home directory and installation. A named installation
+    protects its own home, Antigravity folder and plugin caches as well as the default installation's."""
     home = Path.home()
-    if str(home) not in _ROOTS:
+    key = (str(home), _instance)
+    if key not in _ROOTS:
         norm = lambda p: normalize(str(p), None)  # noqa: E731
-        _ROOTS[str(home)] = {
+        installations = []
+        for names in (instance_names(""), instance_names()):
+            installations += [home / names["home"], home / ".gemini" / "config" / "plugins" / names["folder"],
+                              home / ".claude" / "plugins" / "cache" / names["marketplace"],
+                              home / ".claude" / "plugins" / "marketplaces" / names["marketplace"],
+                              home / ".codex" / "plugins" / "cache" / names["marketplace"]]
+        _ROOTS[key] = {
             "protected": [norm(p) for p in (
-                home / ".tinker", home / ".gemini" / "config" / "plugins" / "tinker",
-                home / ".claude" / "plugins" / "cache" / "tinker-local",
-                home / ".claude" / "plugins" / "marketplaces" / "tinker-local",
-                home / ".codex" / "plugins" / "cache" / "tinker-local",
+                *dict.fromkeys(installations),
                 # ponytail: the interpreter the hooks run; on POSIX only its stdlib, since base_prefix is often /usr
                 Path(sys.base_prefix) if os.name == "nt" else Path(os.__file__).resolve().parent)],
             "agents": norm(home / ".codex" / "agents") + os.sep + "tinker-",
             "config": [norm(p) for p in (home / ".claude" / "plugins", home / ".codex" / "plugins",
                                          home / ".agents" / "plugins", home / ".gemini" / "config")],
         }
-    return _ROOTS[str(home)]
+    return _ROOTS[key]
 
 
 def _under(path, root):
@@ -812,15 +842,19 @@ def _classify_segment(seg, previous, verb, args, base, unattended, labels, tampe
 
 
 def _allowed_script_use(words):
-    """Only `python [flags] <path>/tinker_runtime.py status|schedule-plan ...`; main() dispatches on argv[0]."""
+    """Only `python [flags] <path>/tinker_runtime.py [--instance <name>] status|schedule-plan ...`; main() dispatches
+    on the first word after the script once it has taken --instance out."""
     i = verb_index(words)
     if i is None or base_name(words[i]) not in PY_RUNNERS:
         return False
     j = i + 1
     while j < len(words) and re.fullmatch(r"-[IBESsuq]+|-3(?:\.\d+)?|-X", words[j]):
         j += 2 if words[j] == "-X" else 1
-    return j + 1 < len(words) and base_name(words[j]) in ("tinker_runtime", "tinker_runtime.py") \
-        and words[j + 1] in ("status", "schedule-plan")
+    k = j + 1
+    if k + 1 < len(words) and words[k] == "--instance" and valid_instance(words[k + 1]):
+        k += 2
+    return k < len(words) and base_name(words[j]) in ("tinker_runtime", "tinker_runtime.py") \
+        and words[k] in ("status", "schedule-plan")
 
 
 def _wrapper_body(verb, args):
@@ -1649,10 +1683,11 @@ def status_text():
     root = package_root(cfg)
     now = time.time()
     lines = [f"Tinker root: {root or 'not configured'}",
-             f"Installed: {cfg.get('version', 'no (project mode only)')}", *install_lines(cfg, root)]
+             f"Installed: {cfg.get('version', 'no (project mode only)')}; home {state_dir()}", *install_lines(cfg, root)]
     if foreign_home():
         lines.append(f"Note: {state_dir()} belongs to another Tinker installation; this checkout runs in project "
-                     "mode here, and the installer leaves that home alone.")
+                     "mode here, and the installer leaves that home alone. Install beside it with --instance <name>; "
+                     "then pass the same --instance to status.")
     sessions = []
     folder = state_dir() / "state" / "sessions"
     for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
@@ -1751,6 +1786,16 @@ def schedule_plan(role, repo, cron, task, app):
 
 
 def main(argv):
+    argv = list(argv)
+    if "--instance" in argv:  # anywhere, so a rendered `<cli>` can carry it before the command
+        at = argv.index("--instance")
+        name = argv[at + 1] if at + 1 < len(argv) else ""
+        del argv[at:at + 2]
+        if not valid_instance(name) and argv[:1] in (["status"], ["schedule-plan"]):
+            sys.stderr.write(f"--instance '{one_line(name, 40)}' is not an installation name (a-z, 0-9, at most 20, "
+                             "not 'local')\n")
+            return 1
+        set_instance(name)  # a hook event with an invalid name keeps the default installation and its guard
     command = argv[0] if argv else ""
     options = {}
     rest = argv[1:]
