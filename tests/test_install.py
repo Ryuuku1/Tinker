@@ -196,11 +196,34 @@ class RenderTests(InstallCase):
         for path, digest in record["files"].items():
             self.assertEqual(hashlib.sha256(Path(path).read_bytes()).hexdigest(), digest, path)
 
-    @unittest.skipUnless(os.name == "nt" and shutil.which("pwsh") and shutil.which("cmd"), "needs Windows shells")
+    @unittest.skipUnless(shutil.which("pwsh") and shutil.which("cmd") if os.name == "nt" else shutil.which("sh"),
+                         "needs the shells the apps run hooks through")
     def test_rendered_hook_commands_pass_their_shell_self_test(self):
         self.install(skip_cli=True)
         checked = self.steps("Checked")
         self.assertEqual(len(checked), len(APPS), "\n".join(self.lines))
+
+    def test_rendered_skills_run_scripts_on_the_hook_interpreter_off_windows(self):
+        brew = "/opt/homebrew/opt/python@3.12/bin/python3.12"  # where Homebrew keeps it on macOS
+        self.assertTrue(install_apps.SAFE_PATH.match(brew), "Antigravity must accept Homebrew's interpreter")
+        tree = install_apps.charter_tree(ROOT, python=brew)
+        skill, team = tree["skills/tinker/SKILL.md"], tree["skills/tinker-team/SKILL.md"]
+        if os.name == "nt":
+            self.assertIn("`python scripts/reload.py", skill)
+        else:
+            self.assertIn(f"`{brew} scripts/reload.py", skill)
+            self.assertIn(f'`{brew} "', team)
+            for text in tree.values():
+                self.assertNotRegex(text, r"(?<![\w.-])python (?=scripts/|\")")
+
+    def test_older_python_is_refused_with_a_way_out(self):
+        # The python3 that comes with macOS is often 3.9; the installer stops before anything runs on it.
+        code = ("import runpy, sys; sys.version_info = (3, 9, 6, 'final', 0); "
+                f"runpy.run_path({str(ROOT / 'scripts' / 'install_apps.py')!r}, run_name='__main__')")
+        result = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("Python 3.11 or newer", result.stderr)
+        self.assertIn("python.org, Homebrew or uv", result.stderr)
 
     def test_hook_command_forms(self):
         runtime = self.home / ".tinker" / "runtime" / "tinker_runtime.py"

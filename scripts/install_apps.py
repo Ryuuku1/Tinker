@@ -26,10 +26,15 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 import time
+
+if sys.version_info < (3, 11):  # the hooks run on this interpreter too
+    sys.exit(f"Tinker needs Python 3.11 or newer; {sys.executable} is {sys.version.split()[0]}. The python3 that "
+             "comes with macOS is often 3.9: install a newer one (python.org, Homebrew or uv) and run this with it.")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tinker_runtime  # noqa: E402  (shared: charter files, digest, marker, hook names)
@@ -38,7 +43,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MARKER_FILE = ".tinker-generated"
 MARKETPLACE = "tinker-local"
 PLUGIN_ID = f"tinker@{MARKETPLACE}"
-SAFE_PATH = re.compile(r"^[A-Za-z0-9._:\\/-]+$")
+SAFE_PATH = re.compile(r"^[A-Za-z0-9._:@\\/-]+$")  # @: Homebrew keeps Python under python@3.x
 # Keep these in step with tinker_runtime.TOOL_KINDS. '-' makes Claude read a matcher as an unanchored regex;
 # anchor it so only these tools reach the gate. Claude names a plugin's MCP tools mcp__plugin_<plugin>_<server>__<tool>.
 CLAUDE_MATCHER = ("^(Bash|PowerShell|Monitor|Write|Edit|MultiEdit|NotebookEdit"
@@ -136,12 +141,13 @@ def project_descriptors(root=ROOT):
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 
 
-def charter_tree(root, lead_path="AGENTS.md", instance=""):
+def charter_tree(root, lead_path="AGENTS.md", instance="", python=None):
     """Charter files keyed by their bundle path, with relative links re-pointed at the copies.
 
     Skills move from .agents/skills/<name> to skills/<name>; AGENTS.md moves to lead_path.
     Links to files outside the charter point at the checkout by absolute path. A named installation's
-    copy names its own home, and its runtime commands carry --instance.
+    copy names its own home, and its runtime commands carry --instance. Off Windows, Tinker's
+    scripts run on the hooks' interpreter.
     """
     files = tinker_runtime.charter_files(root)
     moved = {}
@@ -180,6 +186,8 @@ def charter_tree(root, lead_path="AGENTS.md", instance=""):
         if instance:
             text = re.sub(r"~/\.tinker(?![\w-])", f"~/{tinker_runtime.instance_names(instance)['home']}", text)
             text = text.replace('scripts/tinker_runtime.py"`', f'scripts/tinker_runtime.py" --instance {instance}`')
+        if python and os.name != "nt":  # macOS has no `python`, and an app's PATH may reach only its old python3
+            text = re.sub(r"(?<![\w.-])python (?=scripts/|\")", shlex.quote(Path(python).as_posix()) + " ", text)
         tree[new] = text
     return tree
 
@@ -201,11 +209,12 @@ def hook_commands(python, runtime, event, host, instance=""):
                 "commandWindows": f'& "{exe}" -I -S "{script}" {words}; exit $LASTEXITCODE'}
     # cmd /c mangles quotes differently per spawner (Node strips outer ones, Go escapes inner ones as \"),
     # so the Antigravity line carries no quotes at all; both paths must need none (and no ~, which it expands).
-    limit = "only ASCII letters, digits and . _ : \\ / - (no spaces, ~, % or non-ASCII)"
+    limit = "only ASCII letters, digits and . _ : @ \\ / - (no spaces, ~, % or non-ASCII)"
+    shell = "cmd /c" if os.name == "nt" else "a shell"
     if not SAFE_PATH.match(exe):
-        raise ValueError(f"Antigravity runs hooks through cmd /c; pass --python with a path of {limit} (got {exe}).")
+        raise ValueError(f"Antigravity runs hooks through {shell} unquoted; pass --python with a path of {limit} (got {exe}).")
     if not SAFE_PATH.match(script):
-        raise ValueError(f"Antigravity runs hooks through cmd /c; the home folder path needs {limit} (got {script}).")
+        raise ValueError(f"Antigravity runs hooks through {shell} unquoted; the home folder path needs {limit} (got {script}).")
     return {"type": "command", "command": f"{exe} -I -S {script} {words}"}
 
 
@@ -252,7 +261,7 @@ def bundle_files(root, home, python, version, instance=""):
     names = tinker_runtime.instance_names(instance)
     base = home / names["home"] / "plugin"
     runtime = home / names["home"] / "runtime" / "tinker_runtime.py"
-    files = {f"{k}": v for k, v in charter_tree(root, instance=instance).items()}
+    files = {f"{k}": v for k, v in charter_tree(root, instance=instance, python=python).items()}
     files[MARKER_FILE] = f"Rendered by {root / 'scripts' / 'install_apps.py'}; re-run it instead of editing.\n"
     files[".claude-plugin/plugin.json"] = dumps({"name": "tinker", "version": version, "description": ABOUT,
                                                  "author": AUTHOR, "hooks": "./hooks/claude.json"})
@@ -287,7 +296,7 @@ def codex_agent_files(root, home, instance=""):
 def antigravity_files(root, home, python, instance=""):
     names = tinker_runtime.instance_names(instance)
     base = home / ".gemini" / "config" / "plugins" / names["folder"]
-    files = charter_tree(root, lead_path="rules/AGENTS.md", instance=instance)
+    files = charter_tree(root, lead_path="rules/AGENTS.md", instance=instance, python=python)
     files[MARKER_FILE] = f"Rendered by {root / 'scripts' / 'install_apps.py'}; re-run it instead of editing.\n"
     files["plugin.json"] = dumps({"name": names["folder"]})
     files["hooks.json"] = dumps(antigravity_hooks(python, home / names["home"] / "runtime" / "tinker_runtime.py", instance))

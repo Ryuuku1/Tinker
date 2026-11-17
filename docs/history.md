@@ -7,6 +7,19 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-17: installing on macOS
+
+The installer and hooks already had POSIX branches, but nothing had run them off Windows.
+
+| Area | Decision |
+| --- | --- |
+| Protected paths | macOS's default file system ignores case, as Windows does, so on macOS the hook folds case when it compares a path with Tinker's protected locations; `~/.TINKER/runtime` no longer slips past the check there. Only the comparison folds: a path used again (after `cd`, in `git -C`) keeps its case. Linux keeps case |
+| Python | The installer refuses Python older than 3.11 before anything else runs, naming the interpreter and how to get a newer one; the `python3` that comes with macOS is often 3.9. Guides say `python3` on macOS and Linux. Off Windows, the installed skills run Tinker's scripts on the hooks' interpreter, since macOS has no `python` and an app's PATH may reach only the old `python3` |
+| Antigravity | Its hook line carries no quotes, so paths stay limited to safe characters; `@` joined them, because Homebrew keeps Python under `python@3.x` |
+| Hook self-test | The installer's test that each rendered hook command denies a tamper payload through its real shell now also runs where `sh` is the shell |
+| CI | Added, not yet run: the unit suite on Windows, Linux and macOS with Python 3.11, the oldest supported. Until it runs, nothing here has been observed on macOS |
+| Evidence | 2026-11-17: the suite passed on Windows and on Linux in WSL (Windows-only paths and the optional Graphify CLI skipped), also with case folding forced on and a temporary folder reached through a symlink with capitals in its path, as macOS's `/var/folders/.../T` is. The 3.9 refusal was simulated; no Python older than 3.12 was at hand |
+
 ## 2026-11-17: installing beside another installation
 
 The comparison below left one gap: where the organization's edition is installed, it

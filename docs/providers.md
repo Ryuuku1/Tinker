@@ -274,13 +274,15 @@ acceptance cases succeed.
 | Descriptor generation | Verified by package tests (no drift). 2026-09-26: `claude plugin validate` (CLI 2.1.274) passed for this checkout and for a bundle and marketplace rendered by the new installer into a disposable home | Package tests only | Package tests only |
 | Host discovery | Live 2026-09-23/24: skills and eight agents loaded; plugin validation passed | Desktop task loaded AGENTS.md and skills (2026-09-23); CLI 0.146.0 present, not run live | Not verified (no scoped live interface, no `agy` on PATH on 2026-09-26) |
 | Tool restrictions | Requested by descriptors; not verified live | Same | Same |
-| Hook behavior | Live 2026-09-24 for the runtime before this refactor (context, ask, block in default and bypass modes, session end). The 2026-09-26 runtime: sample-payload tests. The output trim (2026-11-17): sample-payload tests only, not yet checked in an installed app | Documented formats and shell self-tests only | Documented formats and `cmd /c` self-tests only |
+| Hook behavior | Live 2026-09-24 for the runtime before this refactor (context, ask, block in default and bypass modes, session end). The 2026-09-26 runtime: sample-payload tests. The output trim (2026-11-17): sample-payload tests only, not yet checked in an installed app | Documented formats and shell self-tests only | Documented formats and shell self-tests only (`cmd /c` on Windows, `sh -c` elsewhere) |
 | Task execution | Behavioral cases not verified; no accepted baseline | Not verified (a delegation probe timed out; see below) | Not verified |
 
 Earlier Codex notes: a read-only smoke run recognized the Lead, roles, skills and
 limits from project context; a disposable feature/delegation probe timed out after
 240 seconds without changing its target; a smaller delegation probe exited 0 without
 enough native worker detail to verify the team case. Windows checks do not establish
-macOS or Linux behavior. See the [evaluation guide](../evals/README.md); preserve
+macOS or Linux behavior: the unit suite, hook self-tests included, passed on Linux on
+2026-11-17. `.github/workflows/tests.yml` (added then, not yet run) runs it on Windows,
+Linux and macOS with Python 3.11; no install has been observed on macOS. See the [evaluation guide](../evals/README.md); preserve
 failures and missing capabilities. Use a [checkpoint](../templates/job.md) after the
 old host and helpers stop or pause.

@@ -18,7 +18,7 @@ keeps no list of them, and each project carries its own facts.
 | Need | For | Check |
 | --- | --- | --- |
 | Git | everything | `git --version` |
-| Python 3.11+ | installer, hooks, helper scripts, tests | `python --version` (or use [uv](https://docs.astral.sh/uv/): `uv run --no-project --python 3.12 python ...`) |
+| Python 3.11+ | installer, hooks, helper scripts, tests | `python --version`, `python3` on macOS and Linux (or use [uv](https://docs.astral.sh/uv/): `uv run --no-project --python 3.12 python ...`) |
 | At least one host, signed in | running the team | `claude --version`, `codex --version`, or the Antigravity app |
 | [Graphify](https://github.com/Graphify-Labs/graphify#install) (optional) | code graphs for big repositories | `uv tool install graphifyy`, then `graphify --version` |
 | Node.js 18+ (optional) | browser live passes in Claude Code | `node --version` |
@@ -27,6 +27,11 @@ keeps no list of them, and each project carries its own facts.
 On Windows, if `python` opens the Microsoft Store, the store alias is shadowing a real
 install: install Python (or use `uv`) and turn the alias off under Settings, Apps,
 Advanced app settings, App execution aliases.
+
+On macOS and Linux, type `python3` wherever this guide says `python`. The `python3`
+that comes with macOS is often 3.9, which the installer refuses: install 3.11 or newer
+from python.org, Homebrew (`brew install python`) or `uv`, and run the installer with
+it. The hooks keep running the interpreter that installed them.
 
 ### 2. Get Tinker
 

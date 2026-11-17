@@ -240,20 +240,30 @@ def repo_key(project):
     return f"{slug}-{digest}"
 
 
+# macOS's default file system (APFS, case-insensitive) ignores case as Windows does, where normcase already folds it.
+# Only comparisons fold, never a path that is used again. ponytail: on a case-sensitive APFS volume the guard is
+# only stricter; Linux file systems keep case.
+FOLD_CASE = sys.platform == "darwin"
+
+
+def fold(path):
+    path = os.path.normcase(str(path))
+    return path.lower() if FOLD_CASE else path
+
+
 def same_path(left, right):
     try:
-        return os.path.normcase(str(Path(left).resolve())) == os.path.normcase(str(Path(right).resolve()))
+        return fold(Path(left).resolve()) == fold(Path(right).resolve())
     except (OSError, ValueError, TypeError):
         return False
 
 
 def inside(path, root):
     try:
-        path, root = Path(path).resolve(), Path(root).resolve()
+        path, root = fold(Path(path).resolve()), fold(Path(root).resolve())
     except (OSError, ValueError, TypeError):
         return False
-    return os.path.normcase(str(path)) == os.path.normcase(str(root)) or \
-        os.path.normcase(str(path)).startswith(os.path.normcase(str(root)).rstrip("\\/") + os.sep)
+    return path == root or path.startswith(root.rstrip("\\/") + os.sep)
 
 
 # ---------------------------------------------------------------- shell text
@@ -586,7 +596,7 @@ def normalize(token, base, shell=None):
             text = os.path.realpath(text)
         except (OSError, ValueError):
             pass
-    return os.path.normcase(text)
+    return os.path.normcase(text)  # keeps case on macOS: callers reuse it as a folder (cd, git -C)
 
 
 _ROOTS = {}
@@ -598,7 +608,7 @@ def _roots():
     home = Path.home()
     key = (str(home), _instance)
     if key not in _ROOTS:
-        norm = lambda p: normalize(str(p), None)  # noqa: E731
+        norm = lambda p: fold(normalize(str(p), None))  # noqa: E731
         installations = []
         for names in (instance_names(""), instance_names()):
             installations += [home / names["home"], home / ".gemini" / "config" / "plugins" / names["folder"],
@@ -622,13 +632,13 @@ def _under(path, root):
 
 
 def is_protected(path):
-    roots = _roots()
+    path, roots = fold(path), _roots()
     return path.startswith(roots["agents"]) or any(_under(path, root) for root in roots["protected"])
 
 
 def contains_protected(path):
     """A folder whose deletion would take a protected location with it."""
-    roots = _roots()
+    path, roots = fold(path), _roots()
     return any(_under(root, path) for root in (*roots["protected"], roots["agents"]))
 
 
@@ -638,6 +648,7 @@ HOST_CONFIG_FILES = tuple(os.path.normcase(os.sep.join(("", *parts))) for parts 
 
 
 def is_host_config(path):
+    path = fold(path)
     return path.endswith(HOST_CONFIG_FILES) or any(_under(path, root) for root in _roots()["config"])
 
 

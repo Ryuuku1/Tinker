@@ -321,6 +321,21 @@ class ClassifierTests(Fixture):
             self.skipTest("8.3 names are disabled on this volume")
         self.assertTrue(self.tampers(f"echo x > {buffer.value}\\s.json", "pwsh"))
 
+    def test_case_variants_are_protected_where_the_file_system_ignores_case(self):
+        # macOS's default APFS, like Windows, opens ~/.TINKER/Runtime as ~/.tinker/runtime.
+        variant = str(self.home / ".TINKER" / "Runtime" / "tinker_runtime.py")
+        mixed = self.tmp / "Mixed"  # a repository whose path keeps its case after the comparison
+        (mixed / ".git").mkdir(parents=True)
+        (mixed / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+        with mock.patch.object(self.tb, "FOLD_CASE", True):
+            labels, tamper = self.tb.classify_paths([variant], "", str(self.repo))
+            self.assertTrue(tamper, labels)
+            self.assertTrue(self.tb.inside(self.home / ".Tinker", self.home / ".tinker"))
+            self.assertIn("git.pushProtected", self.labels(f"git -C {mixed.as_posix()} push origin"))
+        if os.name != "nt" and not self.tb.FOLD_CASE:  # Linux keeps case: another name is another file
+            self.tb._ROOTS.clear()
+            self.assertFalse(self.tb.classify_paths([variant], "", str(self.repo))[1])
+
     def test_unc_paths_stay_lexical(self):
         real = os.path.realpath
 
