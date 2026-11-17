@@ -7,6 +7,21 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-17: installing beside another installation
+
+The comparison below left one gap: where the organization's edition is installed, it
+owns `~/.tinker`, the `tinker-local` marketplace and `tinker@tinker-local`, so this
+edition could run only in project mode, without hooks.
+
+| Area | Decision |
+| --- | --- |
+| Names | `--instance <name>` gives an installation its own home `~/.tinker-<name>`, marketplace `tinker-<name>`, plugin id `tinker@tinker-<name>` and Antigravity folder `tinker-<name>`; without it every name and rendered file stays as before. The plugin keeps the name `tinker`, so skills and teammates keep theirs |
+| Runtime | Hook commands carry `--instance <name>` and `state_dir()` follows it: presence, approvals, run outcomes, `config.json` and `apps.json` live in that home. The tamper guard covers both homes, both sets of plugin caches and marketplaces, and both plugin ids. The runtime turns errors into an allow, so an unusable name falls back to the default installation's guard instead of raising; only `status` and `schedule-plan` refuse it |
+| Charter copy | The rendered skills name that home's `config.json` and run `tinker_runtime.py --instance <name>`; the checkout's skills are unchanged, within their byte budgets |
+| Both enabled | Rejected: two gates would ask twice and two charters would compete in every chat. Claude Code gets this installation installed and then turned off at user scope (an install turns a plugin on, also one turned off earlier), with the commands to switch for every project or one project. Codex's CLI can only add or remove a plugin and Antigravity loads every plugin folder, so both are left out while the other installation is enabled there, with the switch command |
+| Evidence | An isolated Claude Code configuration on 2026-11-17: two `tinker` plugins from different marketplaces installed side by side; `claude plugin disable\|enable <id> --scope user` switched one; `claude plugin install` re-enabled a disabled plugin; a project's `.claude/settings.local.json` overrode the user setting. Codex and Antigravity coexistence is unverified beyond the installer's fake-CLI tests |
+| Teaching skill | Unblocked: its personal state can live in the named home. Not ported in this change |
+
 ## 2026-11-17: fourth comparison with the organization's edition
 
 The organization's edition was compared again at `2205e0a`. Its user asked for this
