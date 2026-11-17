@@ -49,8 +49,14 @@ needs the `claude` CLI; see the [evaluation guide](../evals/README.md).
 4. **Edit and measure.** Apply the edits. When an edit changes behavior no live case
    covers, first add or tighten one `regression` case and run it on the base branch: it
    must fall short there, or it does not measure the edit. Never edit a `heldout` case
-   to fit a change. Run the regression and held-out sets with the accepted baseline's
-   arguments, then the gate. With `--adaptive`, a case that falls short on either side
+   to fit a change. First run each case the edits touch once (`run --case <name> --runs 1`);
+   fix or drop an edit whose case is red before paying for the full gate. Then run the
+   regression and held-out sets with the accepted baseline's arguments, then the gate.
+   When a set shares at least eight unchanged cases with the baseline, the gate compares
+   them case by case with a 95% bound, so one flaky case does not fail it while a broad
+   slide does; new or changed cases are listed, not gated. Graders are judged by one
+   pinned model: a result judged by another only becomes a new baseline (`--accept`),
+   after the user confirms that run's cost. With `--adaptive`, a case that falls short on either side
    ends with the same number of runs on both, measuring the baseline again at its own
    commit when needed, so one unlucky run does not decide the gate. Measure any case the
    gate still lists under `Uneven runs` to the same count on both sides before trusting
@@ -62,6 +68,26 @@ needs the `claude` CLI; see the [evaluation guide](../evals/README.md).
    baseline file. The message names the evidence for each edit in words another reader
    can check without the retros, and includes the gate table. Never push or merge: the
    user reviews and merges, then reinstalls Tinker into the apps if they use it there.
+
+## Weekly maintenance
+
+The weekly routine ([routines](../templates/routines.md)) writes
+`.tinker/reports/weekly-<date>.md` and proposes; it never edits instructions.
+
+- **Usage:** the `python scripts/usage_report.py --days 7` table (tokens and estimated
+  cost per workflow from this machine's Claude and Codex transcripts; Antigravity is not
+  measured). Flag a workflow whose cost per session rose by more than a third since the
+  previous report, with the sessions that drove it.
+- **Proposal queue:** carry the previous report's open proposals forward with their id
+  (`W<yyyy-mm-dd>-<n>`), age and how many weeks new evidence supported them; evidence for
+  a queued proposal raises its count instead of adding a duplicate. Drop a proposal after
+  four weeks without new evidence. At most three new proposals a week, each with its
+  evidence, destination and live eval case. Learn picks the oldest well-supported ones.
+- **Missing cases:** a failure seen in two or more retros or results that no live case
+  covers becomes a proposed `regression` case: name, prompt idea and a `regex` grader.
+- **Notes:** revalidate knowledge notes against current source, mark disproved ones
+  stale ([knowledge policy](knowledge.md)), and give the 30-day rework rate (retros with
+  `round` above 1).
 
 Learning never changes safety rules, authorization boundaries or delegation limits
 without the user asking for that specific change.

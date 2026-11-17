@@ -13,13 +13,11 @@ laptop that sleeps at night misses night runs.
 
 - Schedule: `0 13 * * 5` (Fridays at 13:00), or the user's choice.
 - Plan: `schedule-plan --app <claude|codex|antigravity> --role researcher --repo <Tinker checkout> --cron "0 13 * * 5" --task "<task>"`
-- Task: Weekly maintenance of this Tinker checkout. Read the last 7 days of retros in
-  .tinker/retros, open checkpoints in .tinker/tasks, knowledge candidates and the newest
-  live eval result. Revalidate notes against current source and mark disproved ones
-  stale per policies/knowledge.md. Propose at most three delta edits per
-  policies/learning.md, each with evidence, destination and live eval case, and the
-  30-day rework rate (retros with `round` > 1), in .tinker/reports/weekly-<date>.md.
-  Commit nothing.
+- Task: Weekly maintenance of this Tinker checkout per the Weekly maintenance section
+  of policies/learning.md. Read the last 7 days of retros in .tinker/retros, open
+  checkpoints in .tinker/tasks, knowledge candidates, the newest live eval result and
+  the previous weekly report. Add the python scripts/usage_report.py --days 7 table when
+  it runs without an approval. Write .tinker/reports/weekly-<date>.md. Commit nothing.
 
 In Claude Code, also consolidate the host's own auto memory for this project when the
 `consolidate-memory` skill is available: merge duplicates, drop facts current source
@@ -32,11 +30,12 @@ only for a Claude plan: auto memory reaches no other host.
   at 12:15) and let the task skip unless it is the first Monday of the month.
 - Plan: `schedule-plan --app <claude|codex|antigravity> --role researcher --repo <Tinker checkout> --cron "15 12 * * 1" --task "<task>"`
 - Task: Skip unless it is the month's first Monday. Compare installed Claude Code, Codex
-  and Graphify with their latest releases. Recheck docs/providers.md's hook and tool docs
-  against TOOL_KINDS in scripts/tinker_runtime.py and the installer matchers, and the
-  provider's models, prices and prompting guidance against role tiers and skills. Report
-  each discrepancy and each feature that could replace Tinker code or cut cost, with URL
-  and date, in .tinker/reports/upgrade-<date>.md. Change nothing else.
+  and Graphify with their channels' latest releases. Recheck
+  docs/providers.md's hook and tool docs against TOOL_KINDS in scripts/tinker_runtime.py
+  and the installer matchers, and the provider's models, prices and prompting guidance
+  against role tiers and skills. Report discrepancies and features that could replace
+  Tinker code or cut cost, with URL and date, in .tinker/reports/upgrade-<date>.md.
+  Change nothing else.
 
 The next learn pass reads that report. For a Claude plan, add to the task: "Fetch only
 from sites that .claude/settings.json allows." A fetch that needs an approval stalls an

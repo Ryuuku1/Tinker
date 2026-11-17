@@ -1,6 +1,6 @@
 ---
 name: tinker-explorer
-description: "Explorer: cheap read-only search for files, symbols, callers and conventions."
+description: "Explorer: cheap read-only search for files, symbols, callers and conventions, or the asked facts from a long file or log."
 tools:
   - view_file
   - grep_search

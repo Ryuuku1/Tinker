@@ -6,7 +6,10 @@ worker identities, assignments, running/stopped state and returned evidence.
 ## Team size
 
 Pick the number of helpers per task for the best result per cost; there is no
-fixed ceiling. Before dispatch, say in one line how many and why.
+fixed ceiling. Before a workflow, say it in one line:
+`Triage: <small|standard|broad> · <helpers and why, or none>`. Small is a lookup,
+a one-file edit or a rename (0 helpers); standard is one bounded change; broad
+spans independent areas or repositories. Recount aloud only when the work changes.
 
 - Count the independent, bounded pieces: separate areas to search or analyze,
   changes on disjoint files, a review or test pass that needs fresh context.
