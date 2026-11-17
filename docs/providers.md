@@ -172,6 +172,7 @@ Run these yourself in a terminal, never through an agent (the gate refuses it):
 python scripts/install_apps.py --dry-run
 python scripts/install_apps.py [--app claude|codex|antigravity]
 python scripts/install_apps.py --uninstall [--app ...]
+python scripts/install_apps.py --instance <name> [...]   # beside another installation
 ```
 
 It writes the hook script to a stable `~/.tinker/runtime/tinker_runtime.py` and a
@@ -208,9 +209,9 @@ whose settings cannot be read is refused while another Tinker installation might
 enabled there. The installer also refuses an app where another Tinker installation is
 enabled, including one that uses this plugin's id or folder without this installer's
 records, and it never reads or rewrites a `~/.tinker/apps.json` that it did not write.
-On such a machine the checkout runs in project mode: the runtime ignores the other
-installation's `config.json`, takes the checkout as its root, and `status` says whose
-home it is.
+On such a machine, install [beside it](#beside-another-installation) or run the
+checkout in project mode: the runtime ignores the other installation's `config.json`,
+takes the checkout as its root, and `status` says whose home it is.
 
 Uninstall removes an app's files once its CLI or its own settings show the plugin
 gone; the bundle stays while Claude or Codex still registers it. It never deletes
@@ -220,6 +221,39 @@ ownership record. Restart the apps, then delete `~/.tinker` yourself if unwanted
 Scheduled runs start with a marker that makes them unattended. The team skill builds
 schedule plans and the host's own scheduler runs them; Antigravity scheduling is
 manual and unverified.
+
+### Beside another installation
+
+`--instance <name>` (lowercase letters and digits, at most 20, not `local`) installs
+under names the default installation never uses: home `~/.tinker-<name>/`, marketplace
+`tinker-<name>`, plugin id `tinker@tinker-<name>` and Antigravity folder
+`~/.gemini/config/plugins/tinker-<name>/`. The plugin is still named `tinker`, so its
+skills and teammates keep their names. Every rendered hook command carries
+`--instance <name>`: the runtime keeps presence, approvals and run outcomes in that
+home and guards it, its plugin caches and its plugin id as it guards the default ones,
+which stay guarded too. A name the runtime cannot use leaves the default guard running,
+never none. The rendered skills point at that home's `config.json` and run
+`tinker_runtime.py --instance <name>`; pass the same option to `status`, later
+installs and `--uninstall`. The other installation's home, records and registration
+are never read as this one's or changed.
+
+Where another Tinker is enabled in an app:
+
+- Claude Code: this one is installed, then turned off with `claude plugin disable
+  tinker@tinker-<name> --scope user`. An install turns a plugin on again, so every
+  update turns it off again while the other stays enabled. Both on would run two gates
+  and two charters in each chat. To switch, disable the other and enable this one at
+  user scope, or for one project put `"enabledPlugins": {"tinker@tinker-local": false,
+  "tinker@tinker-<name>": true}` in its `.claude/settings.local.json`; the installer
+  prints both. Checked on 2026-11-17 in an isolated Claude Code configuration: two
+  plugins named `tinker` from different marketplaces install side by side, `disable`
+  and `enable` switch one at user scope, and a project's `settings.local.json`
+  overrides the user setting.
+- Codex: its CLI only adds or removes a plugin, so this one stays out of Codex until
+  the other is removed; then re-run with `--app codex`. Teammate files
+  `~/.codex/agents/tinker-<role>.toml` have the same names in every installation, and
+  one the other installation wrote is kept, not replaced.
+- Antigravity loads every plugin folder, so it is left out the same way.
 
 ## Secondary Gemini CLI compatibility
 

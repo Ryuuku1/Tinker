@@ -69,9 +69,21 @@ python scripts/install_apps.py               # or: --app claude|codex|antigravit
 
 Then restart the apps. In Codex, trust the hooks in `/hooks` after every install. In
 Claude Code the front door is `/tinker:tinker` and the teammates are `tinker:<role>`.
-The installer refuses an app where another Tinker installation is already enabled,
-for example an organization's edition with the same plugin id; use project mode on
-that machine instead. Uninstall with `python scripts/install_apps.py --uninstall`.
+Uninstall with `python scripts/install_apps.py --uninstall`.
+
+Where another Tinker installation already owns `~/.tinker` or is enabled (for example
+an organization's edition with the same plugin id), install beside it under a name of
+your own, and pass the same name to every later install, `--uninstall` and `status`:
+
+```bash
+python scripts/install_apps.py --instance personal --dry-run
+python scripts/install_apps.py --instance personal   # ~/.tinker-personal, tinker@tinker-personal
+```
+
+Claude Code then gets this one installed but turned off, so a chat never runs both;
+the installer prints how to switch, for every project or just one. Codex and
+Antigravity are left out while the other one is enabled there. Project mode works on
+such a machine too.
 Details: [install reference](#install-reference).
 
 ### 4. Check it works
@@ -313,7 +325,8 @@ Including documents or media may need a model backend; discuss its data path fir
 
 ### Install reference
 
-The installer renders a small bundle under `~/.tinker/`, stages and self-tests it, and
+The installer renders a small bundle under `~/.tinker/` (`~/.tinker-<name>/` with
+`--instance <name>`), stages and self-tests it, and
 registers it with `claude`, `codex` and as an Antigravity plugin. It replaces or
 deletes only files it recorded with their hash, restores the previous files if an
 update fails, and reports each app separately: one app can be current while another
