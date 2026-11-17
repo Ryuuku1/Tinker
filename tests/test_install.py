@@ -3,7 +3,9 @@
 Host CLIs are fakes that record their calls and update the temporary home's settings the way
 the real CLIs do; they prove the installer's bookkeeping, not live host registration.
 """
+import contextlib
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -38,14 +40,14 @@ failing = (here / "fail.txt").read_text(encoding="utf-8").splitlines() if (here 
 if any(prefix and line.startswith(prefix) for prefix in failing):
     sys.exit(1)
 home = Path((here / "home.txt").read_text(encoding="utf-8").strip())  # only ever the test's disposable home
-if name == "claude" and args[:2] in (["plugin", "install"], ["plugin", "uninstall"]):
+if name == "claude" and args[:1] == ["plugin"] and args[1:2] in (["install"], ["uninstall"], ["enable"], ["disable"]):
     path = home / ".claude" / "settings.json"
     settings = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     plugins = settings.setdefault("enabledPlugins", {})
-    if args[1] == "install":
-        plugins[args[2]] = True
-    else:
+    if args[1] == "uninstall":
         plugins.pop(args[2], None)
+    else:  # an install turns the plugin on, also one turned off earlier
+        plugins[args[2]] = args[1] != "disable"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(settings), encoding="utf-8")
 if name == "codex" and args[:2] in (["plugin", "add"], ["plugin", "remove"]):
@@ -667,6 +669,124 @@ class ActivationTests(InstallCase):
         self.lines.clear()
         self.assertEqual(self.install(skip_cli=True, apps=("claude",)), 1)
         self.assertTrue(any("tinker_runtime.py" in line for line in self.steps("Refused")), "\n".join(self.lines))
+
+
+class InstanceTests(InstallCase):
+    """--instance beside another Tinker installation that owns ~/.tinker and has tinker@tinker-local enabled."""
+
+    def other_installation(self):
+        """The other installation as its own installer left it; {path: bytes} of every file it owns."""
+        state = self.home / ".tinker"
+        theirs = {state / "apps.json": json.dumps({"Claude": {"plugin": "tinker", "version": "1.0"}}),
+                  state / "config.json": json.dumps({"root": "C:/elsewhere", "team": "core"}),
+                  state / "plugin" / ".claude-plugin" / "plugin.json": json.dumps({"name": "tinker"}),
+                  self.home / ".codex" / "config.toml": '[plugins."tinker@tinker-local"]\nenabled = true\n',
+                  self.home / ".gemini" / "config" / "plugins" / "tinker" / "plugin.json": json.dumps({"name": "tinker"})}
+        for path, text in theirs.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        (self.home / ".claude").mkdir()
+        (self.home / ".claude" / "settings.json").write_text(json.dumps({"enabledPlugins": {"tinker@tinker-local": True}}))
+        return {path: path.read_bytes() for path in theirs}
+
+    def files_under(self, folder):
+        return sorted(p for p in folder.rglob("*") if p.is_file())
+
+    def test_hook_commands_name_the_installation_on_every_host(self):
+        runtime = Path("/home/u/.tinker-personal/runtime/tinker_runtime.py")
+        claude = install_apps.hook_commands("/usr/bin/python3", runtime, "pre-tool", "claude", "personal")
+        self.assertEqual(claude["args"][-4:], ["--host", "claude", "--instance", "personal"])
+        codex = install_apps.hook_commands("/usr/bin/python3", runtime, "pre-tool", "codex", "personal")
+        self.assertTrue(codex["command"].endswith("pre-tool --host codex --instance personal"))
+        self.assertTrue(codex["commandWindows"].endswith("--host codex --instance personal; exit $LASTEXITCODE"))
+        antigravity = install_apps.antigravity_hooks("/usr/bin/python3", runtime, "personal")
+        self.assertEqual(list(antigravity), ["tinker-personal"])
+        self.assertTrue(antigravity["tinker-personal"]["Stop"][0]["command"].endswith("stop --host antigravity --instance personal"))
+        self.assertNotIn("--instance", json.dumps(install_apps.claude_hooks("/usr/bin/python3", runtime)))
+        for name in ("local", "Personal", "a b", "x" * 21, "--home"):
+            with self.subTest(name=name):
+                with self.assertRaises(ValueError):
+                    install_apps.hook_commands("/usr/bin/python3", runtime, "stop", "claude", name)
+                with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                    install_apps.main(["--instance", name, "--dry-run", "--home", str(self.home)])
+        self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_installs_beside_another_installation_and_leaves_it_enabled(self):
+        log = self.fake_cli()
+        theirs = self.other_installation()
+        before = self.files_under(self.home / ".tinker")
+        self.assertEqual(self.install(instance="personal"), 0, "\n".join(self.lines))
+        self.assertEqual({p: p.read_bytes() for p in theirs}, theirs)
+        self.assertEqual(self.files_under(self.home / ".tinker"), before)
+        calls = [c.strip() for c in log.read_text().splitlines()]
+        self.assertFalse([c for c in calls if "tinker-local" in c or c.startswith("codex")], calls)
+        self.assertIn("claude plugin install tinker@tinker-personal --scope user", calls)
+        self.assertIn("claude plugin disable tinker@tinker-personal --scope user", calls)
+        enabled = json.loads((self.home / ".claude" / "settings.json").read_text(encoding="utf-8"))["enabledPlugins"]
+        self.assertEqual(enabled, {"tinker@tinker-local": True, "tinker@tinker-personal": False})
+        self.assertTrue(self.steps("Checked"), "\n".join(self.lines))  # the staged hook denied a tamper payload
+        self.assertTrue(any("tinker@tinker-local stays the enabled" in line and
+                            "claude plugin enable tinker@tinker-personal --scope user" in line and
+                            "settings.local.json" in line for line in self.steps("Next")), "\n".join(self.lines))
+        for app in APPS[1:]:
+            self.assertTrue(any(line.startswith(app) and "stays out" in line for line in self.steps("Skipped")), app)
+        state = self.home / ".tinker-personal"
+        record = json.loads((state / "apps.json").read_text(encoding="utf-8"))
+        self.assertEqual(set(record["apps"]), {"claude"})
+        self.assertEqual(record["apps"]["claude"]["registration"], "disabled")
+        bundle = state / "plugin"
+        self.assertEqual(json.loads((bundle / ".claude-plugin" / "marketplace.json").read_text())["name"], "tinker-personal")
+        self.assertEqual(json.loads((bundle / ".agents" / "plugins" / "marketplace.json").read_text())["name"], "tinker-personal")
+        for event, groups in json.loads((bundle / "hooks" / "claude.json").read_text())["hooks"].items():
+            with self.subTest(event=event):
+                handler = groups[0]["hooks"][0]
+                self.assertEqual(handler["args"][-2:], ["--instance", "personal"])
+                self.assertEqual(Path(handler["args"][2]), state / "runtime" / "tinker_runtime.py")
+        front = (bundle / "skills" / "tinker" / "SKILL.md").read_text(encoding="utf-8")
+        team = (bundle / "skills" / "tinker-team" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("`root` in `~/.tinker-personal/config.json`", front)
+        self.assertIn('scripts/tinker_runtime.py" --instance personal`', team)
+        self.assertNotRegex(front + team, r"~/\.tinker(?![\w-])")
+        env = dict(os.environ, USERPROFILE=str(self.home), HOME=str(self.home))
+        runtime = [PYTHON, "-I", "-S", str(state / "runtime" / "tinker_runtime.py")]
+        status = subprocess.run([*runtime, "--instance", "personal", "status"], capture_output=True, env=env,
+                                timeout=60).stdout.decode("utf-8")
+        self.assertIn(f"home {state}", status)
+        self.assertRegex(status, r"- claude: current; registration disabled")
+        self.assertNotIn("belongs to another Tinker installation", status)
+        default = subprocess.run([*runtime, "status"], capture_output=True, env=env, timeout=60).stdout.decode("utf-8")
+        self.assertIn("belongs to another Tinker installation", default)
+        self.lines.clear()
+        log.write_text("")
+        self.assertEqual(self.installer(instance="personal").uninstall(list(APPS)), 0, "\n".join(self.lines))
+        calls = [c.strip() for c in log.read_text().splitlines()]
+        self.assertEqual(calls, ["claude plugin uninstall tinker@tinker-personal --scope user",
+                                 "claude plugin marketplace remove tinker-personal"])
+        self.assertFalse(bundle.exists())
+        self.assertEqual({p: p.read_bytes() for p in theirs}, theirs)
+        enabled = json.loads((self.home / ".claude" / "settings.json").read_text(encoding="utf-8"))["enabledPlugins"]
+        self.assertEqual(enabled, {"tinker@tinker-local": True})
+
+    def test_without_app_clis_the_finish_command_turns_it_off(self):
+        self.other_installation()
+        self.assertEqual(self.install(apps=("claude",), dry_run=True, instance="personal"), 0, "\n".join(self.lines))
+        self.assertTrue(any("claude plugin disable tinker@tinker-personal --scope user" in line
+                            for line in self.steps("Would run")), "\n".join(self.lines))
+        self.assertFalse((self.home / ".tinker-personal").exists())
+        self.lines.clear()
+        self.assertEqual(self.install(apps=("claude",), skip_cli=True, instance="personal"), 0, "\n".join(self.lines))
+        self.assertTrue(any(line.endswith("claude plugin disable tinker@tinker-personal --scope user")
+                            for line in self.steps("Pending")), "\n".join(self.lines))
+
+    def test_its_own_plugin_id_enabled_without_its_records_is_refused(self):
+        (self.home / ".claude").mkdir()
+        (self.home / ".claude" / "settings.json").write_text(json.dumps({"enabledPlugins": {"tinker@tinker-personal": True}}))
+        self.assertEqual(self.install(apps=("claude",), skip_cli=True, instance="personal"), 1)
+        self.assertTrue(any("another Tinker" in line for line in self.steps("Refused")), "\n".join(self.lines))
+        self.assertFalse((self.home / ".tinker-personal").exists())
+        self.lines.clear()
+        self.assertEqual(self.install(apps=("claude",), skip_cli=True), 1)  # the default installation sees it too
+        self.assertTrue(any("tinker@tinker-personal" in line for line in self.steps("Refused")), "\n".join(self.lines))
 
 
 if __name__ == "__main__":

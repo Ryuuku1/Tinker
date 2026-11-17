@@ -12,8 +12,11 @@ hook must deny a tamper payload), then activated behind a journal that restores 
 on failure. Registration is per app, recorded as enabled, disabled or unknown; nothing is atomic
 across apps. Refuses an app where another Tinker installation is enabled or its settings cannot be
 read, and a home whose apps.json it did not write (another installation can share the product name).
-Run it yourself, not through an agent. --dry-run prints the plan; --uninstall removes only what
-apps.json records, after each app confirms its plugin is gone. --write-descriptors regenerates
+--instance <name> installs beside another installation instead, under its own names: home
+~/.tinker-<name>, marketplace tinker-<name>, plugin id tinker@tinker-<name>, Antigravity folder
+tinker-<name>. Where another Tinker is enabled, Claude gets this one installed but turned off, and
+Codex and Antigravity are left out. Run it yourself, not through an agent. --dry-run prints the
+plan; --uninstall removes only what apps.json records, after each app confirms its plugin is gone. --write-descriptors regenerates
 this checkout's project descriptors. --design-skills instead installs the third-party design skills
 globally through their own CLIs (npx); their files are theirs, never recorded in apps.json.
 """
@@ -133,11 +136,12 @@ def project_descriptors(root=ROOT):
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 
 
-def charter_tree(root, lead_path="AGENTS.md"):
+def charter_tree(root, lead_path="AGENTS.md", instance=""):
     """Charter files keyed by their bundle path, with relative links re-pointed at the copies.
 
     Skills move from .agents/skills/<name> to skills/<name>; AGENTS.md moves to lead_path.
-    Links to files outside the charter point at the checkout by absolute path.
+    Links to files outside the charter point at the checkout by absolute path. A named installation's
+    copy names its own home, and its runtime commands carry --instance.
     """
     files = tinker_runtime.charter_files(root)
     moved = {}
@@ -173,21 +177,28 @@ def charter_tree(root, lead_path="AGENTS.md"):
         text = LINK.sub(relink, text)
         text = text.replace("python scripts/graphify_project.py",
                             f"python \"{(root / 'scripts' / 'graphify_project.py').as_posix()}\"")
+        if instance:
+            text = re.sub(r"~/\.tinker(?![\w-])", f"~/{tinker_runtime.instance_names(instance)['home']}", text)
+            text = text.replace('scripts/tinker_runtime.py"`', f'scripts/tinker_runtime.py" --instance {instance}`')
         tree[new] = text
     return tree
 
 
 # ---------------------------------------------------------------- hook commands
 
-def hook_commands(python, runtime, event, host):
+def hook_commands(python, runtime, event, host, instance=""):
     exe, script = str(python), str(runtime)
-    posix = f'"{Path(exe).as_posix()}" -I -S "{Path(script).as_posix()}" {event} --host {host}'
+    if not tinker_runtime.valid_instance(instance):
+        raise ValueError(f"'{instance}' is not an installation name")
+    tail = ["--instance", instance] if instance else []  # the runtime's state_dir() follows it
+    words = " ".join([event, "--host", host, *tail])
+    posix = f'"{Path(exe).as_posix()}" -I -S "{Path(script).as_posix()}" {words}'
     if host == "claude":  # exec form: no shell parses it
         return {"type": "command", "command": Path(exe).as_posix(),
-                "args": ["-I", "-S", Path(script).as_posix(), event, "--host", host]}
+                "args": ["-I", "-S", Path(script).as_posix(), event, "--host", host, *tail]}
     if host == "codex":  # PowerShell: a leading string needs `&`, and only `exit` passes exit code 2 through
         return {"type": "command", "command": posix,
-                "commandWindows": f'& "{exe}" -I -S "{script}" {event} --host {host}; exit $LASTEXITCODE'}
+                "commandWindows": f'& "{exe}" -I -S "{script}" {words}; exit $LASTEXITCODE'}
     # cmd /c mangles quotes differently per spawner (Node strips outer ones, Go escapes inner ones as \"),
     # so the Antigravity line carries no quotes at all; both paths must need none (and no ~, which it expands).
     limit = "only ASCII letters, digits and . _ : \\ / - (no spaces, ~, % or non-ASCII)"
@@ -195,12 +206,12 @@ def hook_commands(python, runtime, event, host):
         raise ValueError(f"Antigravity runs hooks through cmd /c; pass --python with a path of {limit} (got {exe}).")
     if not SAFE_PATH.match(script):
         raise ValueError(f"Antigravity runs hooks through cmd /c; the home folder path needs {limit} (got {script}).")
-    return {"type": "command", "command": f"{exe} -I -S {script} {event} --host {host}"}
+    return {"type": "command", "command": f"{exe} -I -S {script} {words}"}
 
 
-def claude_hooks(python, runtime):
+def claude_hooks(python, runtime, instance=""):
     def group(event, timeout, matcher=None):
-        entry = {"hooks": [dict(hook_commands(python, runtime, event, "claude"), timeout=timeout)]}
+        entry = {"hooks": [dict(hook_commands(python, runtime, event, "claude", instance), timeout=timeout)]}
         return [dict({"matcher": matcher}, **entry) if matcher else entry]
     return {"hooks": {"SessionStart": group("session-start", 10, "startup|resume|clear|compact|fork"),
                       "UserPromptSubmit": group("prompt-submit", 10),
@@ -210,9 +221,9 @@ def claude_hooks(python, runtime):
                       "Stop": group("stop", 10), "SessionEnd": group("session-end", 5)}}
 
 
-def codex_hooks(python, runtime):
+def codex_hooks(python, runtime, instance=""):
     def group(event, timeout, matcher=None):
-        handler = dict(hook_commands(python, runtime, event, "codex"), timeout=timeout)
+        handler = dict(hook_commands(python, runtime, event, "codex", instance), timeout=timeout)
         entry = {"hooks": [handler]}
         return [dict({"matcher": matcher}, **entry) if matcher else entry]
     return {"hooks": {"SessionStart": group("session-start", 10, "startup|resume|clear|compact"),
@@ -221,9 +232,9 @@ def codex_hooks(python, runtime):
                       "Stop": group("stop", 10), "SessionEnd": group("session-end", 3)}}
 
 
-def antigravity_hooks(python, runtime):
-    handler = lambda event: dict(hook_commands(python, runtime, event, "antigravity"), timeout=10)  # noqa: E731
-    return {"tinker": {"enabled": True,
+def antigravity_hooks(python, runtime, instance=""):
+    handler = lambda event: dict(hook_commands(python, runtime, event, "antigravity", instance), timeout=10)  # noqa: E731
+    return {tinker_runtime.instance_names(instance)["folder"]: {"enabled": True,
                            "PreToolUse": [{"matcher": ANTIGRAVITY_MATCHER, "hooks": [handler("pre-tool")]}],
                            "PreInvocation": [handler("session-start")], "Stop": [handler("stop")]}}
 
@@ -237,14 +248,15 @@ def user_agents(root, charter_dir, lead):
             for role, fields in roles(root).items()}
 
 
-def bundle_files(root, home, python, version):
-    base = home / ".tinker" / "plugin"
-    runtime = home / ".tinker" / "runtime" / "tinker_runtime.py"
-    files = {f"{k}": v for k, v in charter_tree(root).items()}
+def bundle_files(root, home, python, version, instance=""):
+    names = tinker_runtime.instance_names(instance)
+    base = home / names["home"] / "plugin"
+    runtime = home / names["home"] / "runtime" / "tinker_runtime.py"
+    files = {f"{k}": v for k, v in charter_tree(root, instance=instance).items()}
     files[MARKER_FILE] = f"Rendered by {root / 'scripts' / 'install_apps.py'}; re-run it instead of editing.\n"
     files[".claude-plugin/plugin.json"] = dumps({"name": "tinker", "version": version, "description": ABOUT,
                                                  "author": AUTHOR, "hooks": "./hooks/claude.json"})
-    files[".claude-plugin/marketplace.json"] = dumps({"name": MARKETPLACE, "owner": AUTHOR,
+    files[".claude-plugin/marketplace.json"] = dumps({"name": names["marketplace"], "owner": AUTHOR,
                                                       "description": "Tinker, installed from this machine.",
                                                       "plugins": [{"name": "tinker", "source": "./",
                                                                    "version": version, "description": ABOUT}]})
@@ -255,29 +267,30 @@ def bundle_files(root, home, python, version):
                                       "developerName": "Tinker", "category": "Developer Tools",
                                       "capabilities": ["Interactive", "Read", "Write"]}}}})
     files[".agents/plugins/marketplace.json"] = dumps({
-        "name": MARKETPLACE, "interface": {"displayName": "Tinker"},
+        "name": names["marketplace"], "interface": {"displayName": "Tinker"},
         "plugins": [{"name": "tinker", "source": {"source": "local", "path": "./"},
                      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
                      "category": "Developer Tools"}]})
-    files["hooks/claude.json"] = dumps(claude_hooks(python, runtime))
-    files["hooks/codex.json"] = dumps(codex_hooks(python, runtime))
+    files["hooks/claude.json"] = dumps(claude_hooks(python, runtime, instance))
+    files["hooks/codex.json"] = dumps(codex_hooks(python, runtime, instance))
     for role, (fields, body) in user_agents(root, base, "AGENTS.md").items():
         files[f"agents/{role}.md"] = claude_agent(role, fields, body)
     return base, files
 
 
-def codex_agent_files(root, home):
-    base = home / ".tinker" / "plugin"
+def codex_agent_files(root, home, instance=""):
+    base = home / tinker_runtime.instance_names(instance)["home"] / "plugin"
     return {home / ".codex" / "agents" / f"tinker-{role}.toml": codex_agent(f"tinker-{role}", fields, body)
             for role, (fields, body) in user_agents(root, base, "AGENTS.md").items()}
 
 
-def antigravity_files(root, home, python):
-    base = home / ".gemini" / "config" / "plugins" / "tinker"
-    files = charter_tree(root, lead_path="rules/AGENTS.md")
+def antigravity_files(root, home, python, instance=""):
+    names = tinker_runtime.instance_names(instance)
+    base = home / ".gemini" / "config" / "plugins" / names["folder"]
+    files = charter_tree(root, lead_path="rules/AGENTS.md", instance=instance)
     files[MARKER_FILE] = f"Rendered by {root / 'scripts' / 'install_apps.py'}; re-run it instead of editing.\n"
-    files["plugin.json"] = dumps({"name": "tinker"})
-    files["hooks.json"] = dumps(antigravity_hooks(python, home / ".tinker" / "runtime" / "tinker_runtime.py"))
+    files["plugin.json"] = dumps({"name": names["folder"]})
+    files["hooks.json"] = dumps(antigravity_hooks(python, home / names["home"] / "runtime" / "tinker_runtime.py", instance))
     for role, (fields, body) in user_agents(root, base, "rules/AGENTS.md").items():
         files[f"agents/tinker-{role}.md"] = antigravity_agent(f"tinker-{role}", fields, body)
     return base, files
@@ -331,10 +344,15 @@ class Installer:
     Registration is per app and never atomic across apps.
     """
 
-    def __init__(self, home, python, dry_run=False, skip_cli=False, root=ROOT, out=print):
+    def __init__(self, home, python, dry_run=False, skip_cli=False, root=ROOT, out=print, instance=""):
         self.home, self.python, self.dry, self.skip_cli, self.root = Path(home), str(python), dry_run, skip_cli, Path(root)
         self.out, self.steps, self.failed = out, [], False
-        self.state = self.home / ".tinker"
+        if not tinker_runtime.valid_instance(instance):
+            raise ValueError(f"'{instance}' is not an installation name (a-z, 0-9, at most 20, not 'local')")
+        self.instance, self.names = instance, tinker_runtime.instance_names(instance)
+        self.plugin_id, self.marketplace = self.names["plugin_id"], self.names["marketplace"]
+        self.beside = {}  # app -> the other Tinker plugin ids that stay enabled there; ours is installed but off
+        self.state = self.home / self.names["home"]
         self.apps_file = self.state / "apps.json"
         status, previous = tinker_runtime.read_state(self.apps_file)
         if status == "ok" and tinker_runtime.foreign_records(previous):
@@ -513,25 +531,25 @@ class Installer:
 
     SETTINGS = {"claude": ".claude/settings.json", "codex": ".codex/config.toml", "antigravity": ".gemini/config/config.json"}
 
-    def registration(self, app, other=False):
-        """'enabled', 'disabled' (absent or turned off) or 'unknown' (settings unreadable or not understood),
-        for this plugin, or with other=True for another Tinker installation: any other tinker@ plugin, or
-        this plugin's id or folder while these records do not account for the app."""
+    def plugins(self, app, other=False):
+        """{plugin id or Antigravity folder: enabled value} for this plugin, or with other=True for every other
+        Tinker installation: any other tinker@ plugin or tinker[-<name>] folder, or this plugin's id or folder
+        while these records do not account for the app. 'unknown' when the settings cannot be read or understood."""
         ours = app in self.apps
-        match = (lambda key: key.startswith("tinker@") and not (ours and key == PLUGIN_ID)) if other \
-            else (lambda key: key == PLUGIN_ID)
+        match = (lambda key: key.startswith("tinker@") and not (ours and key == self.plugin_id)) if other \
+            else (lambda key: key == self.plugin_id)
         if app == "claude":
             status, settings = tinker_runtime.read_state(self.home / ".claude" / "settings.json")
             if status == "missing":
-                return "disabled"
+                return {}
             plugins = settings.get("enabledPlugins", {}) if status == "ok" else None
             if not isinstance(plugins, dict):
                 return "unknown"
-            values = [value for key, value in plugins.items() if match(key)]
-        elif app == "codex":
+            return {key: value for key, value in plugins.items() if match(key)}
+        if app == "codex":
             path = self.home / ".codex" / "config.toml"
             if not path.exists():
-                return "disabled"
+                return {}
             try:
                 import tomllib
                 plugins = tomllib.loads(path.read_text(encoding="utf-8")).get("plugins", {})
@@ -539,48 +557,69 @@ class Installer:
                 return "unknown"
             if not isinstance(plugins, dict) or any(not isinstance(v, dict) for k, v in plugins.items() if match(k)):
                 return "unknown"
-            values = [value.get("enabled", True) for key, value in plugins.items() if match(key)]
+            return {key: value.get("enabled", True) for key, value in plugins.items() if match(key)}
+        parent = self.home / ".gemini" / "config" / "plugins"
+        if other:
+            names = sorted(p.name for p in parent.iterdir() if re.fullmatch(r"tinker(-[a-z0-9]+)?", p.name)) \
+                if parent.is_dir() else []
         else:
-            name = "tinker"
-            folder = self.home / ".gemini" / "config" / "plugins" / name
+            names = [self.names["folder"]]
+        found = {}
+        config_status, config = tinker_runtime.read_state(self.home / ".gemini" / "config" / "config.json")
+        for name in names:
+            folder = parent / name
             if not folder.is_dir() or (other and self.recorded_under(folder)):
-                return "disabled"
+                continue
             status, manifest = tinker_runtime.read_state(folder / "plugin.json")
             if status == "missing" and not other:  # our folder without its manifest is no loadable plugin;
-                return "disabled"                  # for another installation the folder alone counts, to stay safe
-            config_status, config = tinker_runtime.read_state(self.home / ".gemini" / "config" / "config.json")
+                continue                           # for another installation the folder alone counts, to stay safe
             plugins = (config or {}).get("plugins", {}) if config_status != "unreadable" else None
             choice = plugins.get(name, {}) if isinstance(plugins, dict) else None
-            if not isinstance(choice, dict) or status == "unreadable":
-                return "unknown"
-            return "disabled" if choice.get("enabled") is False or (manifest or {}).get("disabled") else "enabled"
-        if any(value is True for value in values):
+            found[name] = "unknown" if not isinstance(choice, dict) or status == "unreadable" else \
+                not (choice.get("enabled") is False or (manifest or {}).get("disabled"))
+        return found
+
+    def registration(self, app, other=False):
+        """'enabled', 'disabled' (absent or turned off) or 'unknown' (settings unreadable or not understood),
+        for this plugin, or with other=True for any other Tinker installation (see plugins)."""
+        values = self.plugins(app, other)
+        if values == "unknown":
+            return "unknown"
+        if any(value is True for value in values.values()):
             return "enabled"
-        return "disabled" if all(value is False or value is None for value in values) else "unknown"
+        return "disabled" if all(value is False or value is None for value in values.values()) else "unknown"
+
+    def others_enabled(self, app):
+        values = self.plugins(app, other=True)
+        return [key for key, value in values.items() if value is True] if isinstance(values, dict) else []
 
     UNKNOWN_RECORDS = {
         "unreadable": "{} cannot be read, so which files are Tinker's is unknown; nothing was changed. Repair it "
                       "and re-run",
         "foreign": "{} was written by another Tinker installation (the same product name, another installer), "
-                   "which owns this home; nothing was changed. On this machine use project mode (README, "
-                   "\"Choose how to run it\"): this checkout runs from its own folder and leaves that "
-                   "installation as it is. Install here only after that installation's own uninstaller removed it",
+                   "which owns this home; nothing was changed. Install beside it with --instance <name> (a name "
+                   "no other installation uses: its own home, marketplace and plugin id), or use project mode "
+                   "(README, \"Choose how to run it\"), which runs this checkout from its own folder. Either way "
+                   "that installation stays as it is",
     }
     DISABLE_OTHER = {
-        "claude": "claude plugin disable tinker@tinker-local",
-        "codex": "codex plugin remove tinker@tinker-local (or disable it in the Codex app's Plugins view)",
-        "antigravity": "set \"plugins\": {\"tinker\": {\"enabled\": false}} in ~/.gemini/config/config.json",
+        "claude": "claude plugin disable {} --scope user",
+        "codex": "codex plugin remove {} (or disable it in the Codex app's Plugins view)",
+        "antigravity": "set \"plugins\": {{\"{}\": {{\"enabled\": false}}}} in ~/.gemini/config/config.json",
     }
+
+    def disable_other(self, app, ids):
+        return "; ".join(self.DISABLE_OTHER[app].format(i) for i in ids or ["tinker@tinker-local"])
 
     # ---- self-test: run each rendered command through its real shell with a tamper payload
     def self_test(self, app, handler):
+        tamper = f"echo x > ~/{self.names['home']}/runtime/tinker_runtime.py"
         payload = json.dumps({"session_id": "", "cwd": str(self.root), "tool_name": "Bash",
-                              "tool_input": {"command": "echo x > ~/.tinker/runtime/tinker_runtime.py"}})
+                              "tool_input": {"command": tamper}})
         runs = []
         if app == "antigravity":
             payload = json.dumps({"conversationId": "", "workspacePaths": [str(self.root)],
-                                  "toolCall": {"name": "run_command",
-                                               "args": {"CommandLine": "echo x > ~/.tinker/runtime/tinker_runtime.py"}}})
+                                  "toolCall": {"name": "run_command", "args": {"CommandLine": tamper}}})
             # Both plausible spawners: Node's verbatim `/d /s /c "..."` string, and an escaped argv (Go's default).
             runs = [f'cmd.exe /d /s /c "{handler["command"]}"', ["cmd.exe", "/d", "/c", handler["command"]]] \
                 if os.name == "nt" else [["sh", "-c", handler["command"]]]
@@ -608,10 +647,10 @@ class Installer:
 
     def hook_handler(self, app, runtime, python):
         if app == "claude":
-            return claude_hooks(python, runtime)["hooks"]["PreToolUse"][0]["hooks"][0]
+            return claude_hooks(python, runtime, self.instance)["hooks"]["PreToolUse"][0]["hooks"][0]
         if app == "codex":
-            return codex_hooks(python, runtime)["hooks"]["PreToolUse"][0]["hooks"][0]
-        return antigravity_hooks(python, runtime)["tinker"]["PreToolUse"][0]["hooks"][0]
+            return codex_hooks(python, runtime, self.instance)["hooks"]["PreToolUse"][0]["hooks"][0]
+        return antigravity_hooks(python, runtime, self.instance)[self.names["folder"]]["PreToolUse"][0]["hooks"][0]
 
     # ---- earlier manifests
     def migrate(self):
@@ -634,8 +673,17 @@ class Installer:
     def recovery(self, app):
         bundle = self.state / "plugin"
         if app == "claude":
-            return f"claude plugin marketplace add {bundle}; claude plugin install {PLUGIN_ID} --scope user"
-        return f"codex plugin marketplace add {bundle}; codex plugin add {PLUGIN_ID}; then trust the hooks in /hooks"
+            off = f"; claude plugin disable {self.plugin_id} --scope user" if app in self.beside else ""
+            return f"claude plugin marketplace add {bundle}; claude plugin install {self.plugin_id} --scope user{off}"
+        return f"codex plugin marketplace add {bundle}; codex plugin add {self.plugin_id}; then trust the hooks in /hooks"
+
+    def switch(self, app):
+        """How to make this installation the enabled one in Claude, everywhere or in one project."""
+        others = self.beside[app]
+        off = "; ".join(f"claude plugin disable {i} --scope user" for i in others)
+        local = ", ".join([*(f"\"{i}\": false" for i in others), f"\"{self.plugin_id}\": true"])
+        return (f"{off}; claude plugin enable {self.plugin_id} --scope user. For one project only, put "
+                f"\"enabledPlugins\": {{{local}}} in its .claude/settings.local.json")
 
     # ---- install
     def install(self, apps):
@@ -646,9 +694,20 @@ class Installer:
         self.migrate()
         for app in list(apps):
             state = self.registration(app, other=True)
-            if state == "enabled":
+            others = self.others_enabled(app) if state == "enabled" else []
+            mine = self.names["folder"] if app == "antigravity" else self.plugin_id
+            beside = state == "enabled" and self.instance and mine not in others
+            if beside and app == "claude":  # installed, then turned off: one chat never runs two Tinker gates
+                self.beside[app] = others
+                continue
+            if beside:  # Codex's CLI cannot keep a plugin installed but off, and Antigravity loads every plugin folder
+                self.step(app, "Skipped", f"another Tinker installation ({', '.join(others)}) is enabled in {app}, which "
+                                          "cannot hold a second one turned off; this one stays out of it. To switch: "
+                                          f"{self.disable_other(app, others)}, then re-run with --instance {self.instance} "
+                                          f"--app {app}")
+            elif state == "enabled":
                 self.step(app, "Refused", f"another Tinker installation is enabled in this app; disable it first "
-                                          f"({self.DISABLE_OTHER[app]}), then re-run")
+                                          f"({self.disable_other(app, others)}), then re-run")
             elif state == "unknown":
                 self.step(app, "Refused", f"~/{self.SETTINGS[app]} cannot be read, so another Tinker installation may be "
                                           "enabled there; repair it and re-run")
@@ -665,17 +724,18 @@ class Installer:
         base = self.state / "plugin"
         units = {"runtime": (None, {runtime: (self.root / "scripts" / "tinker_runtime.py").read_bytes()})}
         if {"claude", "codex"} & set(apps):
-            units["bundle"] = (base, {base / rel: content for rel, content in bundle_files(self.root, self.home, self.python, version)[1].items()})
+            rendered = bundle_files(self.root, self.home, self.python, version, self.instance)[1]
+            units["bundle"] = (base, {base / rel: content for rel, content in rendered.items()})
         if "antigravity" in apps:
             try:
-                folder, files = antigravity_files(self.root, self.home, self.python)
+                folder, files = antigravity_files(self.root, self.home, self.python, self.instance)
                 units["antigravity"] = (folder, {folder / rel: content for rel, content in files.items()})
             except ValueError as error:
                 self.step("antigravity", "Refused", str(error))
                 apps.remove("antigravity")
         agents, kept_agents = {}, []
         if "codex" in apps:
-            for path, content in codex_agent_files(self.root, self.home).items():
+            for path, content in codex_agent_files(self.root, self.home, self.instance).items():
                 if self.owner(path) in ("absent", "owned"):
                     agents[path] = content
                 else:
@@ -784,7 +844,10 @@ class Installer:
                 entry["agents"] = sorted({*map(str, agents), *(p for p in entry.get("agents") or [] if p in kept_agents and p in self.files)})
             if not registered and not any(a == app and action == "Failed" for a, action, _ in self.steps):
                 self.step(app, "Pending", f"rendered but not active in {app}; to finish: {recovery}")
-            if registered:
+            if registered and app in self.beside:
+                self.step(app, "Next", f"Installed but turned off: {', '.join(self.beside[app])} stays the enabled "
+                                       f"Tinker, so a chat never runs two gates and charters. To switch: {self.switch(app)}.")
+            elif registered:
                 self.step(app, "Next", {
                     "claude": "Start a new chat; skills appear as /tinker:<skill>, teammates as @agent-tinker:<role>.",
                     "codex": "Restart Codex and trust the Tinker hooks in /hooks (needed after every install); "
@@ -807,15 +870,20 @@ class Installer:
         bundle = str(self.state / "plugin")
         if app == "claude":
             self.cli("claude", "claude", ["plugin", "marketplace", "add", bundle], may_fail=True)
-            self.cli("claude", "claude", ["plugin", "marketplace", "update", MARKETPLACE], may_fail=True)
-            installed = self.cli("claude", "claude", ["plugin", "install", PLUGIN_ID, "--scope", "user"], may_fail=True)
-            registered = self.cli("claude", "claude", ["plugin", "update", PLUGIN_ID], may_fail=True) or installed
+            self.cli("claude", "claude", ["plugin", "marketplace", "update", self.marketplace], may_fail=True)
+            installed = self.cli("claude", "claude", ["plugin", "install", self.plugin_id, "--scope", "user"], may_fail=True)
+            registered = self.cli("claude", "claude", ["plugin", "update", self.plugin_id], may_fail=True) or installed
+            # An install turns the plugin on, also one turned off earlier: beside another Tinker, turn it off again.
+            if app in self.beside and (registered or self.dry) and \
+                    not self.cli("claude", "claude", ["plugin", "disable", self.plugin_id, "--scope", "user"]) and registered:
+                self.step(app, "Failed", f"{self.plugin_id} and {', '.join(self.beside[app])} are both enabled now; run "
+                                         f"claude plugin disable {self.plugin_id} --scope user")
         else:
             self.cli("codex", "codex", ["plugin", "marketplace", "add", bundle], may_fail=True)
-            self.cli("codex", "codex", ["plugin", "remove", PLUGIN_ID], may_fail=True)
-            registered = self.cli("codex", "codex", ["plugin", "add", PLUGIN_ID], may_fail=True)
+            self.cli("codex", "codex", ["plugin", "remove", self.plugin_id], may_fail=True)
+            registered = self.cli("codex", "codex", ["plugin", "add", self.plugin_id], may_fail=True)
         if not registered and not self.dry and not self.skip_cli and shutil.which(app):
-            self.step(app, "Failed", f"{PLUGIN_ID} is not registered: the {app} CLI did not confirm it (see above); "
+            self.step(app, "Failed", f"{self.plugin_id} is not registered: the {app} CLI did not confirm it (see above); "
                                      f"files stay in place for recovery: {self.recovery(app)}")
         return registered
 
@@ -841,12 +909,12 @@ class Installer:
         for app in [a for a in apps if a in self.apps]:
             if app == "antigravity":
                 folder = Path(self.apps[app].get("dir") or (self.apps[app].get("rendered") or {}).get("dir")
-                              or self.home / ".gemini" / "config" / "plugins" / "tinker")
+                              or self.home / ".gemini" / "config" / "plugins" / self.names["folder"])
                 cleared = self.remove_folder(folder, app)
             elif app == "claude":
-                cleared = self.cli("claude", "claude", ["plugin", "uninstall", PLUGIN_ID, "--scope", "user"], may_fail=True)
+                cleared = self.cli("claude", "claude", ["plugin", "uninstall", self.plugin_id, "--scope", "user"], may_fail=True)
             else:
-                cleared = self.cli("codex", "codex", ["plugin", "remove", PLUGIN_ID], may_fail=True)
+                cleared = self.cli("codex", "codex", ["plugin", "remove", self.plugin_id], may_fail=True)
             state = self.registration(app)
             self.apps[app]["registration"] = state
             if self.dry:
@@ -856,11 +924,11 @@ class Installer:
                 self.step(app, "Kept", f"registration {state}, not confirmed removed; " + (
                     "files it could not remove stay in its plugin folder, so Antigravity may still load them; remove "
                     "them yourself, then re-run --uninstall" if app == "antigravity" else
-                    f"its files stay so the app keeps working. Remove {PLUGIN_ID} with the app, then re-run --uninstall"))
+                    f"its files stay so the app keeps working. Remove {self.plugin_id} with the app, then re-run --uninstall"))
                 self.failed = True
                 continue
             if app in ("claude", "codex"):
-                self.cli(app, app, ["plugin", "marketplace", "remove", MARKETPLACE], may_fail=True)
+                self.cli(app, app, ["plugin", "marketplace", "remove", self.marketplace], may_fail=True)
             if app == "codex":
                 for path in self.apps[app].get("agents") or []:
                     self.remove_owned(Path(path), "codex")
@@ -910,6 +978,12 @@ def write_descriptors(root=ROOT):
             print(f"wrote {rel}")
 
 
+def instance_name(value):
+    if not tinker_runtime.valid_instance(value):
+        raise argparse.ArgumentTypeError(f"'{value}' is not an installation name (a-z, 0-9, at most 20, not 'local')")
+    return value
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--app", choices=["all", *tinker_runtime.HOSTS], default="all")
@@ -917,6 +991,9 @@ def main(argv=None):
     parser.add_argument("--uninstall", action="store_true")
     parser.add_argument("--skip-app-cli", action="store_true", help="render files but do not call claude/codex")
     parser.add_argument("--home", default=str(Path.home()), help="user home to install into (tests use a temporary one)")
+    parser.add_argument("--instance", default="", type=instance_name, metavar="NAME",
+                        help="install beside another Tinker installation under its own names: ~/.tinker-NAME, "
+                             "plugin id tinker@tinker-NAME (pass it again to update or uninstall)")
     parser.add_argument("--python", default=getattr(sys, "_base_executable", sys.executable),
                         help="interpreter the hooks run (never a virtual environment launcher)")
     parser.add_argument("--write-descriptors", action="store_true", help="regenerate this checkout's project descriptors")
@@ -927,7 +1004,7 @@ def main(argv=None):
         write_descriptors()
         return 0
     apps = list(tinker_runtime.HOSTS) if args.app == "all" else [args.app]
-    installer = Installer(args.home, args.python, args.dry_run, args.skip_app_cli)
+    installer = Installer(args.home, args.python, args.dry_run, args.skip_app_cli, instance=args.instance)
     if args.dry_run:
         print("[dry run] nothing is written and no app CLI runs")
     if args.design_skills:
