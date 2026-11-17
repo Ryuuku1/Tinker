@@ -241,11 +241,12 @@ Where another Tinker is enabled in an app:
 
 - Claude Code: this one is installed, then turned off with `claude plugin disable
   tinker@tinker-<name> --scope user`. An install turns a plugin on again, so every
-  update turns it off again while the other stays enabled. Both on would run two gates
-  and two charters in each chat. To switch, disable the other and enable this one at
-  user scope, or for one project put `"enabledPlugins": {"tinker@tinker-local": false,
-  "tinker@tinker-<name>": true}` in its `.claude/settings.local.json`; the installer
-  prints both. Checked on 2026-11-17 in an isolated Claude Code configuration: two
+  update turns it off again while the other stays enabled; after a switch, updates keep
+  this one on. Both on would run two gates and two charters in each chat. To switch,
+  disable the other and enable this one at user scope, or for one project put
+  `"enabledPlugins": {"tinker@tinker-local": false, "tinker@tinker-<name>": true}` in its
+  `.claude/settings.local.json`; the installer prints both. Run them yourself: the guard
+  denies an agent's command or edit that changes a Tinker plugin's registration. Checked on 2026-11-17 in an isolated Claude Code configuration: two
   plugins named `tinker` from different marketplaces install side by side, `disable`
   and `enable` switch one at user scope, and a project's `settings.local.json`
   overrides the user setting.
