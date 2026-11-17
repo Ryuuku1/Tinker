@@ -205,6 +205,8 @@ def claude_hooks(python, runtime):
     return {"hooks": {"SessionStart": group("session-start", 10, "startup|resume|clear|compact|fork"),
                       "UserPromptSubmit": group("prompt-submit", 10),
                       "PreToolUse": group("pre-tool", 10, CLAUDE_MATCHER),
+                      # Claude only: its PostToolUse can replace a tool's output, so long test logs arrive trimmed.
+                      "PostToolUse": group("post-tool", 30, "Bash|PowerShell"),
                       "Stop": group("stop", 10), "SessionEnd": group("session-end", 5)}}
 
 

@@ -5,65 +5,16 @@
 Passing tests, skipped-test lines and compiler warnings are dropped; failure blocks are kept up to --max-lines; summary
 lines (totals, failure counts) are always kept, even past the cap, and the output ends with what was trimmed, as the
 evidence policy requires. Standard library only; deterministic, so the same log always gives the same summary.
+In Claude, the runtime's post-tool hook applies the same filter to long test, build and lint output.
 """
 import argparse
-import re
+from pathlib import Path
 import sys
 
-NOISE = re.compile(r"(?i)(:\s*warning(\s+[A-Za-z0-9]+)?:\s*|^\s*warning(\s+[A-Za-z0-9]+)?:\s*|\bwarning\s+(CS|TS)\d+:"
-                   r"|^\s*(Passed|PASS)\s+|[✓√]\s+|\bPASSED\b|^\s*Skipped\s+|\bSKIPPED\b"
-                   r"|^\s*(Time Elapsed|Build started|Total time:))")
-FAILURE = re.compile(r"(?i)(Failed\s+[\w.]+|^\s*FAIL\s+|●|AssertionError|Expected:|Received:|Stack\s*Trace:"
-                     r"|^\s*at\s+[\w.<>$]+\(.*\)|:\s*error(\s+[A-Za-z0-9_-]+)?:\s*|:\s*error\[[A-Za-z0-9]+\]:"
-                     r"|^\s*error(\s+[A-Za-z0-9_-]+)?:\s*|^\s*error\[[A-Za-z0-9]+\]:|ERROR:|\bFAILED\b"
-                     r"|^(FAIL|ERROR): |^Traceback \(most recent call last\):|^=+ (FAILURES|ERRORS) =+$)")
-COUNTED = re.compile(r"(?i)(Failed\s+[\w.]+|^\s*FAIL\s+|●|:\s*error|^\s*error|^ERROR:|^FAIL:)")
-SUMMARY = re.compile(r"(?i)(Total tests:|^\s*Failed:\s*\d+|^\s*Passed!|^\s*Failed!|Tests:.*\b(failed|passed)\b"
-                     r"|FAILED\s+\(|^Ran \d+ tests? in|^OK(\s+\(|$)|^=+ .*\b(passed|failed|error)s?\b.* =+$"
-                     r"|\b\d+ (passed|failed)\b|Build (succeeded|FAILED)|\d+ Error\(s\)|\d+ Warning\(s\))")
-
-
-def summarize(lines, max_lines=50):
-    kept, summaries = [], []
-    capturing, blanks, failures, dropped = False, 0, 0, 0
-    for line in lines:
-        if SUMMARY.search(line):
-            summaries.append(line)
-            capturing = False
-            continue
-        if NOISE.search(line):
-            dropped += 1
-            continue
-        if FAILURE.search(line):
-            capturing, blanks = True, 0
-            failures += bool(COUNTED.search(line))
-        elif capturing and not line.strip():
-            blanks += 1
-            if blanks > 2:
-                capturing = False
-                dropped += 1
-                continue
-        elif capturing:
-            blanks = 0
-        else:
-            dropped += 1
-            continue
-        if len(kept) < max_lines:
-            kept.append(line)
-        else:
-            dropped += 1
-    if not kept and not summaries:
-        clean = [line for line in lines if line.strip() and not NOISE.search(line)]
-        if not clean:
-            return "No test or compiler failures detected (no output besides passes, skips and warnings)."
-        tail = clean[-20:]
-        return "\n".join(["--- no failure markers found; last lines ---", *tail,
-                          f"[filter: showed the last {len(tail)} of {len(lines)} lines]"])
-    out = kept + (["--- summary ---", *summaries] if summaries else [])
-    out.append(f"[filter: {failures} failure marker(s); kept {len(kept)} block line(s) and {len(summaries)} summary "
-               f"line(s); dropped {dropped} of {len(lines)} lines (passes, skips, warnings, context"
-               f"{', and block lines past the cap of ' + str(max_lines) if len(kept) >= max_lines else ''})]")
-    return "\n".join(out)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+# One copy of the filter: the runtime's PostToolUse trim (Claude) uses it too, and the installed runtime runs
+# alone, so the filter lives there and this file is its command line.
+from tinker_runtime import COUNTED, FAILURE, NOISE, SUMMARY, summarize  # noqa: E402,F401
 
 
 def main(argv=None):

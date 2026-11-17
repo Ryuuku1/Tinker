@@ -140,6 +140,7 @@ structured tool input: a guard against mistakes and naive injection, not a sandb
 | Creating or updating a schedule without the unattended marker | Claude asks; Codex best-effort (`automation_update` is not a documented hook tool); Antigravity `schedule` gated but its arguments are undocumented | Instructions |
 | A gated call the gate cannot judge (missing or malformed fields, unknown tool) | Visible restriction (`payload.incomplete`) | Not applicable |
 | Attended commits and feature-branch pushes, ordinary edits, tests and builds | Not gated | Instructions and host permissions |
+| A test, build or lint run whose output stream exceeds 200 lines | Claude: that stream reaches the model as its failures and last 30 lines, and the full output is saved under the temp folder's `tinker-logs/`. Codex and Antigravity: unchanged | `python scripts/filter_test_log.py` by hand |
 | Messages, MCP and connector tools, web requests, reading secrets, deployment through unclassified tools | Not gated | Instructions and host permissions |
 | Helper budget, one writer, no recursion, read-only reviewer | Descriptors request restrictions; parents can override | Delegation policy |
 | Checkpoint ownership | Not enforced; hooks only read front matter | Workspace policy |
@@ -152,7 +153,7 @@ for Claude Code, the tool schemas of an installed build. `TOOL_KINDS` in
 
 | Host | Gated tool names | Decision contract used |
 | --- | --- | --- |
-| Claude Code | `Bash`, `PowerShell`, `Monitor`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit`, and `mcp__scheduled-tasks__{create,update}_scheduled_task`, also as a plugin's `mcp__plugin_<plugin>_scheduled-tasks__…` | `permissionDecision: ask` prompts; exit 2 with stderr blocks; empty output keeps normal permissions. `CronCreate`/`ScheduleWakeup` are session-only and not gated: their prompts run in the same session under its own restriction |
+| Claude Code | `Bash`, `PowerShell`, `Monitor`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit`, and `mcp__scheduled-tasks__{create,update}_scheduled_task`, also as a plugin's `mcp__plugin_<plugin>_scheduled-tasks__…` | `permissionDecision: ask` prompts; exit 2 with stderr blocks; empty output keeps normal permissions. `CronCreate`/`ScheduleWakeup` are session-only and not gated: their prompts run in the same session under its own restriction. `PostToolUse` on `Bash` and `PowerShell` returns `updatedToolOutput` (the tool's own fields, with a long runner stream trimmed); empty output keeps the original |
 | Codex | `Bash` and `apply_patch` (input in `tool_input.command`), `automation_update` (undocumented, best-effort) | `ask` is parsed but unsupported (the hook fails and the tool runs), so Codex gets a deny with a request id; exit 2 blocks; empty output is no decision; changed hooks must be trusted again in `/hooks` |
 | Antigravity | `run_command`, `write_to_file`, `replace_file_content`, `multi_replace_file_content`, `code_action` (absent from current docs, kept for earlier builds), `schedule` (arguments undocumented: every prompt-named argument must be a non-empty string carrying the marker) | `force_ask` and `deny` as documented; `decision` is documented as required and `{}` is sent for no opinion, which is unverified. `allow` is never sent, so the user's own review is kept |
 
@@ -238,7 +239,7 @@ acceptance cases succeed.
 | Descriptor generation | Verified by package tests (no drift). 2026-09-26: `claude plugin validate` (CLI 2.1.274) passed for this checkout and for a bundle and marketplace rendered by the new installer into a disposable home | Package tests only | Package tests only |
 | Host discovery | Live 2026-09-23/24: skills and eight agents loaded; plugin validation passed | Desktop task loaded AGENTS.md and skills (2026-09-23); CLI 0.146.0 present, not run live | Not verified (no scoped live interface, no `agy` on PATH on 2026-09-26) |
 | Tool restrictions | Requested by descriptors; not verified live | Same | Same |
-| Hook behavior | Live 2026-09-24 for the runtime before this refactor (context, ask, block in default and bypass modes, session end). The 2026-09-26 runtime: sample-payload tests | Documented formats and shell self-tests only | Documented formats and `cmd /c` self-tests only |
+| Hook behavior | Live 2026-09-24 for the runtime before this refactor (context, ask, block in default and bypass modes, session end). The 2026-09-26 runtime: sample-payload tests. The output trim (2026-11-17): sample-payload tests only, not yet checked in an installed app | Documented formats and shell self-tests only | Documented formats and `cmd /c` self-tests only |
 | Task execution | Behavioral cases not verified; no accepted baseline | Not verified (a delegation probe timed out; see below) | Not verified |
 
 Earlier Codex notes: a read-only smoke run recognized the Lead, roles, skills and

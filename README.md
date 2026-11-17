@@ -264,7 +264,8 @@ repository's instructions link it.
    reports failed, skipped and unavailable checks exactly
    ([evidence policy](policies/evidence.md)). Noisy test output can go through
    `python scripts/filter_test_log.py`, which keeps failures and totals and says what
-   it dropped. Substantial or delegated work keeps a checkpoint in `.tinker/tasks/`.
+   it dropped. In Claude with the installed hooks, a test, build or lint output over
+   200 lines arrives trimmed that way, with the full log saved in the temp folder. Substantial or delegated work keeps a checkpoint in `.tinker/tasks/`.
 4. **Deliver.** Changes are left as the playbook says. Commits, pushes, publishing
    and remote changes happen only when you ask.
 5. **Retro.** The final message ends with a short retro, also saved to the ignored

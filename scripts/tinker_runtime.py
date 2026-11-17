@@ -7,6 +7,8 @@ Hook events read the app's hook JSON on stdin:
   prompt-submit  presence; the scheduled-run marker; `approve <id>` typed by the user
   pre-tool       the approval gate: consequential operations ask through the app, or are
                  denied with a request id; tampering with Tinker is never allowed
+  post-tool      Claude only: a long test, build or lint output reaches the model as its
+                 failures and last lines; the full output is saved under the temp folder
   stop           presence; an unattended run's final message becomes its outcome
   session-end    presence
 Read-only commands: `status`, `schedule-plan`. No command grants an approval.
@@ -25,11 +27,12 @@ from pathlib import Path
 import re
 import shlex
 import sys
+import tempfile
 import threading
 import time
 
 HOSTS = ("claude", "codex", "antigravity")
-EVENTS = ("session-start", "prompt-submit", "pre-tool", "stop", "session-end")
+EVENTS = ("session-start", "prompt-submit", "pre-tool", "post-tool", "stop", "session-end")
 MARKER = "[tinker scheduled run]"
 WATCHDOG_SECONDS = 5.0
 GRANT_TTL = 30 * 60
@@ -1358,6 +1361,95 @@ class Output:
         self.denied = self._write(stderr=reason + "\n")
         return 2
 
+    def updated_output(self, response):
+        self._write({"hookSpecificOutput": {"hookEventName": "PostToolUse", "updatedToolOutput": response}})
+        return 0
+
+
+# ---------------------------------------------------------------- test logs and output trimming
+
+NOISE = re.compile(r"(?i)(:\s*warning(\s+[A-Za-z0-9]+)?:\s*|^\s*warning(\s+[A-Za-z0-9]+)?:\s*|\bwarning\s+(CS|TS)\d+:"
+                   r"|^\s*(Passed|PASS)\s+|[✓√]\s+|\bPASSED\b|^\s*Skipped\s+|\bSKIPPED\b"
+                   r"|^\s*(Time Elapsed|Build started|Total time:))")
+FAILURE = re.compile(r"(?i)(Failed\s+[\w.]+|^\s*FAIL\s+|●|AssertionError|Expected:|Received:|Stack\s*Trace:"
+                     r"|^\s*at\s+[\w.<>$]+\(.*\)|:\s*error(\s+[A-Za-z0-9_-]+)?:\s*|:\s*error\[[A-Za-z0-9]+\]:"
+                     r"|^\s*error(\s+[A-Za-z0-9_-]+)?:\s*|^\s*error\[[A-Za-z0-9]+\]:|ERROR:|\bFAILED\b"
+                     r"|^(FAIL|ERROR): |^Traceback \(most recent call last\):|^=+ (FAILURES|ERRORS) =+$)")
+COUNTED = re.compile(r"(?i)(Failed\s+[\w.]+|^\s*FAIL\s+|●|:\s*error|^\s*error|^ERROR:|^FAIL:)")
+SUMMARY = re.compile(r"(?i)(Total tests:|^\s*Failed:\s*\d+|^\s*Passed!|^\s*Failed!|Tests:.*\b(failed|passed)\b"
+                     r"|FAILED\s+\(|^Ran \d+ tests? in|^OK(\s+\(|$)|^=+ .*\b(passed|failed|error)s?\b.* =+$"
+                     r"|\b\d+ (passed|failed)\b|Build (succeeded|FAILED)|\d+ Error\(s\)|\d+ Warning\(s\))")
+
+
+def summarize(lines, max_lines=50, tail=20):
+    """Failure blocks (at most max_lines lines) and every summary line, then what was dropped; with no failure
+    marker, the last `tail` meaningful lines (none when tail is 0, for a caller that adds its own tail)."""
+    kept, summaries = [], []
+    capturing, blanks, failures, dropped = False, 0, 0, 0
+    for line in lines:
+        if SUMMARY.search(line):
+            summaries.append(line)
+            capturing = False
+            continue
+        if NOISE.search(line):
+            dropped += 1
+            continue
+        if FAILURE.search(line):
+            capturing, blanks = True, 0
+            failures += bool(COUNTED.search(line))
+        elif capturing and not line.strip():
+            blanks += 1
+            if blanks > 2:
+                capturing = False
+                dropped += 1
+                continue
+        elif capturing:
+            blanks = 0
+        else:
+            dropped += 1
+            continue
+        if len(kept) < max_lines:
+            kept.append(line)
+        else:
+            dropped += 1
+    if not kept and not summaries:
+        clean = [line for line in lines if line.strip() and not NOISE.search(line)]
+        if not clean:
+            return "No test or compiler failures detected (no output besides passes, skips and warnings)."
+        if tail <= 0:
+            return "[filter: no failure markers found]"
+        tail = clean[-tail:]
+        return "\n".join(["--- no failure markers found; last lines ---", *tail,
+                          f"[filter: showed the last {len(tail)} of {len(lines)} lines]"])
+    out = kept + (["--- summary ---", *summaries] if summaries else [])
+    out.append(f"[filter: {failures} failure marker(s); kept {len(kept)} block line(s) and {len(summaries)} summary "
+               f"line(s); dropped {dropped} of {len(lines)} lines (passes, skips, warnings, context"
+               f"{', and block lines past the cap of ' + str(max_lines) if len(kept) >= max_lines else ''})]")
+    return "\n".join(out)
+
+
+TRIM_LIMIT, TRIM_FAILURES, TRIM_TAIL = 200, 120, 30
+# A test, build or lint runner invoked as a command (at the start, or after &&, ||, ; or |); a grep, diff or file read
+# that merely names tests passes untouched.
+RUNNER_RX = re.compile(
+    r"(?i)(?:^|&&|\|\||;|\|)\s*(?:&\s*)?(?:dotnet\s+(?:test|build)|msbuild|(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:test|build|lint)"
+    r"|npx\s+(?:vitest|jest|playwright|tsc|eslint)|vitest|jest|pytest|playwright\s+test|tsc|eslint|go\s+test"
+    r"|cargo\s+(?:test|build)|mvn|gradlew?|Invoke-Pester|(?:python3?|py)(?:\.exe)?\s+(?:-\w+\s+)*-m\s+(?:unittest|pytest)"
+    r"|(?:pwsh|powershell)(?:\.exe)?\s+(?:-\w+\s+)*-File\s+\S*(?:test|build)\S*\.ps1)\b")
+
+
+def trim_stream(text, log):
+    """The failures and the last lines of a stream longer than TRIM_LIMIT lines, after saving all of it to `log`;
+    None when the stream is short enough to pass unchanged."""
+    lines = re.split(r"\r?\n", text.rstrip("\r\n"))
+    if len(lines) <= TRIM_LIMIT:
+        return None
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with open(log, "w", encoding="utf-8", errors="replace", newline="") as handle:
+        handle.write(text)
+    return "\n".join([f"[Tinker trimmed {len(lines)} lines to the failures and the last {TRIM_TAIL} lines; the full "
+                      f"output is {log}]", summarize(lines, TRIM_FAILURES, tail=0), "...", *lines[-TRIM_TAIL:]])
+
 
 # ---------------------------------------------------------------- events
 
@@ -1492,6 +1584,24 @@ def event_session_end(host, payload, out):
     return out.noop()
 
 
+def event_post_tool(host, payload, out):
+    """Claude only (its PostToolUse can replace a tool's output): a long runner output is trimmed per stream. Anything
+    else prints nothing, so the host keeps the original; run_hook turns any error into that same no-op."""
+    tool_input, response = payload.get("tool_input"), payload.get("tool_response")
+    command = tool_input.get("command") if isinstance(tool_input, dict) else None
+    if host != "claude" or not isinstance(command, str) or not RUNNER_RX.search(command) or not isinstance(response, dict):
+        return out.noop()
+    name = re.sub(r"[^A-Za-z0-9_-]", "", str(payload.get("tool_use_id") or ""))[:80] or os.urandom(8).hex()
+    folder = Path(tempfile.gettempdir()) / "tinker-logs"
+    updated = dict(response)
+    for stream, suffix in (("stdout", ""), ("stderr", ".stderr")):
+        text = response.get(stream)
+        trimmed = trim_stream(text, folder / f"{name}{suffix}.log") if isinstance(text, str) else None
+        if trimmed is not None:
+            updated[stream] = trimmed
+    return out.updated_output(updated) if updated != response else out.noop()
+
+
 def run_hook(event, host):
     out = Output(host)
     if event == "pre-tool":
@@ -1499,9 +1609,9 @@ def run_hook(event, host):
     try:
         payload = read_payload()
         handler = {"session-start": event_session_start, "prompt-submit": event_prompt_submit,
-                   "stop": event_stop, "session-end": event_session_end}[event]
+                   "post-tool": event_post_tool, "stop": event_stop, "session-end": event_session_end}[event]
         return handler(host, payload if isinstance(payload, dict) else {}, out)
-    except Exception:  # turn-boundary hooks never block the user
+    except Exception:  # turn-boundary and post-tool hooks never block the user or change a result
         return out.noop()
 
 
@@ -1659,7 +1769,7 @@ def main(argv):
             return 1
         sys.stdout.write(json.dumps(plan, indent=2) + "\n")
         return 0
-    sys.stderr.write("usage: tinker_runtime.py <session-start|prompt-submit|pre-tool|stop|session-end> --host "
+    sys.stderr.write("usage: tinker_runtime.py <session-start|prompt-submit|pre-tool|post-tool|stop|session-end> --host "
                      "<claude|codex|antigravity> | status | schedule-plan --role R --repo P --cron C --task T --app A\n")
     return 0
 

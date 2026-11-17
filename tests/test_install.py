@@ -216,7 +216,11 @@ class RenderTests(InstallCase):
         self.assertFalse(re.search(gated, "list_schedules"))
         self.assertEqual(pre["hooks"][0]["args"][:2], ["-I", "-S"])
         self.assertEqual(claude["SessionStart"][0]["matcher"], "startup|resume|clear|compact|fork")
+        post = claude["PostToolUse"][0]
+        self.assertEqual(post["matcher"], "Bash|PowerShell")
+        self.assertEqual(post["hooks"][0]["args"][-3:], ["post-tool", "--host", "claude"])
         codex = install_apps.codex_hooks(PYTHON, runtime)["hooks"]
+        self.assertNotIn("PostToolUse", codex)
         windows = codex["PreToolUse"][0]["hooks"][0]["commandWindows"]
         self.assertTrue(windows.startswith('& "') and windows.endswith("; exit $LASTEXITCODE"))
         self.assertLessEqual(codex["SessionEnd"][0]["hooks"][0]["timeout"], 3)

@@ -481,7 +481,7 @@ class ProtocolTests(Fixture):
                 result = subprocess.run([sys.executable, "-I", "-S", str(SCRIPT), *argv], input=b"{}",
                                         capture_output=True, env=self.env, timeout=30)
                 self.assertNotEqual(result.returncode, 2)
-        for event in ("session-start", "prompt-submit", "stop", "session-end"):
+        for event in ("session-start", "prompt-submit", "post-tool", "stop", "session-end"):
             with self.subTest(event=event):
                 self.assertEqual(self.hook(event, "claude", raw=b"{broken")[0], 0)
 
@@ -706,6 +706,65 @@ class LifecycleTests(Fixture):
         self.assertNotIn("checkout changed", self.start(session="s3"))
         (self.root / "scripts" / "tinker_runtime.py").write_text("# gate v2\n", encoding="utf-8")
         self.assertIn("checkout changed since install", self.start(session="s4"))
+
+
+class OutputTrimTests(Fixture):
+    """Claude's PostToolUse: a long runner output is trimmed per stream; everything else passes untouched."""
+
+    def setUp(self):
+        super().setUp()
+        self.temp = self.tmp / "temp"
+        self.temp.mkdir()
+        self.env.update(TMPDIR=str(self.temp), TEMP=str(self.temp), TMP=str(self.temp))
+
+    def run_tool(self, command, stdout="", stderr="", host="claude", tool_use_id="toolu_01A"):
+        payload = {"session_id": "s1", "cwd": str(self.repo), "hook_event_name": "PostToolUse", "tool_name": "Bash",
+                   "tool_input": {"command": command}, "tool_use_id": tool_use_id,
+                   "tool_response": {"stdout": stdout, "stderr": stderr, "interrupted": False, "isImage": False}}
+        return self.hook("post-tool", host, payload)
+
+    @staticmethod
+    def long_log(passes=300):
+        lines = [f"test_{i} (tests.test_x.T.test_{i}) ... ok" for i in range(passes)]
+        return "\n".join(lines + ["FAIL: test_b (tests.test_x.T.test_b)", "Traceback (most recent call last):",
+                                  "AssertionError: 1 != 2", "", f"Ran {passes + 1} tests in 1.0s",
+                                  "FAILED (failures=1)"]) + "\n"
+
+    def test_long_runner_output_reaches_claude_trimmed(self):
+        log = self.long_log()
+        code, out, err = self.run_tool("cd /work && python -m unittest discover -s tests", stdout=log)
+        self.assertEqual((code, err), (0, ""))
+        hook = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(hook["hookEventName"], "PostToolUse")
+        result = hook["updatedToolOutput"]
+        saved = self.temp / "tinker-logs" / "toolu_01A.log"
+        self.assertEqual(saved.read_bytes().decode("utf-8"), log)
+        self.assertTrue(result["stdout"].startswith("[Tinker trimmed 306 lines"))
+        self.assertIn(str(saved), result["stdout"])
+        self.assertIn("AssertionError: 1 != 2", result["stdout"])
+        self.assertTrue(result["stdout"].endswith("FAILED (failures=1)"))
+        self.assertLess(len(result["stdout"].splitlines()), 200)
+        self.assertEqual((result["stderr"], result["interrupted"], result["isImage"]), ("", False, False))
+
+    def test_a_long_stderr_is_trimmed_on_its_own(self):
+        code, out, _ = self.run_tool("pytest -q", stdout="1 passed\n", stderr=self.long_log(), tool_use_id="../../x")
+        result = json.loads(out)["hookSpecificOutput"]["updatedToolOutput"]
+        self.assertEqual(result["stdout"], "1 passed\n")
+        self.assertTrue(result["stderr"].startswith("[Tinker trimmed"))
+        self.assertTrue((self.temp / "tinker-logs" / "x.stderr.log").is_file())
+
+    def test_everything_else_passes_untouched(self):
+        long = self.long_log()
+        cases = [("claude", "grep -rn pytest tests/", long), ("claude", "cat build.log | head -400", long),
+                 ("claude", "echo dotnet test", long), ("claude", "python -m unittest discover", "Ran 3 tests\nOK\n"),
+                 ("codex", "python -m unittest discover -s tests", long)]
+        for host, command, stdout in cases:
+            with self.subTest(host=host, command=command):
+                self.assertEqual(self.run_tool(command, stdout=stdout, host=host), (0, "", ""))
+        self.assertFalse((self.temp / "tinker-logs").exists())
+        for raw in (b"{broken", b"", b'{"tool_input": "x", "tool_response": []}'):
+            with self.subTest(raw=raw):
+                self.assertEqual(self.hook("post-tool", "claude", raw=raw), (0, "", ""))
 
 
 class OperationIdentityTests(Fixture):
