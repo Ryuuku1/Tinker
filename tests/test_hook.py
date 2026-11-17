@@ -1103,5 +1103,59 @@ class CommandTests(Fixture):
                 self.assertIn("refused", err)
 
 
+class InstanceTests(Fixture):
+    """A named installation (--instance personal) keeps its state in ~/.tinker-personal and guards it."""
+
+    cli = CommandTests.cli
+
+    def run_hook(self, event, payload, *extra):
+        result = subprocess.run([sys.executable, "-I", "-S", str(SCRIPT), event, "--host", "claude", *extra],
+                                input=json.dumps(payload).encode("utf-8"), capture_output=True, env=self.env, timeout=30)
+        return result.returncode, (result.stdout + result.stderr).decode("utf-8")
+
+    def test_named_home_plugin_caches_and_id_are_guarded(self):
+        self.tb.set_instance("personal")
+        home = str(self.home)
+        for command, shell in [
+                (f"echo x > {home}/.tinker-personal/runtime/tinker_runtime.py", "posix"),
+                ("Set-Content $env:USERPROFILE\\.tinker-personal\\config.json x", "pwsh"),
+                ("cd ~ && echo x > .tinker-personal/state/a.json", "posix"),
+                (f"Remove-Item -Recurse {home}\\.claude\\plugins\\cache\\tinker-personal", "pwsh"),
+                (f"Remove-Item -Recurse {home}\\.claude\\plugins\\marketplaces\\tinker-personal", "pwsh"),
+                (f"rm -rf {self.home.as_posix()}/.gemini/config/plugins/tinker-personal", "posix"),
+                ("claude plugin disable tinker@tinker-personal", "posix"),
+                ("claude plugin marketplace remove tinker-personal", "posix"),
+                ("echo x > ~/.tinker/runtime/tinker_runtime.py", "posix")]:  # the default home stays guarded
+            with self.subTest(command=command):
+                self.assertTrue(self.classify(command, shell)[1], command)
+        for command in ("python C:/dev/Tinker/scripts/tinker_runtime.py --instance personal status",
+                        "git -C C:/dev/worktrees/tinker-personal-coexist status",
+                        "cat ~/.tinker-personal/config.json"):
+            with self.subTest(command=command):
+                self.assertEqual(self.classify(command, "pwsh")[1], [])
+        labels, tamper = self.tb.classify_paths([str(self.repo / ".claude" / "settings.local.json")],
+                                                '{"enabledPlugins": {"tinker@tinker-personal": false}}', str(self.repo))
+        self.assertTrue(tamper)
+
+    def test_hooks_and_status_use_the_named_home(self):
+        code, _ = self.run_hook("session-start", {"session_id": "s1", "cwd": str(self.repo), "source": "startup"},
+                                "--instance", "personal")
+        self.assertEqual(code, 0)
+        self.assertTrue(list((self.home / ".tinker-personal" / "state" / "sessions").glob("*.json")))
+        self.assertFalse((self.home / ".tinker" / "state").exists())
+        tamper = self.bash("echo x > ~/.tinker-personal/runtime/tinker_runtime.py")
+        self.assertEqual(self.run_hook("pre-tool", tamper, "--instance", "personal")[0], 2)
+        # An unusable name never turns the gate off: the default installation's guard runs instead.
+        code, out = self.run_hook("pre-tool", self.bash("echo x > ~/.tinker/config.json"), "--instance", "Bad Name")
+        self.assertEqual(code, 2, out)
+        code, out, _ = self.cli("--instance", "personal", "status")
+        self.assertEqual(code, 0)
+        self.assertIn(f"home {self.home / '.tinker-personal'}", out)
+        self.assertIn("claude/s1", out)
+        code, _, err = self.cli("--instance", "local", "status")
+        self.assertEqual(code, 1)
+        self.assertIn("not an installation name", err)
+
+
 if __name__ == "__main__":
     unittest.main()
