@@ -767,6 +767,55 @@ class InstanceTests(InstallCase):
         enabled = json.loads((self.home / ".claude" / "settings.json").read_text(encoding="utf-8"))["enabledPlugins"]
         self.assertEqual(enabled, {"tinker@tinker-local": True})
 
+    def test_reruns_keep_the_installation_the_user_enabled(self):
+        self.fake_cli()
+        self.other_installation()
+        settings = self.home / ".claude" / "settings.json"
+        cases = [({"tinker@tinker-local": True, "tinker@tinker-personal": False}, False),  # upgrade, still beside
+                 ({"tinker@tinker-local": False, "tinker@tinker-personal": True}, True),   # after a switch
+                 ({"tinker@tinker-local": True, "tinker@tinker-personal": True}, False)]   # both on: ours goes off
+        self.assertEqual(self.install(apps=("claude",), instance="personal"), 0, "\n".join(self.lines))
+        for enabled, ours in cases:
+            with self.subTest(enabled=enabled):
+                settings.write_text(json.dumps({"enabledPlugins": enabled}), encoding="utf-8")
+                self.lines.clear()
+                self.assertEqual(self.install(apps=("claude",), instance="personal"), 0, "\n".join(self.lines))
+                self.assertEqual(json.loads(settings.read_text(encoding="utf-8"))["enabledPlugins"],
+                                 dict(enabled, **{"tinker@tinker-personal": ours}))
+                self.assertFalse(self.steps("Refused") + self.steps("Failed"), "\n".join(self.lines))
+                self.assertTrue(any(("Start a new chat" if ours else "Installed but turned off") in line
+                                    for line in self.steps("Next")), "\n".join(self.lines))
+
+    def test_installs_into_every_app_under_its_own_names(self):
+        log = self.fake_cli()
+        theirs = self.other_installation()
+        (self.home / ".claude" / "settings.json").write_text(json.dumps({"enabledPlugins": {"tinker@tinker-local": False}}))
+        codex = self.home / ".codex" / "config.toml"
+        codex.write_text('[plugins."tinker@tinker-local"]\nenabled = false\n', encoding="utf-8")
+        gemini = self.home / ".gemini" / "config" / "config.json"
+        gemini.write_text(json.dumps({"plugins": {"tinker": {"enabled": False}}}), encoding="utf-8")
+        theirs.update({path: path.read_bytes() for path in (codex, gemini)})
+        self.assertEqual(self.install(instance="personal"), 0, "\n".join(self.lines))
+        self.assertEqual({p: p.read_bytes() for p in theirs if p != codex}, {p: v for p, v in theirs.items() if p != codex})
+        self.assertIn('[plugins."tinker@tinker-personal"]', codex.read_text(encoding="utf-8"))
+        self.assertTrue(codex.read_bytes().startswith(theirs[codex]), codex.read_bytes())
+        calls = [c.strip() for c in log.read_text().splitlines()]
+        self.assertFalse([c for c in calls if "tinker-local" in c], calls)
+        self.assertIn("codex plugin add tinker@tinker-personal", calls)
+        self.assertFalse(self.steps("Skipped") + self.steps("Refused"), "\n".join(self.lines))
+        if "antigravity" in APPS:
+            folder = self.home / ".gemini" / "config" / "plugins" / "tinker-personal"
+            self.assertEqual(json.loads((folder / "plugin.json").read_text(encoding="utf-8"))["name"], "tinker-personal")
+            self.assertIn("--instance personal", (folder / "hooks.json").read_text(encoding="utf-8"))
+        self.lines.clear()
+        log.write_text("")
+        self.assertEqual(self.installer(instance="personal").uninstall(list(APPS)), 0, "\n".join(self.lines))
+        calls = [c.strip() for c in log.read_text().splitlines()]
+        self.assertFalse([c for c in calls if "tinker-local" in c], calls)
+        self.assertIn("codex plugin marketplace remove tinker-personal", calls)
+        self.assertFalse((self.home / ".gemini" / "config" / "plugins" / "tinker-personal").exists())
+        self.assertEqual({p: p.read_bytes() for p in theirs}, theirs)
+
     def test_without_app_clis_the_finish_command_turns_it_off(self):
         self.other_installation()
         self.assertEqual(self.install(apps=("claude",), dry_run=True, instance="personal"), 0, "\n".join(self.lines))
