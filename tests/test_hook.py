@@ -128,6 +128,7 @@ class ClassifierTests(Fixture):
         ("git branch -D old", "posix", "git.deleteBranch"),
         ("git push origin --delete old", "posix", "git.deleteBranch"),
         ("git push origin :old", "posix", "git.deleteBranch"),
+        ("python scripts/reload.py ../product", "posix", "git.deleteBranch"),
         ("git reset --hard HEAD~1", "posix", "git.destructive"),
         ("git clean -fdx", "posix", "git.destructive"),
         ("git checkout -- .", "posix", "git.destructive"),
@@ -184,6 +185,7 @@ class ClassifierTests(Fixture):
         ("git commit -m wip", "posix"), ("cat > notes.txt <<'EOF'\ngit push --force origin main\nEOF", "posix"),
         ("echo 'git push -f origin main'", "posix"), ("C:/Python313/python.exe -m pytest", "posix"),
         ("gh pr view 12", "posix"), ("gh api repos/o/r/pulls", "posix"), ("git push 2>&1", "posix"),
+        ("python scripts/reload.py --dry-run", "posix"), ("cat scripts/reload.py", "posix"),
     ]
 
     def test_consequential_commands_are_classified(self):

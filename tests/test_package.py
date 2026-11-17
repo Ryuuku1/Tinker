@@ -302,6 +302,11 @@ class PackageTests(unittest.TestCase):
             for tool in ('Bash', 'PowerShell'):
                 self.assertIn(f'{tool}({pattern})', deny)
         self.assertIn('Bash(git *push*--delete*)', ask)
+        for tool in ('Bash', 'PowerShell'):
+            # A rule ending in `:*` is the legacy prefix form, whose other `*` match literally: the colon refspec
+            # (`git push origin :branch`, a deletion) needs `:**` to reach the ask list.
+            self.assertIn(f'{tool}(git *push* :**)', ask)
+            self.assertFalse([rule for rule in ask if rule.endswith(':*)')], ask)
         env = settings['env']
         self.assertEqual(env['PLAYWRIGHT_MCP_ISOLATED'], 'true')
         for origin in env['PLAYWRIGHT_MCP_ALLOWED_ORIGINS'].split(';'):
@@ -310,8 +315,8 @@ class PackageTests(unittest.TestCase):
 
     def test_front_door_lists_its_forms_and_routes_through_the_lead(self):
         text = (ROOT / '.agents/skills/tinker/SKILL.md').read_text(encoding='utf-8')
-        for form in ('`<task>`', 'No task', '`status`', '`remember <fact>`', '`learn [focus]`', '`eval [args]`',
-                     '`playbook <repo>`', '`schedule <what> <when>`', '`help`'):
+        for form in ('`<task>`', 'No task', '`status`', '`reload [path ...]`', '`remember <fact>`', '`learn [focus]`',
+                     '`eval [args]`', '`playbook <repo>`', '`schedule <what> <when>`', '`help`'):
             self.assertIn(f'\n## {form}\n', text)
         self.assertIn("question route, with no workflow skill", ' '.join(text.split()))
         self.assertIn('(../../../AGENTS.md)', text)

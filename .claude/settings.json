@@ -74,10 +74,10 @@
     "ask": [
       "Bash(git *push*--delete*)",
       "Bash(git *push* -d *)",
-      "Bash(git *push* :*)",
+      "Bash(git *push* :**)",
       "PowerShell(git *push*--delete*)",
       "PowerShell(git *push* -d *)",
-      "PowerShell(git *push* :*)"
+      "PowerShell(git *push* :**)"
     ]
   },
   "enabledPlugins": {

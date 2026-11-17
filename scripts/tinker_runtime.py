@@ -410,6 +410,8 @@ RULES = [
     ("git.forcePush", _rx(r"\bgit\b.*\bpush\b.*(?:\s--force\S*|\s-[a-z]*f[a-z]*\b|\s\+\S)")),
     ("git.deleteBranch", _rx(r"\bgit\b.*(?:\bbranch\b.*\s(?:-[a-z]*d[a-z]*|--delete)\b"
                              r"|\bpush\b.*(?:\s(?:--delete|-d)\b|\s:\S))")),
+    # reload.py deletes proven-merged branches and worktrees through git, out of this gate's sight: it asks too.
+    ("git.deleteBranch", _rx(r"\b(?:python3?|py)(?:\.exe)?\b.*\breload\.py\b(?!.*\s--dry-run\b)")),
     ("git.pushProtected", _rx(r"\bgit\b.*\bpush\b.*\s(?:[^\s:]*:)?(?:refs/heads/)?"
                               r"(?:main|master|production|release)(?:[-./][\w./-]*)?(?=[\s\"']|$)")),
     ("git.destructive", _rx(r"\bgit\b.*\b(?:reset\b.*--hard|clean\b.*(?:\s-[a-z]*f|\s--force\b)"
