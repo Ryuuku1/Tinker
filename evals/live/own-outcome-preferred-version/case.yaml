@@ -21,6 +21,6 @@ graders:
   - name: keeps-its-wording
     type: regex
     target: { source: file, path: product/garden/docs/intro.md }
-    pattern: '^(?=[\s\S]*when, where,? and how much)(?=[\s\S]*bed opens)(?=[\s\S]*neither\b[^.]*\bwrong)'
+    pattern: '^(?=[\s\S]*when, where,? and how much)(?=[\s\S]*start on the map)(?=[\s\S]*bed opens)(?=[\s\S]*neighbours)(?=[\s\S]*same week)'
     flags: i
     weight: 3

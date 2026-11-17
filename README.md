@@ -172,7 +172,7 @@ the default branch, every commit already upstream, or the head of a merged pull
 request), keeps anything dirty, locked or in use, and fast-forwards the default branch.
 The installed gate asks before it runs without `--dry-run`. `usage_report.py` reads
 Claude Code and Codex session logs; Claude rows are priced at list prices, Codex rows
-show tokens only, and Antigravity keeps no readable log.
+show tokens only, and Antigravity is not measured.
 
 ## Use it
 
