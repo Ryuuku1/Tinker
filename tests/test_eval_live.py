@@ -216,7 +216,8 @@ class RunTests(TempCase):
         args = call["args"]
         self.assertEqual(Path(call["cwd"]).resolve(), bundle.resolve())
         for flag, value in (("--model", "opus"), ("--concurrency", "4"), ("--ablation", "none"),
-                            ("--eval-dir", "evals"), ("--case", "playbook-gate")):
+                            ("--eval-dir", "evals"), ("--case", "playbook-gate"),
+                            ("--judge-model", eval_live.JUDGE_MODEL)):
             self.assertEqual(args[args.index(flag) + 1], value, flag)
         for flag in ("--scaffold", "--trust-plugin", "--no-publish"):
             self.assertIn(flag, args)
@@ -244,6 +245,7 @@ class RunTests(TempCase):
         (kept,) = list((self.checkout / "evals" / "live" / "results").glob("*.json"))
         self.assertEqual(kept.stem, run_dir.name.removeprefix("tinker_eval_"))
         self.assertIn(f"Result: {kept}", out)
+        self.assertEqual(json.loads(kept.read_text(encoding="utf-8"))["suite"]["judgeModel"], eval_live.JUDGE_MODEL)
 
     def test_options_pass_through_and_a_failed_eval_keeps_its_exit_code(self):
         log = self.fake_claude(exit_code=1)
@@ -280,9 +282,9 @@ class RunTests(TempCase):
         self.assertEqual({c["name"]: len(c["arms"]["with"]) for c in doc["cases"]}, {"alpha": 1, "beta": 3, "gamma": 1})
         self.assertEqual(doc["costUsd"], 0.7)
 
-    def baseline(self, cases, model="opus", adaptive=True, tree=None):
+    def baseline(self, cases, model="opus", adaptive=True, tree=None, judge=eval_live.JUDGE_MODEL):
         path = self.checkout / "evals" / "live" / "accepted.json"
-        path.write_text(json.dumps({"model": model, "adaptive": adaptive, "tree": tree, "cases": {
+        path.write_text(json.dumps({"model": model, "judgeModel": judge, "adaptive": adaptive, "tree": tree, "cases": {
             name: {"set": "regression", "score": score, "costPerRunUsd": 0.2, "runs": runs}
             for name, (score, runs) in cases.items()}}), encoding="utf-8")
 
@@ -347,9 +349,10 @@ class RunTests(TempCase):
     def test_adaptive_ignores_a_baseline_measured_another_way(self):
         def case(name):
             return {"name": name, "arms": {"with": [{"score": 1.0, "costUsd": 0.2, "turns": 3}]}}
-        for model, adaptive in (("sonnet", True), ("opus", False)):
-            with self.subTest(model=model, adaptive=adaptive):
-                self.baseline({"alpha": (0.5, 3)}, model=model, adaptive=adaptive)
+        for model, adaptive, judge in (("sonnet", True, eval_live.JUDGE_MODEL), ("opus", False, eval_live.JUDGE_MODEL),
+                                       ("opus", True, None)):  # None: judged by the CLI's moving default
+            with self.subTest(model=model, adaptive=adaptive, judge=judge):
+                self.baseline({"alpha": (0.5, 3)}, model=model, adaptive=adaptive, judge=judge)
                 log = self.fake_claude(cases=[case("alpha")], rerun_score=1.0)
                 log.unlink(missing_ok=True)
                 code, out = self.main("run", "--adaptive", "--force", root=self.checkout, temp=self.runs)
@@ -481,8 +484,11 @@ class GateTests(TempCase):
         self.gate(path, "--accept")
         record = json.loads(self.accepted.read_text(encoding="utf-8"))
         self.assertEqual(record["cases"], {
-            "held-case": {"set": "heldout", "score": 1.0, "costPerRunUsd": 0.25, "runs": 2},
-            "reg-case": {"set": "regression", "score": 1.0, "costPerRunUsd": 0.25, "runs": 2}})
+            "held-case": {"set": "heldout", "score": 1.0, "costPerRunUsd": 0.25, "runs": 2,
+                          "case": eval_live.case_hash(self.tmp, "held-case")},
+            "reg-case": {"set": "regression", "score": 1.0, "costPerRunUsd": 0.25, "runs": 2,
+                         "case": eval_live.case_hash(self.tmp, "reg-case")}})
+        self.assertEqual(record["judgeModel"], "haiku")  # a result that names no judge was graded by the default
         self.assertEqual(record["tree"], "0123456789abcdef")  # how a later --adaptive run finds the measured commit
 
     def adaptive_doc(self, cases, **extra):
@@ -507,7 +513,7 @@ class GateTests(TempCase):
         self.gate(result, "--accept")  # the new baseline holds this result's own runs, not the pooled old ones
         record = json.loads(self.accepted.read_text(encoding="utf-8"))
         self.assertEqual(record["cases"]["reg-case"], {"set": "regression", "score": 0.667, "costPerRunUsd": 0.2,
-                                                       "runs": 3})
+                                                       "runs": 3, "case": eval_live.case_hash(self.tmp, "reg-case")})
 
     def test_gate_names_cases_whose_run_counts_differ(self):
         def doc(**cases):
@@ -525,6 +531,69 @@ class GateTests(TempCase):
         self.assertNotIn("held-case (", out)
         code, out = self.gate(doc(**{"reg-case": [1.0], "held-case": [1.0]}))
         self.assertNotIn("Uneven runs", out)
+
+    def paired_doc(self, scores, costs=None, judge=None):
+        self.count += 1
+        path = self.tmp / f"paired{self.count}.json"
+        suite = {"modelOverride": "opus", **({"judgeModel": judge} if judge else {})}
+        path.write_text(json.dumps({"suite": suite, "cases": [
+            {"name": name, "arms": {"with": [{"score": score, "costUsd": (costs or {}).get(name, 0.2), "turns": 5}]}}
+            for name, score in scores.items()]}), encoding="utf-8")
+        return path
+
+    def eight_cases(self):
+        names = [f"reg-{i}" for i in range(8)]
+        for name in names:
+            write_case(self.tmp, name, ["review", "regression"])
+        return names
+
+    def test_paired_gate_tolerates_one_flaky_case_but_fails_a_broad_slide(self):
+        names = self.eight_cases()
+        self.gate(self.paired_doc(dict.fromkeys(names, 1.0)), "--accept")
+        # One case missing its single run moves the set mean by 0.125, which the set-mean check would fail; the
+        # pairwise bound sees one outlier among unchanged cases.
+        code, out = self.gate(self.paired_doc({**dict.fromkeys(names, 1.0), names[0]: 0.0}))
+        self.assertEqual(code, 0, out)
+        self.assertIn("| regression | 8 | 0.875 | 1.0 | 0.2 | 0.2 | pass |", out)
+        self.assertIn("Paired regression (8 cases): score change -0.125", out)
+        self.assertIn("regression: cases that dropped by 0.5 or more (check their graders): reg-0", out)
+        code, out = self.gate(self.paired_doc(dict.fromkeys(names, 0.9)))  # every case a little worse
+        self.assertEqual(code, 1, out)
+        self.assertIn("FAIL: score", out)
+        code, out = self.gate(self.paired_doc(dict.fromkeys(names, 1.0), costs=dict.fromkeys(names, 0.3)))
+        self.assertEqual(code, 1, out)
+        self.assertIn("FAIL: cost", out)
+
+    def test_paired_gate_leaves_new_and_changed_cases_out(self):
+        names = self.eight_cases()
+        self.gate(self.paired_doc(dict.fromkeys(names, 1.0)), "--accept")
+        write_case(self.tmp, "reg-new", ["review", "regression"])
+        yaml = self.tmp / "evals" / "live" / names[1] / "case.yaml"
+        yaml.write_text(yaml.read_text(encoding="utf-8") + "# changed\n", encoding="utf-8")
+        code, out = self.gate(self.paired_doc({**dict.fromkeys(names, 1.0), "reg-new": 0.0}))
+        self.assertIn(f"regression: new or changed cases, not gated: {names[1]}, reg-new", out)
+        self.assertNotIn("Paired regression", out)  # seven shared cases are too few: the set means decide
+        self.assertEqual(code, 1, out)
+
+    def test_another_judge_never_passes_but_can_be_accepted(self):
+        self.gate(self.result(), "--accept")  # graded by the CLI's default judge
+        path = self.result()
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        path.write_text(json.dumps({**doc, "suite": {**doc["suite"], "judgeModel": eval_live.JUDGE_MODEL}}),
+                        encoding="utf-8")
+        code, out = self.gate(path)
+        self.assertEqual(code, 1)
+        self.assertIn("new judge", out)
+        self.assertIn(f"haiku -> {eval_live.JUDGE_MODEL}", out)
+        self.assertEqual(self.gate(path, "--accept")[0], 0)
+        self.assertEqual(json.loads(self.accepted.read_text(encoding="utf-8"))["judgeModel"], eval_live.JUDGE_MODEL)
+        self.assertEqual(self.gate(path)[0], 0)
+
+    def test_bound_is_a_one_sided_t_bound(self):
+        self.assertEqual(eval_live.bound([0.5], 1), 0.5)
+        values = [0.0] * 7 + [-1.0]
+        expected = -0.125 + (1.645 + 1.524 / 7) * (0.125 / 8) ** 0.5
+        self.assertAlmostEqual(eval_live.bound(values, 1), expected)
 
 
 class FingerprintTests(TempCase):

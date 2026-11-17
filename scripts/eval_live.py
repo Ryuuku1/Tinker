@@ -12,9 +12,14 @@ run   Snapshots this checkout once (tracked and untracked files, never ignored o
       the same count and one unlucky run on either side does not decide a gate. A call that starts more than 20
       agent runs first reads the account's five-hour usage (one Haiku turn) and refuses when the runs likely won't
       fit; --force skips the check.
+      Graders are judged by one pinned model (--judge-model, default an exact Haiku id), recorded in the result, so
+      an alias moving to a new release never shifts the scores the gate compares.
 gate  Compares a result with evals/live/accepted.json per set (regression, heldout), averaging per case and pooling
-      any baseline runs --adaptive measured again: exit 0 pass, 1 fail, 2 invalid. --accept records the result as
-      the new baseline, with each case's means and the measured tree's fingerprint.
+      any baseline runs --adaptive measured again. When a set shares at least --min-paired cases with the baseline
+      (same case.yaml), the verdict compares those cases pairwise with a one-sided 95% bound, so one flaky case
+      cannot fail it while a broad slide still does; otherwise it compares set means. New or changed cases are
+      listed, not gated. Exit 0 pass, 1 fail, 2 invalid. --accept records the result as the new baseline, with
+      each case's means and case.yaml hash, the judge and the measured tree's fingerprint.
 
 Eval runs cannot sandbox shell tools on Windows, so cases get Read/Grep/Glob, Write/Edit, Skill and Agent only.
 Scaffolds are bash: they need bash (Git Bash on Windows) and git on PATH.
@@ -44,6 +49,9 @@ ROOT_NOTE = ("This session's working directory is the Tinker root: the charter b
              "the charter's relative links and .tinker/ paths resolve against it.")
 USAGE_CHECK_ABOVE = 20
 RERUNS = 2  # --adaptive: more runs for a case that fell short, so a single miss weighs a third of its score
+JUDGE_MODEL = "claude-haiku-5-5"  # an exact id: the CLI's `haiku` alias moves with each release
+UNRECORDED_JUDGE = "haiku"  # what a result or baseline without a judgeModel was judged by (the CLI default)
+MIN_PAIRED = 8
 # Bundle files only another host reads, and the hooks (an eval measures the charter, not this machine's runtime).
 NOT_IN_BUNDLE = ("hooks/", "plugin.json", ".agents/plugins/")
 RENDER = r"""
@@ -383,9 +391,16 @@ def read_accepted(args, root):
         return {}
 
 
+def judge_of(record):
+    """The grader model a result (its suite) or a baseline was judged by."""
+    suite = record.get("suite") if isinstance(record.get("suite"), dict) else {}
+    return str(record.get("judgeModel") or suite.get("judgeModel") or UNRECORDED_JUDGE)
+
+
 def measured_alike(accepted, args):
-    """Whether the baseline was measured the way this run measures: same model, --adaptive."""
-    return bool(accepted) and str(accepted.get("model")) == str(args.model) and bool(accepted.get("adaptive"))
+    """Whether the baseline was measured the way this run measures: same model and judge, --adaptive."""
+    return (bool(accepted) and str(accepted.get("model")) == str(args.model) and bool(accepted.get("adaptive"))
+            and judge_of(accepted) == str(args.judge_model))
 
 
 def short_in_baseline(accepted, args):
@@ -397,7 +412,8 @@ def short_in_baseline(accepted, args):
 
 def eval_command(claude, args):
     return [claude, "plugin", "eval", ".", "--eval-dir", BUNDLE_EVALS, "--scaffold", "--allow-tools", "Write", "Edit",
-            "--trust-plugin", "--no-publish", "--model", args.model, "--concurrency", str(args.jobs)]
+            "--trust-plugin", "--no-publish", "--model", args.model, "--judge-model", args.judge_model,
+            "--concurrency", str(args.jobs)]
 
 
 def run(args, root, temp=None):
@@ -435,6 +451,7 @@ def run(args, root, temp=None):
         return code or 1
     doc = json.loads(result.read_text(encoding="utf-8-sig"))
     doc["tree"] = fingerprint  # what --accept records, so a later --adaptive run can find this tree's commit
+    doc["suite"] = dict(doc["suite"] if isinstance(doc.get("suite"), dict) else {}, judgeModel=args.judge_model)
     if args.adaptive:
         accepted = read_accepted(args, root)
         rerun_short(args, claude, base, bundle, env, doc, run_dir, short_in_baseline(accepted, args))
@@ -469,6 +486,48 @@ def case_means(result, root):
             means[name] = {"set": case_set(read_case(yaml)), "score": mean([float(r.get("score") or 0) for r in runs]),
                            "costPerRunUsd": mean([float(r.get("costUsd") or 0) for r in runs]), "runs": len(runs)}
     return means, list(dict.fromkeys(errored))
+
+
+def case_hash(root, name):
+    """A short hash of the case's case.yaml with line endings normalized: a changed prompt, scaffold or grader makes
+    the case a new one for the paired gate."""
+    data = (Path(root) / LIVE / str(name) / "case.yaml").read_bytes().replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest()[:12]
+
+
+def bound(values, sign):
+    """The mean plus sign times a one-sided 95% t bound (Cornish-Fisher approximation of the quantile)."""
+    n, centre = len(values), mean(values)
+    if n < 2:
+        return centre
+    variance = sum((v - centre) ** 2 for v in values) / (n - 1)
+    return centre + sign * (1.645 + 1.524 / (n - 1)) * (variance / n) ** 0.5
+
+
+def paired_sets(means, compare, root, min_paired):
+    """Per set, the cases measured on both sides with the same case.yaml: their mean score change with its 95% upper
+    bound and mean cost change with its 95% lower bound, when there are at least min_paired of them. Also the notes
+    on cases left out (new or changed) and on cases that dropped by half a point or more."""
+    before = (compare or {}).get("cases") or {}
+    paired, notes = {}, []
+    for name in SETS:
+        mine = sorted(case for case, m in means.items() if m["set"] == name)
+        both = [case for case in mine if case in before and before[case].get("set") == name
+                and before[case].get("case", case_hash(root, case)) == case_hash(root, case)]
+        skipped = [case for case in mine if case not in both]
+        if skipped and before:
+            notes.append(f"{name}: new or changed cases, not gated: {', '.join(skipped)}")
+        if len(both) < min_paired:
+            continue
+        score = [means[c]["score"] - before[c]["score"] for c in both]
+        cost = [means[c]["costPerRunUsd"] - before[c]["costPerRunUsd"] for c in both]
+        paired[name] = {"n": len(both), "scoreDelta": mean(score), "scoreUpper": bound(score, 1),
+                        "costDelta": mean(cost), "costLower": bound(cost, -1),
+                        "baseCost": mean([before[c]["costPerRunUsd"] for c in both])}
+        drops = [c for c, d in zip(both, score) if d <= -0.5]
+        if drops:
+            notes.append(f"{name}: cases that dropped by 0.5 or more (check their graders): {', '.join(drops)}")
+    return paired, notes
 
 
 def summarize(result, root):
@@ -536,11 +595,15 @@ def gate(args, root):
         return 2
     accepted = json.loads(accepted_path.read_text(encoding="utf-8-sig")) if accepted_path.is_file() else None
     model, adaptive = (result.get("suite") or {}).get("modelOverride"), bool(result.get("adaptive"))
+    judge = judge_of(result)
     new_model = bool(accepted) and str(accepted.get("model")) != str(model)
+    new_judge = bool(accepted) and not new_model and judge_of(accepted) != judge  # another grader scores differently
     new_mode = bool(accepted) and bool(accepted.get("adaptive")) != adaptive  # re-runs lift a flaky case's score
-    passed = not errored and not new_model and not new_mode and bool(summary)
-    compare, pooled = (pooled_baseline(accepted, result.get("baselineTopUp")) if accepted and not (new_model or new_mode)
+    fresh = new_model or new_judge or new_mode
+    passed = not errored and not fresh and bool(summary)
+    compare, pooled = (pooled_baseline(accepted, result.get("baselineTopUp")) if accepted and not fresh
                        else (accepted, []))
+    paired, notes = paired_sets(means, compare, root, args.min_paired) if accepted and not fresh else ({}, [])
     print("| Set | Runs | Score | Accepted | Cost/run (USD) | Accepted | Verdict |")
     print("| --- | --- | --- | --- | --- | --- | --- |")
     for name, now in summary.items():
@@ -549,10 +612,20 @@ def gate(args, root):
             verdict = "INVALID"
         elif new_model:
             verdict = "new model"
+        elif new_judge:
+            verdict = "new judge"
         elif new_mode:
             verdict = "new mode"
         elif not base:
             verdict = "no baseline"
+        elif name in paired:
+            pair = paired[name]
+            if pair["scoreUpper"] < 0 and pair["scoreDelta"] < -args.score_tolerance / 2:
+                verdict = "FAIL: score"
+            elif pair["costLower"] > 0 and pair["costDelta"] > args.cost_tolerance * pair["baseCost"]:
+                verdict = "FAIL: cost"
+            else:
+                verdict = "pass"
         elif now["score"] < base["score"] - args.score_tolerance:
             verdict = "FAIL: score"
         elif now["costPerRunUsd"] > base["costPerRunUsd"] * (1 + args.cost_tolerance):
@@ -570,30 +643,41 @@ def gate(args, root):
     if new_model:
         print(f"Model changed ({accepted.get('model')} -> {model}): this result cannot pass the gate; "
               "--accept makes it the new baseline.")
+    if new_judge:
+        print(f"Judge changed ({judge_of(accepted)} -> {judge}): this result cannot pass the gate; "
+              "--accept makes it the new baseline.")
     if new_mode:
         print(f"Adaptive mode changed ({'on' if accepted.get('adaptive') else 'off'} -> {'on' if adaptive else 'off'}): "
               "this result cannot pass the gate; --accept makes it the new baseline.")
     if not accepted:
         print(f"No baseline at {accepted_path}: review the result, then --accept records the first one.")
+    for name, pair in paired.items():
+        print(f"Paired {name} ({pair['n']} cases): score change {pair['scoreDelta']:+.3f} (95% upper bound "
+              f"{pair['scoreUpper']:+.3f}), cost change {pair['costDelta']:+.4f} USD/run (95% lower bound "
+              f"{pair['costLower']:+.4f}).")
+    for note in notes:
+        print(note)
     if pooled:
         print(f"Baseline runs measured again at {str(result['baselineTopUp'].get('commit'))[:7]} and pooled: "
               + "; ".join(pooled) + ".")
-    uneven = [] if new_model or new_mode else uneven_cases(means, compare)
+    uneven = [] if fresh else uneven_cases(means, compare)
     if uneven:
         print("Uneven runs: " + "; ".join(uneven) + ". A mean over fewer runs is the weaker estimate; measure that "
               "side to the same count before trusting a verdict these cases decide.")
     if args.accept:
-        kept = not (new_model or new_mode)
+        kept = not fresh
         sets = dict((accepted or {}).get("sets") or {}) if kept else {}
         sets.update(summary)
         cases = dict((accepted or {}).get("cases") or {}) if kept else {}
         cases.update({name: {"set": m["set"], "score": round(m["score"], 3),
-                             "costPerRunUsd": round(m["costPerRunUsd"], 4), "runs": m["runs"]}
+                             "costPerRunUsd": round(m["costPerRunUsd"], 4), "runs": m["runs"],
+                             "case": case_hash(root, name)}
                       for name, m in means.items()})
         commit = subprocess.run(["git", "-C", str(root), "rev-parse", "--short", "HEAD"], capture_output=True, text=True)
         record = {"acceptedAt": result.get("startedAt"), "result": result_path.name,
                   "commit": commit.stdout.strip() if commit.returncode == 0 else "", "tree": result.get("tree"),
-                  "model": model, "adaptive": adaptive, "sets": sets, "cases": dict(sorted(cases.items()))}
+                  "model": model, "judgeModel": judge, "adaptive": adaptive, "sets": sets,
+                  "cases": dict(sorted(cases.items()))}
         accepted_path.parent.mkdir(parents=True, exist_ok=True)
         accepted_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8", newline="\n")
         print(f"Accepted as the new baseline: {accepted_path}")
@@ -611,6 +695,7 @@ def parser():
     r.add_argument("--tag", nargs="+", action="extend", help="only cases with one of these tags")
     r.add_argument("--runs", type=int, help="runs per case (default: the case's runs:, else 1)")
     r.add_argument("--model", default="opus")
+    r.add_argument("--judge-model", default=JUDGE_MODEL, help=f"grader model, an exact id (default {JUDGE_MODEL})")
     r.add_argument("-j", "--jobs", type=int, default=4, help="agent runs at once (1-8)")
     r.add_argument("--ablation", choices=("none", "with-without"), default="none")
     r.add_argument("--adaptive", action="store_true",
@@ -627,6 +712,8 @@ def parser():
     g.add_argument("--accepted", help=f"baseline file (default {LIVE.as_posix()}/accepted.json)")
     g.add_argument("--score-tolerance", type=float, default=0.02)
     g.add_argument("--cost-tolerance", type=float, default=0.10)
+    g.add_argument("--min-paired", type=int, default=MIN_PAIRED,
+                   help=f"shared cases a set needs for the paired per-case verdict (default {MIN_PAIRED})")
     return top
 
 

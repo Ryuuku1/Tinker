@@ -207,7 +207,9 @@ system prompt (the `TINKER_AGENTS_MD` placeholder, filled in per run).
 python scripts/eval_live.py run [--case GLOB] [--tag TAG ...] [--runs N] [--model M]
                                 [-j N] [--ablation none|with-without] [--adaptive]
                                 [--accepted FILE] [--force] [--percent-per-run F]
+                                [--judge-model ID]
 python scripts/eval_live.py gate --result evals/live/results/<runId>.json [--accept]
+                                 [--min-paired N]
 ```
 
 `run` copies the checkout's tracked and untracked-but-not-ignored files once into
@@ -218,13 +220,16 @@ what was measured. Defaults: `--model opus`, 4 runs at once, one run per case un
 the case sets `runs:`, `--ablation none` (`with-without` adds a no-plugin arm and
 doubles the runs). It prints the result path and copies the JSON to the ignored
 `evals/live/results/<runId>.json`. Its exit code is `claude plugin eval`'s (1 when a
-case scores below 1.0).
+case scores below 1.0). `llm` graders are judged by one pinned model, `--judge-model`
+(default `claude-haiku-5-5`, an exact id: the CLI's `haiku` alias moves with each
+release, and a new judge scores the same answers differently). The result records it as
+`suite.judgeModel`.
 
 `--adaptive` then runs each case that fell short of 1.0 twice more, whether it fell
 short in this run or in the accepted baseline, and merges those runs into the result,
 which records `adaptive` and `mergedFrom`.
-- The baseline's per-case means count only when it was measured with the same model and
-  `--adaptive`. `--accepted` names another baseline file.
+- The baseline's per-case means count only when it was measured with the same model,
+  the same judge and `--adaptive`. `--accepted` names another baseline file.
 - Only the plugin arm re-runs.
 - A case with an errored run is left as it is, since the result is invalid anyway.
 - A case that already has three runs is not re-run.
@@ -245,11 +250,24 @@ mean score and mean cost per run, averaged over the set's cases (a case run thre
 weighs what a case run once does). It passes (exit 0) when each set's score is at least
 the accepted one minus 0.02 and its cost per run at most 10% higher
 (`--score-tolerance`, `--cost-tolerance`); otherwise it fails (exit 1).
+- **Paired cases:** when a set shares at least eight cases with the baseline
+  (`--min-paired`) whose `case.yaml` is unchanged, the verdict compares those cases one
+  by one instead: it fails on score only when the 95% upper bound of the mean change is
+  below zero and the mean change is below minus half the score tolerance, and on cost
+  only when the 95% lower bound of the mean cost change is above zero and the change
+  exceeds the cost tolerance. One flaky case moves a set mean by a whole step but stays
+  inside that bound; a small slide across every case does not. The gate prints each
+  set's paired change with its bound, and names cases that dropped by 0.5 or more so
+  their graders get checked.
+- **New or changed cases:** a case missing from the baseline, or whose `case.yaml` hash
+  differs from the one recorded, is listed and left out of the paired verdict: its old
+  mean measured another prompt or grader.
 - **Errored runs:** a result with errored or unstarted runs is invalid (exit 2) and
   cannot be accepted.
-- **Another model or mode:** a result from another model or another adaptive mode than
-  the baseline never passes, since re-runs lift a flaky case's score. It can only be
-  accepted, which replaces the baseline.
+- **Another model, judge or mode:** a result from another model, another judge or
+  another adaptive mode than the baseline never passes, since each moves scores without
+  any edit. It can only be accepted, which replaces the baseline. A baseline that names
+  no judge was graded by the CLI's `haiku` alias.
 - **Pooled baseline runs:** the gate pools a result's `baselineTopUp` runs into that
   case's baseline mean, and moves the set's mean by the change. It prints which cases it
   pooled.
@@ -257,8 +275,9 @@ the accepted one minus 0.02 and its cost per run at most 10% higher
   different number of times on each, such as one whose baseline commit was not found.
   Its mean over fewer runs is the weaker estimate, so measure it to the same count
   before trusting a verdict it decides.
-- **Accepting:** `--accept` records model, adaptive mode, commit, the measured tree's
-  fingerprint, and the per-set and per-case score, cost per run and run count. It keeps
+- **Accepting:** `--accept` records model, judge, adaptive mode, commit, the measured
+  tree's fingerprint, the per-set and per-case score, cost per run and run count, and
+  each case's `case.yaml` hash. It keeps
   the sets and cases the result did not cover. Commit `accepted.json` with the change it
   measured, so the commit that holds it also holds the measured tree.
 

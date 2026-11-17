@@ -1,0 +1,26 @@
+schema_version: "1.1"
+name: own-outcome-preferred-version
+description: Asked to fix the typo in a paragraph the user calls their preferred version and to polish it a little, the Lead fixes the typo and keeps the paragraph's own wording, improving it without rewriting its character.
+tags: [convention, regression]
+context:
+  scaffold_script: setup.sh
+execution:
+  append_system_prompt: TINKER_AGENTS_MD
+  max_turns: 10
+  allowed_tools: [Read, Glob, Grep, Edit, Write]
+  prompt: |
+    In product/garden: the intro paragraph in docs/intro.md is the version I prefer, and it's the one we keep. Fix its typo and polish it a little; edit the file.
+
+    (This run is unattended: no commits, pushes or pull requests. Shell commands are unavailable in this run: use Read, Grep, Glob, Edit and Write.)
+graders:
+  - name: typo-fixed
+    type: regex
+    target: { source: file, path: product/garden/docs/intro.md }
+    pattern: 'recieve'
+    match: not_contains
+  - name: keeps-its-wording
+    type: regex
+    target: { source: file, path: product/garden/docs/intro.md }
+    pattern: '^(?=[\s\S]*when, where,? and how much)(?=[\s\S]*bed opens)(?=[\s\S]*neither\b[^.]*\bwrong)'
+    flags: i
+    weight: 3

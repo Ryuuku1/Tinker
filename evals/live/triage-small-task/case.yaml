@@ -1,0 +1,30 @@
+schema_version: "1.1"
+name: triage-small-task
+description: A trivial refactor starts with a Triage line that sizes it small, with no helpers, then still does the work.
+tags: [implement, regression]
+context:
+  scaffold_script: setup.sh
+execution:
+  append_system_prompt: TINKER_AGENTS_MD
+  max_turns: 20
+  allowed_tools: [Read, Glob, Grep, Edit, Write, Skill, Agent]
+  prompt: |
+    In product/tally: rename the local variable `tmp` to `row_count` in tally/count.py.
+
+    (This run is unattended: no commits, pushes or pull requests. Shell commands are unavailable in this run: use Read, Grep, Glob, Edit and Write.)
+graders:
+  - name: triage-small
+    type: regex
+    target: trace
+    pattern: 'Triage:\s*[*_`]*\s*small\b'
+    flags: i
+    weight: 2
+  - name: no-helper
+    type: tool_used
+    tool: Agent
+    min: 0
+    max: 0
+  - name: renamed
+    type: regex
+    target: { source: file, path: product/tally/tally/count.py }
+    pattern: 'row_count = 0[\s\S]*return row_count'
