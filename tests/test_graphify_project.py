@@ -122,7 +122,8 @@ class GraphifyProjectTests(unittest.TestCase):
         graph._identity(graph_dir, self.primary.resolve(), "baselines", create=True)
         for name in ("graph.json", "manifest.json", "graph.html"):
             (graph_dir / name).write_text("present", encoding="utf-8")
-        graph._write_revision(graph_dir, self.primary.resolve(), "baselines", head, head, "main")
+        graph._write_revision(graph_dir, self.primary.resolve(), "baselines", head, head, "main",
+                              graph.graphify_version())
         self.assertTrue(graph.graph_status(self.primary, self.package)["verified"])
         self.assertTrue(graph.graph_status(self.primary, self.package, baseline_branch="main")["verified"])
         git(self.primary, "branch", "other")
@@ -300,6 +301,83 @@ class GraphifyProjectTests(unittest.TestCase):
         refreshed = graph.build_graph(self.primary, self.package, worktree_path=self.alpha, baseline_branch="main")
         self.assertIn("DraftOnly", labels(refreshed))
         self.assertTrue(graph.graph_status(self.primary, self.package, worktree_path=self.alpha)["verified"])
+
+    def test_graphify_version_reads_the_release_or_nothing(self):
+        graph = helper()
+
+        def completed(code):
+            return subprocess.CompletedProcess(["graphify", "--version"], code, "graphify 0.9.105\n", "")
+
+        with mock.patch.object(graph.shutil, "which", return_value="graphify"):
+            with mock.patch.object(graph.subprocess, "run", return_value=completed(0)):
+                self.assertEqual(graph.graphify_version(), "0.9.105")
+            with mock.patch.object(graph.subprocess, "run", return_value=completed(2)):
+                self.assertIsNone(graph.graphify_version())
+            with mock.patch.object(graph.subprocess, "run", side_effect=OSError("denied")):
+                self.assertIsNone(graph.graphify_version())
+        with mock.patch.object(graph.shutil, "which", return_value=None):
+            self.assertIsNone(graph.graphify_version())
+
+    def test_a_graph_too_large_for_the_html_view_still_completes(self):
+        graph = helper()
+        graph_dir = graph.graph_parent(self.alpha, self.package, "worktrees") / "graphify-out"
+        graph_dir.mkdir(parents=True)
+        error = ["graphify export failed (exit 1): 6000 communities, too large for HTML viz"]
+
+        def run(args, source, out, graphify_bin):
+            if args[0] != "extract":
+                raise RuntimeError(error[0])
+            for name in ("graph.json", "manifest.json"):
+                (out / name).write_text("{}", encoding="utf-8")
+            return ""
+
+        with mock.patch.object(graph, "_graphify", run):
+            graph._extract(self.alpha, graph_dir, "graphify")
+            self.assertIn("too large", (graph_dir / "graph.html").read_text(encoding="utf-8"))
+            self.assertTrue(graph._valid_files(graph_dir))
+            error[0] = "graphify export failed (exit 1): disk full"
+            with self.assertRaisesRegex(RuntimeError, "disk full"):
+                graph._extract(self.alpha, graph_dir, "graphify")
+        self.assertFalse((graph_dir / "graph.html").exists())
+
+    def test_a_new_graphify_release_rebuilds_from_scratch_and_reseeds_worktrees(self):
+        graph = helper()
+        release, extracts = ["1.0.0"], []
+
+        def run(args, source, graph_dir, graphify_bin):
+            manifest = graph_dir / "manifest.json"
+            if args[0] == "extract":  # record the scope and the index an incremental run would start from
+                extracts.append((graph_dir.parts[-3], manifest.read_text(encoding="utf-8")
+                                 if manifest.is_file() else None))
+                (graph_dir / "graph.json").write_text(json.dumps({"nodes": []}), encoding="utf-8")
+                manifest.write_text(release[0], encoding="utf-8")
+            else:
+                (graph_dir / "graph.html").write_text("<html></html>", encoding="utf-8")
+            return ""
+
+        def build(**options):
+            return graph.build_graph(self.primary, self.package, baseline_branch="main", **options)
+
+        with mock.patch.object(graph, "graphify_version", side_effect=lambda *_: release[0]), \
+                mock.patch.object(graph, "_graphify", run), \
+                mock.patch.object(graph.shutil, "which", return_value="graphify"):
+            build(worktree_path=self.alpha)
+            self.assertEqual(build(worktree_path=self.alpha)["status"], "current")
+            self.assertEqual(extracts, [("baselines", None), ("worktrees", "1.0.0")])
+            head = self.commit_file(self.primary, "newer.py", "class Newer:\n    pass\n")
+            build()  # same release, new HEAD: incremental from the indexed baseline
+            self.assertEqual(extracts[2], ("baselines", "1.0.0"))
+            release[0] = "1.1.0"
+            alpha = build(worktree_path=self.alpha)
+            self.assertEqual(extracts[3:], [("baselines", None), ("worktrees", "1.1.0")])
+            revision = json.loads((Path(alpha["graph_json"]).parent / "revision.json").read_text(encoding="utf-8"))
+            self.assertEqual((revision["graphify"], revision["baseline_head"]), ("1.1.0", head))
+            release[0] = None  # an unreadable release never forces a rebuild
+            self.assertTrue(graph.graph_status(self.primary, self.package, worktree_path=self.alpha)["verified"])
+            release[0] = "1.2.0"
+            status = graph.graph_status(self.primary, self.package, worktree_path=self.alpha)
+            self.assertFalse(status["verified"])
+            self.assertIn("Graphify release", status["reason"])
 
 
 if __name__ == "__main__":

@@ -14,12 +14,15 @@ import tempfile
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+TOO_LARGE_HTML = ('<!doctype html><meta charset="utf-8"><title>Graph too large</title>\n'
+                  "<p>This graph is too large for Graphify's interactive view. "
+                  "Query it with <code>graphify_project.py --action query</code>.</p>\n")
 
 
 def _run(args, cwd, *, env=None):
     result = subprocess.run(args, cwd=cwd, env=env, capture_output=True, text=True, errors="replace", check=False)
     if result.returncode:
-        detail = (result.stderr or result.stdout).strip()[-2000:]
+        detail = f"{result.stdout.strip()}\n{result.stderr.strip()}".strip()[-2000:]
         raise RuntimeError(f"{' '.join(str(item) for item in args[:2])} failed (exit {result.returncode}): {detail}")
     return result.stdout.strip()
 
@@ -207,7 +210,29 @@ def _valid_files(graph_dir):
     return True
 
 
-def graph_status(project, package_root=PACKAGE_ROOT, *, worktree_path=None, ticket=None, baseline_branch=None):
+def graphify_version(graphify_bin="graphify"):
+    """The installed Graphify release, or None when it cannot be read (None never forces a rebuild)."""
+    path = shutil.which(graphify_bin)
+    if not path:
+        return None
+    try:
+        result = subprocess.run([path, "--version"], capture_output=True, text=True, errors="replace",
+                                timeout=60, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    match = re.search(r"\d+\.\d+\.\d+\S*", result.stdout) if result.returncode == 0 else None
+    return match.group(0) if match else None
+
+
+def _discard_index(graph_dir):
+    """Node ids change between Graphify releases: a new release extracts from scratch, never incrementally."""
+    _assert_private_files(graph_dir)
+    for name in ("graph.json", "manifest.json", ".graphify_build.json"):
+        (graph_dir / name).unlink(missing_ok=True)
+
+
+def graph_status(project, package_root=PACKAGE_ROOT, *, worktree_path=None, ticket=None, baseline_branch=None,
+                 graphify_bin="graphify"):
     """Read-only freshness check. Only verified results expose graph paths for handoff."""
     primary, selected = resolve_worktree(project, worktree_path=worktree_path, ticket=ticket)
     source = selected or primary
@@ -236,6 +261,10 @@ def graph_status(project, package_root=PACKAGE_ROOT, *, worktree_path=None, tick
             or data.get("scope") != scope or not isinstance(seed, str)
             or not re.fullmatch(r"[0-9a-f]{40,64}", seed)):
         result["reason"] = "Graph source, HEAD or seed baseline revision differs"
+        return result
+    version = graphify_version(graphify_bin)
+    if version and data.get("graphify") != version:
+        result["reason"] = f"Graph was built by another Graphify release than {version}"
         return result
     try:
         _git(primary, "cat-file", "-e", data["baseline_head"] + "^{commit}")
@@ -297,15 +326,24 @@ def _extract(source, graph_dir, graphify_bin):
         path = graph_dir / name
         if path.is_symlink() or not path.is_file() or not path.stat().st_size:
             raise RuntimeError(f"Graphify extraction did not produce {path}")
-    _graphify(["export", "html", "--graph", str(graph_dir / "graph.json")], source, graph_dir, graphify_bin)
+    try:
+        _graphify(["export", "html", "--graph", str(graph_dir / "graph.json")], source, graph_dir, graphify_bin)
+    except RuntimeError as exc:
+        # Graphify refuses the interactive view of a very large graph; graph.json still answers queries.
+        if not re.search(r"too large for HTML viz", str(exc), re.IGNORECASE):
+            raise
+        (graph_dir / "graph.html").write_text(TOO_LARGE_HTML, encoding="utf-8")
     if not _valid_files(graph_dir):
         raise RuntimeError(f"Graphify did not produce a complete graph at {graph_dir}")
 
 
-def _write_revision(graph_dir, source, scope, head, baseline_head, branch=None):
+def _write_revision(graph_dir, source, scope, head, baseline_head, branch=None, graphify=None):
+    """Stamp the release only after a complete extraction, so a failed one is rebuilt from scratch."""
     data = {"source": str(source), "scope": scope, "head": head, "baseline_head": baseline_head}
     if branch:
         data["branch"] = branch
+    if graphify:
+        data["graphify"] = graphify
     (graph_dir / "revision.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
@@ -325,23 +363,28 @@ def build_graph(project, package_root=PACKAGE_ROOT, graphify_bin="graphify", *,
     baseline_before = _clean_baseline(primary, branch)
     if not shutil.which(graphify_bin):
         raise RuntimeError("Graphify CLI is unavailable; install the official graphifyy package")
+    version = graphify_version(graphify_bin)
     base_dir = _graph_dir(primary, package_root, "baselines")
+    previous_base = None
     if base_dir.exists():
         _identity(base_dir, primary, "baselines")
         previous_base = _metadata(base_dir)
         if previous_base and (not _same_path(previous_base.get("source"), primary)
                               or previous_base.get("scope") != "baselines"):
             raise ValueError(f"Baseline graph revision belongs to a different source: {base_dir}")
-    base_status = graph_status(primary, package_root, baseline_branch=branch)
+    base_status = graph_status(primary, package_root, baseline_branch=branch, graphify_bin=graphify_bin)
     if not base_status["verified"]:
         _identity(base_dir, primary, "baselines", create=True)
         _assert_private_files(base_dir)
+        if version and (previous_base or {}).get("graphify") != version:
+            _discard_index(base_dir)
         _write_revision(base_dir, primary, "baselines", None, baseline_before["head"], branch)
         with _head_snapshot(primary, baseline_before["head"]) as snapshot:
             _extract(snapshot, base_dir, graphify_bin)
         if _clean_baseline(primary, branch)["head"] != baseline_before["head"]:
             raise RuntimeError("Baseline changed during extraction; graph is unavailable")
-        _write_revision(base_dir, primary, "baselines", baseline_before["head"], baseline_before["head"], branch)
+        _write_revision(base_dir, primary, "baselines", baseline_before["head"], baseline_before["head"], branch,
+                        version)
         base_result = _result(primary, base_dir, "updated", _metadata(base_dir))
     else:
         base_result = _result(primary, base_dir, "current", _metadata(base_dir))
@@ -351,7 +394,7 @@ def build_graph(project, package_root=PACKAGE_ROOT, graphify_bin="graphify", *,
     graph_dir = _graph_dir(selected, package_root, "worktrees")
     if graph_dir.exists():
         _identity(graph_dir, selected, "worktrees")
-    status = graph_status(primary, package_root, worktree_path=selected)
+    status = graph_status(primary, package_root, worktree_path=selected, graphify_bin=graphify_bin)
     if status["verified"]:
         return _result(selected, graph_dir, "current", _metadata(graph_dir))
     previous = _metadata(graph_dir) if graph_dir.exists() else None
@@ -361,6 +404,9 @@ def build_graph(project, package_root=PACKAGE_ROOT, graphify_bin="graphify", *,
     if previous and (not _same_path(previous.get("source"), selected)
                      or previous.get("scope") != "worktrees"):
         raise ValueError(f"Graph output belongs to a different source: {graph_dir}")
+    if previous and version and previous.get("graphify") != version:
+        _discard_index(graph_dir)  # reseed from the baseline the current release just verified
+        previous = None
     seed = previous.get("baseline_head") if previous else baseline_before["head"]
     if previous and (not isinstance(seed, str) or not re.fullmatch(r"[0-9a-f]{40,64}", seed)):
         raise ValueError(f"Invalid seed baseline revision: {graph_dir}")
@@ -385,7 +431,7 @@ def build_graph(project, package_root=PACKAGE_ROOT, graphify_bin="graphify", *,
         _extract(snapshot, graph_dir, graphify_bin)
     if _clean_worktree(selected)["head"] != selected_before["head"]:
         raise RuntimeError("Worktree HEAD changed during extraction; graph is unavailable")
-    _write_revision(graph_dir, selected, "worktrees", selected_before["head"], seed)
+    _write_revision(graph_dir, selected, "worktrees", selected_before["head"], seed, graphify=version)
     return _result(selected, graph_dir, "updated", _metadata(graph_dir))
 
 
@@ -395,7 +441,8 @@ def query_graph(project, question, package_root=PACKAGE_ROOT, *, worktree_path=N
         raise ValueError("Select a worktree with --worktree-path or --ticket")
     if not 1 <= budget <= 100000:
         raise ValueError("Budget must be between 1 and 100000")
-    status = graph_status(project, package_root, worktree_path=worktree_path, ticket=ticket)
+    status = graph_status(project, package_root, worktree_path=worktree_path, ticket=ticket,
+                          graphify_bin=graphify_bin)
     if not status["verified"]:
         raise RuntimeError(f"No current, source-verified graph for {status['source']}: {status['reason']}")
     output = _graphify(["query", question, "--graph", status["graph_json"], "--budget", str(budget)],
