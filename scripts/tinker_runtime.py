@@ -91,7 +91,22 @@ def write_json(path, value):
             time.sleep(0.05)
 
 
+def foreign_records(records):
+    """True for an apps.json in another installer's shape: another Tinker installation can share this home
+    (same product name), and its records and config are never read as this installation's."""
+    return not (isinstance(records.get("apps"), dict) and isinstance(records.get("files"), dict))
+
+
+def foreign_home():
+    status, records = read_state(state_dir() / "apps.json")
+    return status == "ok" and foreign_records(records)
+
+
 def config():
+    """This installation's config.json; empty when the home holds another installation's records, so a
+    checkout run in project mode resolves its own root instead of the other installation's."""
+    if foreign_home():
+        return {}
     return read_json(state_dir() / "config.json") or {}
 
 
@@ -1520,6 +1535,9 @@ def status_text():
     now = time.time()
     lines = [f"Tinker root: {root or 'not configured'}",
              f"Installed: {cfg.get('version', 'no (project mode only)')}", *install_lines(cfg, root)]
+    if foreign_home():
+        lines.append(f"Note: {state_dir()} belongs to another Tinker installation; this checkout runs in project "
+                     "mode here, and the installer leaves that home alone.")
     sessions = []
     folder = state_dir() / "state" / "sessions"
     for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:

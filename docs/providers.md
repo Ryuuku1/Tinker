@@ -207,6 +207,9 @@ whose settings cannot be read is refused while another Tinker installation might
 enabled there. The installer also refuses an app where another Tinker installation is
 enabled, including one that uses this plugin's id or folder without this installer's
 records, and it never reads or rewrites a `~/.tinker/apps.json` that it did not write.
+On such a machine the checkout runs in project mode: the runtime ignores the other
+installation's `config.json`, takes the checkout as its root, and `status` says whose
+home it is.
 
 Uninstall removes an app's files once its CLI or its own settings show the plugin
 gone; the bundle stays while Claude or Codex still registers it. It never deletes

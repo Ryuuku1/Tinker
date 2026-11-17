@@ -988,6 +988,22 @@ class CommandTests(Fixture):
         self.assertRegex(out, r"APR-[0-9a-f]{8} codex/c1 \(git\.forcePush\)")
         self.assertIn(f"{task} blocked", out)
 
+    def test_another_installations_home_never_supplies_the_root(self):
+        # Another Tinker installation can share ~/.tinker: its config names its own root, never this checkout's.
+        state = self.home / ".tinker"
+        (state / "config.json").write_text(json.dumps({"root": str(self.tmp / "elsewhere"), "team": "core"}), encoding="utf-8")
+        (state / "apps.json").write_text(json.dumps({"Claude": {"plugin": "tinker", "version": "1.0"}}), encoding="utf-8")
+        code, out, _ = self.cli("status")
+        self.assertEqual(code, 0)
+        self.assertIn(f"Tinker root: {ROOT}", out)
+        self.assertIn("belongs to another Tinker installation", out)
+        self.assertEqual(self.tb.config(), {})
+        # This installer's own records keep the configured root.
+        (state / "apps.json").write_text(json.dumps({"schema": 2, "apps": {}, "files": {}}), encoding="utf-8")
+        code, out, _ = self.cli("status")
+        self.assertIn(f"Tinker root: {self.tmp / 'elsewhere'}", out)
+        self.assertNotIn("another Tinker installation", out)
+
     def test_status_shows_the_latest_run_outcomes_by_time(self):
         runs = self.home / ".tinker" / "state" / "runs"
         runs.mkdir(parents=True)

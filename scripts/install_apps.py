@@ -335,9 +335,10 @@ class Installer:
         self.state = self.home / ".tinker"
         self.apps_file = self.state / "apps.json"
         status, previous = tinker_runtime.read_state(self.apps_file)
-        if status == "ok" and not (isinstance(previous.get("apps"), dict) and isinstance(previous.get("files"), dict)):
+        if status == "ok" and tinker_runtime.foreign_records(previous):
             status, previous = "foreign", None  # another installation's records: never read, never rewritten
         self.unreadable = status in ("unreadable", "foreign")
+        self.records = status
         self.previous = previous or {}
         files, pending, apps = (self.previous.get(k) for k in ("files", "pending", "apps"))
         self.files = {p: h for p, h in files.items() if isinstance(h, str)} if isinstance(files, dict) else {}
@@ -555,9 +556,14 @@ class Installer:
             return "enabled"
         return "disabled" if all(value is False or value is None for value in values) else "unknown"
 
-    UNKNOWN_RECORDS = ("{} is unreadable or was not written by this installer (another Tinker installation can "
-                       "share this home), so which files are its own is unknown; nothing was changed. Repair it, "
-                       "or move that installation away, and re-run")
+    UNKNOWN_RECORDS = {
+        "unreadable": "{} cannot be read, so which files are Tinker's is unknown; nothing was changed. Repair it "
+                      "and re-run",
+        "foreign": "{} was written by another Tinker installation (the same product name, another installer), "
+                   "which owns this home; nothing was changed. On this machine use project mode (README, "
+                   "\"Choose how to run it\"): this checkout runs from its own folder and leaves that "
+                   "installation as it is. Install here only after that installation's own uninstaller removed it",
+    }
     DISABLE_OTHER = {
         "claude": "claude plugin disable tinker@tinker-local",
         "codex": "codex plugin remove tinker@tinker-local (or disable it in the Codex app's Plugins view)",
@@ -633,7 +639,7 @@ class Installer:
     def install(self, apps):
         apps = list(apps)
         if self.unreadable:
-            self.step("all", "Refused", self.UNKNOWN_RECORDS.format(self.apps_file))
+            self.step("all", "Refused", self.UNKNOWN_RECORDS[self.records].format(self.apps_file))
             return self.finish()
         self.migrate()
         for app in list(apps):
@@ -827,7 +833,7 @@ class Installer:
     # ---- uninstall
     def uninstall(self, apps):
         if self.unreadable:
-            self.step("all", "Refused", self.UNKNOWN_RECORDS.format(self.apps_file))
+            self.step("all", "Refused", self.UNKNOWN_RECORDS[self.records].format(self.apps_file))
             return self.finish()
         self.migrate()
         for app in [a for a in apps if a in self.apps]:

@@ -403,7 +403,10 @@ class ActivationTests(InstallCase):
                 self.lines.clear()
                 installer = self.installer(skip_cli=True)
                 self.assertEqual(getattr(installer, run)(list(APPS)), 1)
-                self.assertTrue(any("apps.json" in line for line in self.steps("Refused")), "\n".join(self.lines))
+                refused = [line for line in self.steps("Refused") if "apps.json" in line]
+                self.assertTrue(refused, "\n".join(self.lines))
+                self.assertIn("another Tinker installation", refused[0])
+                self.assertIn("project mode", refused[0])
                 self.assertEqual({p: p.read_text(encoding="utf-8") for p in theirs}, theirs)
                 self.assertFalse((state / "runtime").exists())
 
