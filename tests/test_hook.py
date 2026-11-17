@@ -717,10 +717,11 @@ class OutputTrimTests(Fixture):
         self.temp.mkdir()
         self.env.update(TMPDIR=str(self.temp), TEMP=str(self.temp), TMP=str(self.temp))
 
-    def run_tool(self, command, stdout="", stderr="", host="claude", tool_use_id="toolu_01A"):
+    def run_tool(self, command, stdout="", stderr="", host="claude", tool_use_id="toolu_01A", **response):
         payload = {"session_id": "s1", "cwd": str(self.repo), "hook_event_name": "PostToolUse", "tool_name": "Bash",
                    "tool_input": {"command": command}, "tool_use_id": tool_use_id,
-                   "tool_response": {"stdout": stdout, "stderr": stderr, "interrupted": False, "isImage": False}}
+                   "tool_response": dict({"stdout": stdout, "stderr": stderr, "interrupted": False, "isImage": False},
+                                         **response)}
         return self.hook("post-tool", host, payload)
 
     @staticmethod
@@ -732,7 +733,8 @@ class OutputTrimTests(Fixture):
 
     def test_long_runner_output_reaches_claude_trimmed(self):
         log = self.long_log()
-        code, out, err = self.run_tool("cd /work && python -m unittest discover -s tests", stdout=log)
+        code, out, err = self.run_tool("cd /work && python -m unittest discover -s tests", stdout=log,
+                                       noOutputExpected=False)
         self.assertEqual((code, err), (0, ""))
         hook = json.loads(out)["hookSpecificOutput"]
         self.assertEqual(hook["hookEventName"], "PostToolUse")
@@ -745,6 +747,7 @@ class OutputTrimTests(Fixture):
         self.assertTrue(result["stdout"].endswith("FAILED (failures=1)"))
         self.assertLess(len(result["stdout"].splitlines()), 200)
         self.assertEqual((result["stderr"], result["interrupted"], result["isImage"]), ("", False, False))
+        self.assertEqual(set(result), {"stdout", "stderr", "interrupted", "isImage"})  # the documented Bash shape
 
     def test_a_long_stderr_is_trimmed_on_its_own(self):
         code, out, _ = self.run_tool("pytest -q", stdout="1 passed\n", stderr=self.long_log(), tool_use_id="../../x")
@@ -761,6 +764,7 @@ class OutputTrimTests(Fixture):
         for host, command, stdout in cases:
             with self.subTest(host=host, command=command):
                 self.assertEqual(self.run_tool(command, stdout=stdout, host=host), (0, "", ""))
+        self.assertEqual(self.run_tool("pytest", stdout=long, isImage=True), (0, "", ""))
         self.assertFalse((self.temp / "tinker-logs").exists())
         for raw in (b"{broken", b"", b'{"tool_input": "x", "tool_response": []}'):
             with self.subTest(raw=raw):

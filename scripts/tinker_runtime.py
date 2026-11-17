@@ -1589,17 +1589,22 @@ def event_post_tool(host, payload, out):
     else prints nothing, so the host keeps the original; run_hook turns any error into that same no-op."""
     tool_input, response = payload.get("tool_input"), payload.get("tool_response")
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
-    if host != "claude" or not isinstance(command, str) or not RUNNER_RX.search(command) or not isinstance(response, dict):
+    if (host != "claude" or not isinstance(command, str) or not RUNNER_RX.search(command)
+            or not isinstance(response, dict) or response.get("isImage")):
         return out.noop()
     name = re.sub(r"[^A-Za-z0-9_-]", "", str(payload.get("tool_use_id") or ""))[:80] or os.urandom(8).hex()
     folder = Path(tempfile.gettempdir()) / "tinker-logs"
-    updated = dict(response)
+    streams, changed = {}, False
     for stream, suffix in (("stdout", ""), ("stderr", ".stderr")):
-        text = response.get(stream)
-        trimmed = trim_stream(text, folder / f"{name}{suffix}.log") if isinstance(text, str) else None
-        if trimmed is not None:
-            updated[stream] = trimmed
-    return out.updated_output(updated) if updated != response else out.noop()
+        text = response.get(stream) if isinstance(response.get(stream), str) else ""
+        trimmed = trim_stream(text, folder / f"{name}{suffix}.log")
+        streams[stream] = text if trimmed is None else trimmed
+        changed = changed or trimmed is not None
+    if not changed:
+        return out.noop()
+    # The Bash output shape the hooks reference documents; Claude ignores a value that does not match the tool's
+    # schema and keeps the original output, so a mismatch fails open.
+    return out.updated_output(dict(streams, interrupted=bool(response.get("interrupted")), isImage=False))
 
 
 def run_hook(event, host):
