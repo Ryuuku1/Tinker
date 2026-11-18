@@ -27,7 +27,9 @@ A UI change can get a live pass after its automated gate: the user watches a hea
 browser walk the changed flow and can take over. Run one only when the change is visible
 in a browser, the chat is attended (never a scheduled or other unattended run), the
 repository's `## Agent playbook` has a `Live pass` recipe (or the user gives one now)
-and browser tools are actually loaded. Otherwise say why it was skipped.
+and browser tools are actually loaded. Otherwise the final message's live-pass line
+reports it `skipped` and names each of these conditions that failed, not only the first
+and not only in the retro: a missing recipe is the one the user can fix.
 
 - **Browser.** In Claude Code, Tinker's project settings enable the official Playwright
   plugin with an isolated in-memory profile, an origin allowlist of `localhost` and

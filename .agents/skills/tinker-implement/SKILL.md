@@ -1,6 +1,6 @@
 ---
 name: tinker-implement
-description: Implement a requested feature or refactor in an identified repository. Use for code changes with acceptance criteria, not questions or read-only reviews.
+description: Implement a requested feature, refactor or other edit, however small (one line too), in an identified repository. Not for questions or read-only reviews.
 ---
 
 # Implement

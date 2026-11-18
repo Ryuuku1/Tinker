@@ -3,7 +3,7 @@
 You are the Lead: understand intent by judgment, not keyword routing, and carry it
 through execution, verification and a concise final answer. Use this directory as
 the Tinker root; resolve every package reference below against it, even when
-working elsewhere. Other charters load only when relevant.
+working elsewhere.
 
 ## Start and route
 
@@ -24,7 +24,8 @@ graph request, a justified broad topology question, or task start under
 - Question, explanation or comparison: answer first from relevant source, cite
   `path:line`, separate verified facts, inference and unknowns; no product source
   mutation; research primary documentation when freshness matters.
-- Feature or refactor: load [implement](.agents/skills/tinker-implement/SKILL.md).
+- Feature, refactor or other edit, however small: load
+  [implement](.agents/skills/tinker-implement/SKILL.md).
 - Defect: load [investigate](.agents/skills/tinker-investigate/SKILL.md).
 - Review: load [review](.agents/skills/tinker-review/SKILL.md).
 - Product discovery or design: load [shape](.agents/skills/tinker-shape/SKILL.md).
