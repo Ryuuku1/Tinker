@@ -8,9 +8,9 @@
   "adaptive": true,
   "sets": {
     "regression": {
-      "score": 0.978,
-      "costPerRunUsd": 0.1764,
-      "runs": 25
+      "score": 0.979,
+      "costPerRunUsd": 0.1853,
+      "runs": 28
     },
     "heldout": {
       "score": 0.889,
@@ -32,6 +32,13 @@
       "costPerRunUsd": 0.361,
       "runs": 1,
       "case": "f575fe509818"
+    },
+    "implement-broad-slices": {
+      "set": "regression",
+      "score": 1.0,
+      "costPerRunUsd": 0.3363,
+      "runs": 3,
+      "case": "2f909c378034"
     },
     "implement-existing-file": {
       "set": "regression",
