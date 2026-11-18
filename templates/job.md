@@ -24,6 +24,12 @@ Keep `status` to active, paused, blocked or completed: installed hooks and
 - Its own worktree:
 - Starting revision; staged/unstaged changes; untracked user files:
 
+## Slices
+
+- Only for a change split into [slices](../policies/workspace.md#slices), in
+  dependency order: `Slice N`: scope, files, gate, status (pending, in progress,
+  green, red); then the decisions and interfaces the slices share.
+
 ## Work and evidence
 
 - Decisions and relevant role charters:

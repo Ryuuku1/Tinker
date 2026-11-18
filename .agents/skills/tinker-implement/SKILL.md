@@ -14,30 +14,32 @@ then do the [task start](../../../policies/workspace.md#task-start): its
    coding, with every attached design (mockup, screenshot, design file) opened before
    the first change. When a design and the text disagree, ask now; unattended, follow
    the design and record the disagreement. Inspect the owning symbols, relevant
-   callers and an existing analogous implementation. Ask only for missing information
+   callers and an analogous implementation. Ask only for missing information
    that blocks a safe result. Check any access outside the repository (a database, a
-   design file, a cloud resource) now with one cheap call and report a failure at once.
-2. Choose the smallest safe change, climbing this ladder and stopping at the first
-   rung that holds: does the code need to exist at all; does the codebase already
+   design file, a cloud resource) now with one cheap call; report a failure at once.
+2. Choose the smallest safe change, climbing this ladder to the first rung that
+   holds: does the code need to exist at all; does the codebase already
    have it; does the standard library or an existing dependency cover it; only then
    write new code. Never add a dependency for what those cover, and never trim
    validation, error handling, security or accessibility to save lines. State a
-   short plan for multi-step work; avoid abstractions created merely for the ticket.
+   short plan for multi-step work; no abstractions made only for the ticket.
+   A change across areas the playbook gates separately, or of 8+ points, first gets
+   [slices](../../../policies/workspace.md#slices) in its checkpoint, run one at a time.
 3. Change only the required code and relevant behavioral tests. Prefer a failing
-   test before changing behavior when useful; do not add tests that only mirror
-   wording or trivial implementation details. Inspect dependency, generated-file
-   and schema effects when present.
+   test before changing behavior when useful; no tests that only mirror wording or
+   trivial implementation details. Inspect dependency, generated-file and schema
+   effects when present.
 4. Run the playbook's gates, narrowest first; widen only for shared contracts or
-   unresolved risk. Read exit status and test summary, investigate failures and
-   keep them in the outcome; a failed, unavailable or zero-test gate blocks a
-   "done" claim. Use [evidence policy](../../../policies/evidence.md). For a
-   changed UI, API or CLI flow, verify the running application when relevant and
-   possible, per [application verification](../../../policies/app-verification.md).
+   unresolved risk. Investigate failures and keep them in the outcome; a failed,
+   unavailable or zero-test gate blocks a "done" claim. Use
+   [evidence policy](../../../policies/evidence.md). For a changed UI, API or CLI
+   flow, verify the running application when possible, per
+   [application verification](../../../policies/app-verification.md).
 5. Tick each criterion with its evidence (a test, a command result, a screenshot
    compared with the design at the same viewport); one without evidence is unverified,
-   never done. Inspect the final diff against the original user changes. Request
-   an independent review only when the risk justifies it and delegation permits.
-   Fix material findings and reverify affected behavior.
+   never done. Inspect the final diff against the original user changes. Request an
+   independent review only when the risk justifies it. Fix material findings and
+   reverify affected behavior.
 6. Leave the deliverable as the playbook says; commit only when authorized. Return
    actual changes, verification, limitations and a proposed commit message in the
    repository's style. Complete all authorized local work; prepare a concrete
@@ -47,5 +49,5 @@ then do the [task start](../../../policies/workspace.md#task-start): its
    `.tinker/retros/<yyyy-mm-dd>-<slug>-implement.md`, then close the final message
    with them.
 
-Ordinary testing belongs to the implementer. No mandatory specialist, explainer,
-report file, model choice or remote publication is part of this workflow.
+Testing is the implementer's. No mandatory specialist, report file, model choice or
+remote publication is part of this workflow.

@@ -359,8 +359,11 @@ schedules the daily update check of [section 7](#7-keep-it-up-to-date). See
 ### Continue or switch hosts
 
 Substantial or delegated work gets a checkpoint at `.tinker/tasks/<UUID>.md` in this
-checkout; the Lead gives you its path. Ask "Prepare this job for handoff and stop its
-helpers", stop the old session, then in the other host say:
+checkout; the Lead gives you its path. A change across several separately tested areas
+is planned there as slices, run and verified one at a time; after a green slice in a
+long chat, the Lead offers to continue in a fresh one from the checkpoint. Ask "Prepare
+this job for handoff and stop its helpers", stop the old session, then in the other
+host say:
 
 ```text
 Continue the job from <absolute-checkpoint-path>. Recheck the repository state first.

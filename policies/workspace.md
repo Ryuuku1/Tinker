@@ -93,3 +93,24 @@ Multiple jobs use separate handoffs. Ordinary questions require no checkpoint.
 No auto-cleanup:
 delete only an explicitly selected owned artifact after checking it is inactive,
 inside the authorized root and no longer needed. Never follow links during deletion.
+
+## Slices
+
+A change that spans two or more areas the playbook gates separately (such as an
+importer, an API and a web page), or is estimated at 8 points or more, is split into
+slices before its first code change, whatever the Triage line says. Smaller changes
+skip this.
+
+- Order the slices by dependency, the shared contract first. Each one is finished and
+  verified on its own by a named playbook gate or focused tests.
+- Write them into the task's checkpoint, under `## Slices` in the
+  [template](../templates/job.md): `Slice 1`, `Slice 2`, ..., each with its scope,
+  files, gate and status, then the decisions and interfaces they share.
+- Run them one at a time: implement a slice, run its gate, record the result and
+  status in the checkpoint, then start the next. Never start a slice on a red gate.
+- After a green slice, when the conversation has grown large, offer to continue in a
+  fresh session, which resumes from the checkpoint. Unattended, keep going.
+- Run slices in parallel only when they touch disjoint files and share no contract,
+  each in its own worktree the user agreed to. Never put two writers on a shared seam
+  (a contract, schema, migration or shared component).
+- Slices are steps of one task, not work items: create none unless asked.

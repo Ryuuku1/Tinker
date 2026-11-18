@@ -1,0 +1,46 @@
+schema_version: "1.1"
+name: implement-broad-slices
+description: A broad story across three areas (importer, API, web page) gets dependency-ordered slices, each with its own gate, in a checkpoint at .tinker/tasks/<UUID>.md before any code, and the answer says they run one at a time, each gated before the next.
+tags: [implement, checkpoint, regression]
+context:
+  scaffold_script: setup.sh
+execution:
+  append_system_prompt: TINKER_AGENTS_MD
+  max_turns: 30
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Edit, Write, Skill, Agent]
+  prompt: |
+    In product/store: a 13-point story, the monthly returns report. (1) The importer stores a `returned` flag on each order from the source status column. (2) The API adds `GET /api/reports/returns?month=yyyy-mm`, counting returned orders and their value per product category. (3) The web app adds a Returns page with a monthly table and a CSV export. Start it: do what your workflow does before the first code change, then stop there and tell me how the rest will run.
+
+    (This run is unattended: no commits, pushes or pull requests. Shell commands are unavailable in this run: use Read, Grep, Glob, Edit and Write.)
+graders:
+  - name: checkpoint-in-tinker-root
+    type: file_exists
+    path: .tinker/tasks/*-*-*-*-*.md
+    weight: 2
+  - name: checkpoint-holds-the-slices
+    type: tool_used
+    tool: Write
+    input_match: '"file_path"\s*:\s*"[^"]*\.tinker[\\/]+tasks[\\/]+[^"]*"[\s\S]*[Ss]lice\s*1\b[\s\S]*[Ss]lice\s*2\b'
+    min: 1
+    weight: 2
+  - name: answer-one-slice-at-a-time
+    type: regex
+    pattern: '\bone (?:\w+ )?at a time|one after (?:the )?other|starts? (?:only )?(?:once|after|when) the previous|before (?:the next|starting the next|moving on)|start the next|next (?:\w+ )?(?:starts|begins)'
+    flags: i
+  - name: no-product-edit-yet
+    type: tool_used
+    tool: Edit
+    input_match: '"file_path"\s*:\s*"[^"]*product[\\/]'
+    min: 0
+    max: 0
+  - name: no-product-write-yet
+    type: tool_used
+    tool: Write
+    input_match: '"file_path"\s*:\s*"[^"]*product[\\/]'
+    min: 0
+    max: 0
+  - name: product-stays-tinker-free
+    type: file_exists
+    path: product/**/.tinker/**
+    exists: false
