@@ -19,6 +19,9 @@ Codex and Antigravity are left out. Run it yourself, not through an agent. --dry
 plan; --uninstall removes only what apps.json records, after each app confirms its plugin is gone. --write-descriptors regenerates
 this checkout's project descriptors. --design-skills instead installs the third-party design skills
 globally through their own CLIs (npx); their files are theirs, never recorded in apps.json.
+An install also schedules scripts/update.py --check for this checkout, daily by default (Windows Task
+Scheduler; elsewhere it prints the crontab line): --update-check-hours 1-23 checks more often, 0 removes
+it. Uninstalling the last installation made from this checkout removes it.
 """
 import argparse
 import hashlib
@@ -38,6 +41,7 @@ if sys.version_info < (3, 11):  # the hooks run on this interpreter too
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tinker_runtime  # noqa: E402  (shared: charter files, digest, marker, hook names)
+import update as tinker_update  # noqa: E402  (the daily update check)
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER_FILE = ".tinker-generated"
@@ -1008,6 +1012,9 @@ def main(argv=None):
     parser.add_argument("--write-descriptors", action="store_true", help="regenerate this checkout's project descriptors")
     parser.add_argument("--design-skills", action="store_true",
                         help="install the third-party design skills at user level with npx (needs Node.js)")
+    parser.add_argument("--update-check-hours", type=int, choices=range(25), default=24, metavar="0-24",
+                        help="check whether this checkout is behind origin daily (24, the default) or every N hours, "
+                             "with no agent (Windows Task Scheduler); 0 removes the check")
     args = parser.parse_args(argv)
     if args.write_descriptors:
         write_descriptors()
@@ -1018,7 +1025,19 @@ def main(argv=None):
         print("[dry run] nothing is written and no app CLI runs")
     if args.design_skills:
         return installer.design_skills(apps)
-    return installer.uninstall(apps) if args.uninstall else installer.install(apps)
+    if args.uninstall:
+        code = installer.uninstall(apps)
+        others = [f for f in tinker_update.installations(args.home, ROOT) if f["instance"] != args.instance]
+        if code == 0 and args.app == "all" and not others and not args.skip_app_cli:
+            tinker_update.schedule(ROOT, remove=True, dry_run=args.dry_run)
+        return code
+    code = installer.install(apps)
+    # Whenever an installation from this checkout exists, also after a partial failure; a check that cannot be
+    # scheduled never fails the install: the schedule says why.
+    if not args.skip_app_cli and (args.dry_run or tinker_update.installations(args.home, ROOT)):
+        tinker_update.schedule(ROOT, args.update_check_hours or 24, remove=not args.update_check_hours,
+                               dry_run=args.dry_run)
+    return code
 
 
 if __name__ == "__main__":

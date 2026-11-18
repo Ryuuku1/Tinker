@@ -20,6 +20,7 @@ operation's fingerprint (host, chat, tool, directory and complete tool input).
 Runs as `python -I -S`: standard library only, no sibling imports, explicit UTF-8.
 Command classification reads text; it is a guard against mistakes, not a sandbox.
 """
+import datetime
 import hashlib
 import json
 import os
@@ -37,6 +38,7 @@ MARKER = "[tinker scheduled run]"
 WATCHDOG_SECONDS = 5.0
 GRANT_TTL = 30 * 60
 PRESENCE_TTL = 24 * 3600
+UPDATE_CHECK_STALE = 2 * 24 * 3600  # one missed day of the daily check is no alarm
 CHECKPOINT_STATES = ("active", "paused", "blocked")
 UUID_RX = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -526,6 +528,7 @@ ENCODED_ARG = re.compile(r"[-/–—―]{1,2}(?:e|ec|en|enc\w*)(?::.*)?", re.I |
 PY_RUNNERS = {"python", "python3", "py", "pythonw"}
 SCRIPT_RX = _rx(r"\btinker_runtime(?:\.py)?\b")
 INSTALLER_RX = _rx(r"\binstall_apps(?:\.py)?\b")
+UPDATE_READ_ONLY = {"--check", "--dry-run"}  # whole words only: a quoted value or an abbreviation is not one
 PLUGIN_CLI_RX = _rx(r"\b(?:claude|codex)(?:\.exe|\.cmd)?\b.*\bplugins?\b.*\b(?:disable|uninstall|remove|rm)\b.*tinker")
 DISABLE_RX = _rx(r"disableAllHooks|tinker(?:@tinker-[a-z0-9]+)?[\"']?\s*[:=]\s*false"
                  r"|tinker[^}\n]{0,80}\benabled[\"']?\s*[:=]\s*false")
@@ -696,6 +699,15 @@ def classify_command(command, shell, base, unattended=False, depth=0):
     return labels, tamper
 
 
+def _runs_own_update(verb, words, base, shell):
+    """Whether the command runs this installation's scripts/update.py, which pulls Tinker and runs its installer."""
+    if verb not in PY_RUNNERS and verb != "update.py" or not any(base_name(word) == "update.py" for word in words):
+        return False
+    root = package_root()
+    script = normalize(str(Path(root) / "scripts" / "update.py"), base, shell) if root else None
+    return bool(script) and any(normalize(word, base, shell) == script for word in words)
+
+
 def substitutes(seg, shell):
     """Whether a segment runs commands inside it: $( ), <( ), >( ), backticks (also in heredoc bodies, which
     bash expands unless the delimiter is quoted), or a PowerShell ( ) group."""
@@ -791,6 +803,8 @@ def _classify_segment(seg, previous, verb, args, base, unattended, labels, tampe
         tamper.append("runs or imports the Tinker hook script")
     if INSTALLER_RX.search(text):
         tamper.append("runs the Tinker installer (only the user runs it, outside the agent)")
+    if not UPDATE_READ_ONLY.intersection(seg["words"]) and _runs_own_update(verb, seg["words"], base, shell):
+        tamper.append("runs the Tinker update, which runs the installer (only the user runs it, outside the agent)")
     if PLUGIN_CLI_RX.search(text):
         tamper.append("disables or removes the Tinker plugin")
     host_config = bool(HOST_CONFIG_NAME_RX.search(text))
@@ -1345,6 +1359,7 @@ def session_context(host, call):
     elif installed == "unknown":
         lines.append(f"Note: the installer has no record of activating the current Tinker in this app ({host}); "
                      "this copy may be out of date until the user re-runs the installer.")
+    lines.extend(update_lines(root, brief=True))
     lines.extend(repository_lines(root, call["cwd"]))
     requests = pending_requests(host, call["session"])
     if requests:
@@ -1689,12 +1704,42 @@ def install_lines(cfg, root):
     return lines
 
 
+def update_lines(root, brief=False, now=None):
+    """The record scripts/update.py keeps in the checkout (data, not instructions). Brief: only what needs the user."""
+    record = read_json(Path(root) / ".tinker" / "update.json") if root else None
+    command = f'python "{(Path(root) / "scripts" / "update.py").as_posix()}"' if root else "python scripts/update.py"
+    if not isinstance(record, dict):
+        return [] if brief else [f"Updates: never checked ({command} --check)"]
+    now = time.time() if now is None else now
+
+    def when(field):
+        try:
+            return datetime.datetime.fromisoformat(str(record.get(field))).timestamp()
+        except (TypeError, ValueError, OverflowError, OSError):
+            return None
+    checked, scheduled = when("checked"), when("scheduled_at")
+    day = time.strftime("%Y-%m-%d", time.localtime(checked)) if checked else "unknown"
+    behind = record.get("behind") if isinstance(record.get("behind"), int) else 0
+    lines = []
+    if record.get("status") == "behind" and behind > 0:
+        lines.append(f"Note: the Tinker checkout is {behind} commit{'s' if behind != 1 else ''} behind origin "
+                     f"(checked {day}); the user can run {command} in a terminal to pull and reinstall.")
+    if scheduled and now - scheduled > UPDATE_CHECK_STALE:
+        lines.append(f"Note: the scheduled Tinker update check last ran "
+                     f"{time.strftime('%Y-%m-%d', time.localtime(scheduled))}; see {command} --schedule.")
+    if not brief:
+        lines.insert(0, f"Updates: {one_line(record.get('status', 'unknown'), 20)}, checked {day}: "
+                        f"{one_line(record.get('detail', ''), 200)}")
+    return lines
+
+
 def status_text():
     cfg = config()
     root = package_root(cfg)
     now = time.time()
     lines = [f"Tinker root: {root or 'not configured'}",
-             f"Installed: {cfg.get('version', 'no (project mode only)')}; home {state_dir()}", *install_lines(cfg, root)]
+             f"Installed: {cfg.get('version', 'no (project mode only)')}; home {state_dir()}", *install_lines(cfg, root),
+             *update_lines(root, now=now)]
     if foreign_home():
         lines.append(f"Note: {state_dir()} belongs to another Tinker installation; this checkout runs in project "
                      "mode here, and the installer leaves that home alone. Install beside it with --instance <name>; "

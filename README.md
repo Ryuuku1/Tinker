@@ -170,10 +170,24 @@ gets tuned. See the [evaluation guide](evals/README.md#live-evals-claude-code).
 ### 7. Keep it up to date
 
 ```bash
-git pull
-python -m unittest discover -s tests
-python scripts/install_apps.py               # installed mode only; then restart the apps
+python scripts/update.py --dry-run   # fetches, then says what it would pull and reinstall
+python scripts/update.py             # fast-forwards and reinstalls; then restart the apps
 ```
+
+`update.py` fast-forwards the default branch only when this checkout is on it, clean and
+without commits of its own (otherwise it says why and changes nothing), then re-runs
+the installer for each installation made from this checkout that is stale, with the
+apps, interpreter and `--instance` it recorded. Run it yourself: like the installer,
+the gate refuses it inside an agent, except `--check` and `--dry-run`. Each run records
+its result in `.tinker/update.json`, which `/tinker status` and the session-start note
+read.
+
+The installer also schedules `update.py --check` once a day at 09:00, caught up after
+sleep or shutdown: a `git fetch` with no agent and no tokens, so a new chat says when
+Tinker is behind. That uses Windows Task Scheduler (`--update-check-hours 1-23` checks
+more often, `0` removes it); on macOS and Linux the installer prints the crontab line
+to add instead. `python scripts/update.py --schedule` and `--unschedule` manage it
+directly and never touch a task that runs another checkout's script.
 
 `team status` shows any app still running an older copy. Your local state under
 `.tinker/` (notes, checkpoints, retros, graphs, eval results) is git-ignored and
@@ -220,7 +234,8 @@ hosts, invoke the `tinker` skill or just say the form ("tinker status").
 | --- | --- |
 | `/tinker <task>` | Routes the task to the right workflow in this chat; a question gets a direct answer with `path:line` evidence |
 | `/tinker` | Where you stand: branch, changed files, open checkpoints and up to three next steps |
-| `/tinker status` | Health (checkout behind its remote, stale installs, routines that stopped reporting), install state, open checkpoints, recent retros, the eval baseline, the latest maintenance report, cost per workflow |
+| `/tinker status` | Health (checkout behind its remote at the last update check, stale installs, routines that stopped reporting), install state, open checkpoints, recent retros, the eval baseline, the latest maintenance report, cost per workflow |
+| `/tinker update` | Checks whether this checkout is behind its remote and gives you the command that pulls and reinstalls |
 | `/tinker reload [path ...]` | Pulls the default branch and removes worktrees and branches proven merged; reports what it kept |
 | `/tinker remember <fact>` | Saves the fact as a knowledge candidate that every host reads |
 | `/tinker playbook <repo>` | Drafts that repository's `## Agent playbook` section for your approval |
@@ -337,7 +352,8 @@ deletes only files it recorded with their hash, restores the previous files if a
 update fails, and reports each app separately: one app can be current while another
 is stale or waiting for a recovery command. Force pushes, protected-branch pushes,
 branch deletion, discarding work, recursive deletes, remote changes, publishing and
-credential changes need your approval; scheduled runs cannot approve anything. See
+credential changes need your approval; scheduled runs cannot approve anything. It also
+schedules the daily update check of [section 7](#7-keep-it-up-to-date). See
 [per-app details and limits](docs/providers.md#optional-user-level-install).
 
 ### Continue or switch hosts
@@ -363,7 +379,7 @@ ignored `.tinker/knowledge/`; checkpoints and notes never enter product reposito
 | `roles/` | Specialist charters; their front matter generates the native agents |
 | `policies/` | Evidence, safety, workspace (task start), delegation, tools, knowledge, learning, app verification |
 | `templates/` | Agent playbook, checkpoint, ADR, user story, routines, domain pack, recipes |
-| `scripts/` | Installer, hook runtime, Graphify helper, live eval runner, test-log filter, merged-branch cleanup, usage report, platform helper |
+| `scripts/` | Installer, hook runtime, self-update, Graphify helper, live eval runner, test-log filter, merged-branch cleanup, usage report, platform helper |
 | `evals/` | Offline case catalog and grader; live Claude cases under `evals/live/` |
 | `.claude/`, `.codex/`, `.agents/agents/`, `.gemini/` | Generated native descriptors and Claude project settings |
 | `.tinker/` (ignored) | Your local state: checkpoints, retros, notes, graphs, reports, evidence |

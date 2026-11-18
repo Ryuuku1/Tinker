@@ -294,6 +294,22 @@ class ClassifierTests(Fixture):
             with self.subTest(command=command):
                 self.assertEqual(self.classify(command, "pwsh")[1], [])
 
+    def test_only_the_user_runs_the_tinker_update(self):
+        script = (self.root / "scripts" / "update.py").as_posix()
+        for command, shell in ((f"python {script}", "posix"), (f"C:/Python313/python.exe {script} --schedule", "posix"),
+                               (f"cd {self.root.as_posix()} && python3 scripts/update.py --unschedule", "posix"),
+                               (f'python {script} --home "x --check"', "posix"), (f"python {script} --dry", "posix"),
+                               (f"python {script} --schedule --task-name 't --dry-run'", "posix"),
+                               (f"Set-Location {self.root}; py .\\scripts\\update.py", "pwsh")):
+            with self.subTest(command=command):
+                self.assertIn("runs the Tinker update, which runs the installer (only the user runs it, outside the agent)",
+                              self.tampers(command, shell))
+        for command in (f"python {script} --check", f"python {script} --dry-run", f"cat {script}",
+                        f"sed -i s/a/b/ {script}", "python scripts/update.py", "python ../app/update.py"):
+            with self.subTest(command=command):
+                self.assertNotIn("runs the Tinker update, which runs the installer (only the user runs it, outside the agent)",
+                                 self.tampers(command, base=str(self.repo)))
+
     def test_relative_path_after_cd_resolves_against_the_new_directory(self):
         protected = self.home / ".tinker" / "state"
         protected.mkdir(parents=True)
@@ -1065,6 +1081,25 @@ class CommandTests(Fixture):
         self.assertIn("claude/s1", out)
         self.assertRegex(out, r"APR-[0-9a-f]{8} codex/c1 \(git\.forcePush\)")
         self.assertIn(f"{task} blocked", out)
+
+    def test_status_and_session_start_show_the_update_record(self):
+        code, out, _ = self.cli("status")
+        self.assertIn("Updates: never checked", out)
+        record = self.root / ".tinker" / "update.json"
+        record.write_text(json.dumps({"checked": "2026-01-02T09:00:00+00:00", "status": "behind", "behind": 3,
+                                      "detail": "3 new commits on origin/main", "scheduled_at": "2026-01-02T09:00:00+00:00"}),
+                          encoding="utf-8")
+        code, out, _ = self.cli("status")
+        self.assertEqual(code, 0)
+        self.assertIn("Updates: behind, checked 2026-01-02: 3 new commits on origin/main", out)
+        self.assertIn("3 commits behind origin", out)
+        self.assertIn("scheduled Tinker update check last ran 2026-01-02", out)
+        _, out, _ = self.hook("session-start", "claude", {"session_id": "s1", "cwd": str(self.repo), "source": "startup"})
+        self.assertIn("3 commits behind origin", out)
+        self.assertNotIn("Updates: behind", out)
+        record.write_text(json.dumps({"checked": "2026-01-02T09:00:00+00:00", "status": "current", "behind": 0}),
+                          encoding="utf-8")
+        self.assertEqual(self.tb.update_lines(self.root, brief=True), [])
 
     def test_another_installations_home_never_supplies_the_root(self):
         # Another Tinker installation can share ~/.tinker: its config names its own root, never this checkout's.
