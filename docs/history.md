@@ -7,6 +7,19 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-18: the Triage line on small tasks
+
+The `triage-small-task` live case scored 0.5 in every run that day: the agent renamed
+the variable without helpers but never wrote the Triage line. The charter had not
+changed since the baseline, which passed its single run.
+
+| Area | Decision |
+| --- | --- |
+| Cause | The traces showed two misses. One run skipped the implement skill for a one-line rename, so "before a workflow" never applied. The other loaded the skill and wrote no text before its final message. The rule sat under Delegation, which a task with no helpers reads as not its concern, and the voice rule discourages early text |
+| Charter | The Triage line moved to the top of "Start and route": before a workflow or any file change, a rename too, it is the first output, before any tool call. The voice rule names it as the one line that is not narration, and the delegation policy says the same. Package files keep only the `<small\|standard\|broad>` template, so none matches the case's pattern by itself. To stay within 6000 bytes, the sentence that an unconfirmed helper still holds its slot left the charter; the delegation and workspace policies, read before any delegation, still state it |
+| Evidence | Opus, Claude Code 2.1.311. Before the change, on master: 0 of 2 runs wrote the line. After it: 3 of 3, then 3 of 3 again on the self-update and slices commit, each with the line as the first assistant text. The eight implement cases there, run once each, all opened with the line: six scored 1.0, `implement-broad-slices` 0.875 and `live-pass-skipped` 0.8, each missing one regex on wording the pattern does not cover ("the next one doesn't start", "unverified"). Two more `implement-broad-slices` runs scored 1.0 |
+| Open | `live-pass-skipped` also falls short when a small edit skips the implement skill: no retro is saved and the playbook's missing live-pass recipe goes unmentioned. Untouched master did the same that day (0.4, 1.0, 0.4); with the change it scored 0.4, 1.0, 1.0, 0.2, then 0.8. Not fixed here |
+
 ## 2026-11-18: self-update and slices
 
 The organization's edition, at `95d4c0e`, added a self-update, a daily update check
