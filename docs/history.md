@@ -7,6 +7,21 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-18: small edits load their workflow
+
+The `live-pass-skipped` live case asks for a one-line heading change and a browser
+check in a run with no shell, no browser tools and no live-pass recipe. It scored
+below its 0.933 baseline that day: 0.4, 1.0 and 0.4 on the master before the Triage
+fix, and 0.6, 0.8 and 1.0 on the master after it (passing 1 of 3).
+
+| Area | Decision |
+| --- | --- |
+| Cause | The kept traces showed two separate misses. Some runs triaged the request as "a one-line copy change" and edited the file without loading the implement skill, so no retro file was saved and the missing live-pass recipe often went unmentioned. Neither "feature" nor "refactor" in the routing list, nor the skill's "code changes with acceptance criteria", covered a copy edit. Other runs loaded the skill, read the application verification policy and saved the retro, but gave only the first reason the live pass could not run (no shell), so the judge failed them for leaving out the missing recipe |
+| Charter | The implement route now reads "Feature, refactor or other edit, however small", and the skill's description says the same, "one line too". To stay within 6000 bytes, the opening's "Other charters load only when relevant" went: the delegation section already loads only the selected charter |
+| Policy | A skipped live pass is reported in the final message's live-pass line with every condition that failed, not only the first and not only in the retro, because a missing recipe is the one the user can fix |
+| Grader | `says-not-verified` also accepts "unverified", "not done" and "haven't checked" or "hasn't been run", with either apostrophe. Checked with `node` over the 25 distinct stored answers: it matches all 18 the judge passed, adds four honest answers the old pattern missed, and matches none of three made-up answers that claim a browser check. The changed `case.yaml` makes this a new case for the paired gate until a baseline is accepted again |
+| Evidence | Opus, Claude Code 2.1.311. With the routing change and a first wording of the policy line ("every unmet condition"), `live-pass-skipped` scored 1.0 in 3 of 3 runs: each loaded the implement skill, read the application verification policy and saved its retro, but one gave only the shell and browser tools in its browser line and passed on the retro's proposal to record a recipe, the shape that had failed on master. With the final wording it scored 1.0 in 3 of 3 again, and all three named the missing recipe in the browser line itself. `triage-small-task` scored 1.0 in 3 of 3, still with the Triage line first and no helpers, now also loading the skill and saving a retro in 10 or 11 of its 20 turns. The defect cases that grade the route, `investigate-root-cause` and `investigate-secret-in-log`, scored 1.0 in one run each and still loaded the investigate skill. Loading the skill costs more: `live-pass-skipped` averaged $0.201 a run over the six runs against $0.174 on master and $0.168 in the baseline, and `triage-small-task` $0.178 against a $0.150 baseline. Not run: the full live gate |
+
 ## 2026-11-18: the Triage line on small tasks
 
 The `triage-small-task` live case scored 0.5 in every run that day: the agent renamed
