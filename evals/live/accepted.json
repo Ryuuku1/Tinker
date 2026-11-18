@@ -8,8 +8,8 @@
   "adaptive": true,
   "sets": {
     "regression": {
-      "score": 0.974,
-      "costPerRunUsd": 0.1743,
+      "score": 0.978,
+      "costPerRunUsd": 0.1764,
       "runs": 25
     },
     "heldout": {
@@ -77,10 +77,10 @@
     },
     "live-pass-skipped": {
       "set": "regression",
-      "score": 0.933,
-      "costPerRunUsd": 0.1677,
+      "score": 1.0,
+      "costPerRunUsd": 0.2028,
       "runs": 3,
-      "case": "7de6555f029b"
+      "case": "88f5482413c6"
     },
     "own-outcome-preferred-version": {
       "set": "regression",
