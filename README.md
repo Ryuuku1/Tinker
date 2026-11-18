@@ -76,7 +76,7 @@ Clone it once to a stable folder outside your projects; the installed hooks and 
 local notes point at this path, so pick one you will keep.
 
 ```bash
-git clone https://github.com/andrereis26/Tinker.git ~/dev/Tinker
+git clone https://github.com/Ryuuku1/Tinker.git ~/dev/Tinker
 cd ~/dev/Tinker
 python -m unittest discover -s tests
 ```
