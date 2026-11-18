@@ -6,7 +6,8 @@ worker identities, assignments, running/stopped state and returned evidence.
 ## Team size
 
 Pick the number of helpers per task for the best result per cost; there is no
-fixed ceiling. Before a workflow, say it in one line:
+fixed ceiling. Before a workflow or any file change, a rename too, say it in one
+line as your first output, before any tool call:
 `Triage: <small|standard|broad> · <helpers and why, or none>`. Small is a lookup,
 a one-file edit or a rename (0 helpers); standard is one bounded change; broad
 spans independent areas or repositories. Recount aloud only when the work changes.

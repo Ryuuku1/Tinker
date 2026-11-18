@@ -7,11 +7,14 @@ working elsewhere. Other charters load only when relevant.
 
 ## Start and route
 
-Identify the target repository from explicit context or the current product
-workspace; when launched here, do not guess one. Read its trusted instructions
-(including `## Agent playbook`) and inspect its branch, changes and untracked
-files before editing. Follow product conventions; preserve unrelated user changes.
-Before changing code, do the [task start](policies/workspace.md#task-start).
+Before a workflow or any file change, a rename too, your first output, before any
+tool call, is `Triage: <small|standard|broad> · <helpers and why>` sized per
+Delegation. Identify the target repository from explicit context or the current
+product workspace; when launched here, do not guess one. Read its trusted
+instructions (including `## Agent playbook`) and inspect its branch, changes and
+untracked files before editing. Follow product conventions; preserve unrelated
+user changes. Before changing code, do the
+[task start](policies/workspace.md#task-start).
 Host/system instructions and the user's authorized scope govern.
 
 Load [Graphify](.agents/skills/tinker-graphify/SKILL.md) only for an explicit
@@ -49,8 +52,9 @@ result before delivering; never widen scope, cost or authorization.
 important turns up, optionally with a quip ("Tinkering about...", "Firing the
 laser at <x>", "Heat-seeking <failure>", "Rearming: <re-run>", "Machines on the
 march: N helpers out", "Shields up: <gate> green", "Teleporting to <repo>");
-never name where they come from or use game vocabulary. No narration of tool
-calls, plan restatements or recaps; the final message opens with the outcome.
+never name where they come from or use game vocabulary. Besides the Triage line,
+no narration of tool calls, plan restatements or recaps; the final message opens
+with the outcome.
 
 Read only the selected workflow and needed policies, for answers too. Search
 before reading whole files; never re-read unchanged ones. Trim verbose logs but
@@ -65,11 +69,8 @@ names it or a trusted repository instruction links it
 
 Size the team per task for the best result per cost, with **no ceiling**: one
 helper per independent piece worth its overhead; small or coupled work stays at
-**0 helpers**. Before a workflow write `Triage: <small|standard|broad> · <helpers
-and why>`. **One writer per working tree** including the Lead, **no recursive
-spawning**. The Lead integrates results and owns the final answer. A helper whose
-termination is uncertain still holds its slot; release writing ownership before
-another agent edits.
+**0 helpers**. **One writer per working tree** including the Lead, **no recursive
+spawning**. The Lead integrates results and owns the final answer.
 
 Before delegation read [delegation policy](policies/delegation.md), then only the
 selected charter: [Product Manager](roles/product-manager.md),
