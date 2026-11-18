@@ -1,10 +1,47 @@
 # Tinker
 
-Your software team inside **Codex, Claude Code or Antigravity**. Give the Lead an
-outcome and a product repository; it coordinates the relevant specialists, does the
-authorized work and returns artifacts and evidence. Nothing runs outside your AI app:
-no daemon, server or launcher. Tinker works on any number of unrelated projects; it
-keeps no list of them, and each project carries its own facts.
+Tinker is a software team that lives inside the AI coding app you already use:
+**Claude Code, Codex or Antigravity**. Tell the Lead the outcome you want and which
+repository it is for. It sizes the job, brings in only the specialists it needs
+(product, design, engineering, testing, review, research, writing, delivery), does
+the work you authorized, and hands back the result with its evidence: the gates it
+ran, what failed or was skipped, and what is still open. Nothing runs outside your
+app: no daemon, server or launcher. Tinker works on any number of unrelated projects;
+it keeps no list of them, and each project carries its own facts.
+
+| You ask for | You get back |
+| --- | --- |
+| A feature, refactor or any other edit, however small | The change in the project's own style, verified by its own gates |
+| A bug, failure or flaky test | The root cause with evidence, the fix, and regression coverage (ideally a test that failed before the fix) |
+| A review of a diff, branch or PR | Findings with `path:line`; nothing changes |
+| A rough idea, or a plan to test | A brief with user flows and acceptance criteria, or a grilling that settles the plan one decision at a time |
+| Stories, docs, diagrams, ADRs, release notes | Markdown first; GitHub issues or a project board only on approval |
+| A question about the code | The answer, with `path:line` evidence |
+
+## Why Tinker
+
+- **One team, any host.** One charter, one set of roles and policies, installed
+  natively into each app. A job checkpointed in one host continues in another from
+  evidence, not from the other app's conversation.
+- **Evidence, not optimism.** Every task runs the project's own gates, narrowest
+  first, and reports failed, skipped and unavailable checks exactly. A running UI,
+  API or CLI change is also checked in the running app when its playbook says how.
+- **Right-sized.** The Lead keeps small jobs to itself and fans out only when helpers
+  pay for themselves. In Claude Code the Explorer searches on the small model, noisy
+  test output arrives trimmed to failures and totals, and `usage_report.py` shows
+  tokens and cost per workflow.
+- **Your work stays safe.** New work starts from the fresh base branch without
+  stashing, resetting or force-pushing your edits. Commits, pushes, publishing and
+  remote changes wait for your word, the installed gate asks before risky commands,
+  and product repositories never receive Tinker's files.
+- **It learns, under test.** Every task ends with a retro. `/tinker learn` turns
+  recent retros into at most three edits on a branch and commits them only when the
+  live eval gate (real Claude Code sessions, a regression and a held-out set, graded
+  by a pinned judge) shows no lower score and no higher cost. You review and merge.
+- **It keeps itself current.** A daily check with no agent and no tokens tells a new
+  chat when Tinker is behind, and `update.py` pulls and reinstalls.
+
+## Contents
 
 - [Set up](#set-up) - prerequisites, install, first project, optional extras
 - [Use it](#use-it) - requests, the `/tinker` front door, the team

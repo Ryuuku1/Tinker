@@ -4,6 +4,14 @@ This is the canonical project architecture. Task notes belong in isolated local
 handoffs, never here; change this document only in a task whose scope includes
 architecture. Earlier analyses and reversed decisions are kept in [history](history.md).
 
+In short: Tinker makes the AI coding app you already run behave like a small
+engineering team whose Lead owns the outcome. The Lead routes each request, sizes the
+team, works from the target repository's own playbook, proves the result with that
+repository's gates, and records what it learned; commits, pushes and remote changes
+wait for the user. Everything below serves that: instructions every host can load, a
+small runtime for what instructions cannot enforce, an installer that owns only what
+it wrote, and evaluations that keep self-improvement honest.
+
 ## Decision
 
 Tinker is a portable operating agreement for an AI engineering team, executed by
@@ -23,7 +31,8 @@ database, scheduler service or simulated execution.
 | `profiles/` | Opt-in stack conventions, subordinate to the product repository | Only for matching work |
 | `.claude/`, `.codex/`, `.agents/agents/`, `.gemini/` | Generated native descriptors: discovery and requested tools; `.claude/settings.json` adds destructive-Git deny rules and the Playwright configuration | By each host |
 | `scripts/tinker_runtime.py` | In-app runtime: lifecycle hooks (in Claude also the trim of long test, build and lint output), the test-log filter, `status`, `schedule-plan` | By host hooks, once installed |
-| `scripts/install_apps.py` | Opt-in user-level installer and descriptor generator | By the user, in a terminal |
+| `scripts/install_apps.py` | Opt-in user-level installer and descriptor generator; `--instance <name>` installs beside another Tinker | By the user, in a terminal |
+| `scripts/update.py` | Self-update: fast-forwards the default branch when the checkout is on it, clean and without commits of its own, then re-runs the installer for each stale installation made from this checkout; `--check` only fetches and records how far behind it is | By the user in a terminal (the gate allows an agent only `--check` and `--dry-run`); `--check` daily by the installer's scheduled check |
 | `scripts/graphify_project.py` | Clean-commit Graphify graphs | On a graph request, or at task start when a playbook says `Graph: auto` |
 | `scripts/filter_test_log.py` | Command line for the runtime's test-log filter: keeps failures and totals of a noisy log, states what it trimmed | By the Lead, on noisy output |
 | `scripts/reload.py` | Fetches, removes worktrees and branches proven merged, fast-forwards the default branch | By the user, or `/tinker reload` (the gate asks unless `--dry-run`) |
@@ -33,7 +42,10 @@ database, scheduler service or simulated execution.
 
 ## Request flow
 
-The Lead understands the request, identifies the target repository from explicit
+Before a workflow or any file change, the Lead's first output, before any tool call,
+is one `Triage:` line (small, standard or broad, and the helpers it will use), and a
+feature, refactor or other edit, however small, goes to the implement workflow. The
+Lead understands the request, identifies the target repository from explicit
 context, reads its trusted instructions (including any `## Agent playbook` section)
 and working state, does the task start (fetch the base, start from it, rebase a
 continued branch only when clean and unpushed), selects only the relevant workflow and
@@ -52,6 +64,11 @@ checks a worker's effective tools cover its assignment; otherwise it supplies bo
 excerpts or does the work itself, never widening permissions. Uncertain termination
 counts as active. A failed or unavailable worker is replaced by Lead work, never by
 invented independent findings.
+
+A change across several separately tested areas is split before the first edit into
+dependency-ordered slices, recorded in the task checkpoint. Slices run one at a time,
+each verified by its own gate, and none starts on a red gate; after a green slice in
+a long chat, the Lead offers to continue in a fresh one from the checkpoint.
 
 ## In-app runtime
 
@@ -125,6 +142,15 @@ record alone: a marker file or folder name never authorizes a write or a deletio
 - **Uninstall.** An app's files are removed only after its CLI or settings confirm
   the plugin is gone; the bundle stays while any Claude or Codex registration
   remains. The runtime is kept for chats still running it, with its ownership record.
+- **Side by side.** Where another Tinker already owns `~/.tinker`, `--instance <name>`
+  installs under `~/.tinker-<name>` with the plugin id `tinker@tinker-<name>`. Where
+  another Tinker is enabled, Claude Code gets this one installed but turned off, and
+  Codex and Antigravity leave it out; switching between them is the user's to run.
+- **Update check.** The installer schedules `update.py --check` daily at 09:00 (Windows
+  Task Scheduler, a task named per checkout, `TinkerUpdateCheck-<8 hex>`; on macOS and
+  Linux it prints the crontab line to add). It is a fetch with no agent and no tokens;
+  its result in `.tinker/update.json` is what `status` and the session-start note
+  read.
 
 Earlier manifests are read as they are; only an explicit, writing installer run
 migrates them, and missing evidence stays missing.
@@ -190,8 +216,13 @@ mode can only be accepted as a new baseline). Graders run on one pinned judge, a
 model id recorded in the result. A set that shares at least eight unchanged cases with
 the baseline (same `case.yaml` hash) is judged pairwise, case by case, with a one-sided
 95% bound, so one flaky case cannot fail it; new or changed cases are listed, not
-gated. The learn pass depends on this gate. Live runs measure Claude Code
-only; other hosts keep the observed-evidence process above.
+gated. `run --adaptive` runs each case that fell short, here or in the baseline,
+twice more, and runs a case short in the baseline again at the baseline's own commit
+(found by its tree fingerprint, recorded as `baselineTopUp`), so both sides compare
+equal run counts. The learn pass depends on this gate. Live runs measure Claude Code
+only; other hosts keep the observed-evidence process above. The unit tests run in
+GitHub Actions on Windows, Ubuntu and macOS for every push to `master` and every pull
+request.
 
 ## Persistence and isolation
 
