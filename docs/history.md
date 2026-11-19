@@ -7,6 +7,19 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-19: one installer for pinned skills, and live cases for the floors
+
+Follow-up to the two entries below, closing their open items.
+
+| Area | Decision |
+| --- | --- |
+| Installer | `install_apps.py --skills` (alias `--design-skills`) installs every pinned third-party skill for Claude Code, Codex and Antigravity: the design skills plus `security-and-hardening`, `deprecation-and-migration` and trailofbits `sharp-edges`, whose nested path the skills CLI 1.7.6 resolves. `SKILL_SOURCES` and `skills-lock.json` must agree |
+| Routing | `sharp-edges` is routed when an API, option or interface makes security choices for its users, with a fallback |
+| Impeccable | CLI 4.10.0. It installed the same skill and agent files as 4.8.0: the CLI version pins the installer, not the skill |
+| Ponytail | 5.3.3 reviewed; stay on 4.9.0 because its band hook runs on every tool call with no switch and its ledger is on by default ([study](engineering-skills.md)) |
+| Evals | Live cases `backend-outbound-allowlist` (reuse the allowlist, HTTPS only, a test for another host, name the trust boundary) and `ui-floor-states` (busy and error states, a name per row, focus style, token colours, no claimed screenshot). Both scored 1.0 on one run; the backend case's test grader was widened after its first run missed a URL written outside the call |
+| Open | No screenshot-graded UI case yet; the cases are not in an accepted baseline |
+
 ## 2026-11-19: engineering skills at named steps
 
 The user asked whether superpowers and ponytail were still installed, whether backend

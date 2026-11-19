@@ -179,14 +179,22 @@ for new sources by hand.
 
 ### Already installed: Impeccable and Emil Kowalski
 
-- **Impeccable** (CLI 4.8.0, 2026-10-26; npm is at 4.10.0 on 2026-11-18, a release every
-  2–5 days). Before any UI edit it loads `PRODUCT.md`, `DESIGN.md` and a surface brief
+- **Impeccable** (CLI 4.10.0 since 2026-11-19, a release every 2–5 days). Before any UI edit it loads `PRODUCT.md`, `DESIGN.md` and a surface brief
   through `scripts/impeccable context`, then reads its craft floor. It names the
   surface's mode (Persuade, Operate, Read, Experience) and follows "refinement preserves;
   redesign replaces". This is the right default, so the policy makes it mandatory rather
   than optional. Its launcher downloads a binary on first run. The policy treats that
   download as part of the user's install, and uses the skill's own fallback (read
   `PRODUCT.md` and `DESIGN.md` directly) when the launcher is refused.
+  **The CLI version does not pin the skill.** On 2026-11-19, CLI 4.8.0 and 4.10.0 each
+  installed into an empty folder (`install --no-hooks --yes --providers=claude`) wrote
+  identical skill and agent files, both `version: 4.10.0` with engine 0.1.27: the CLI
+  downloads the current bundle. 4.10.0's launcher only changes the engine cache (a
+  shared `~/.impeccable/bin/<version>/`, re-verified by digest and size) and explains
+  GitHub outages. `--no-hooks`, the install flags and the telemetry switches are
+  unchanged, so the pin moved to 4.10.0. Its own README states that it fetches visual
+  directions from impeccable.style when a new design starts, even with telemetry off;
+  only the anonymous record of the pick stops.
 - **Emil Kowalski** (`emilkowalski/skill`, no tags). Markdown only, with no scripts, hooks
   or `allowed-tools`. The commits since the 2026-11-04 lock fix wrong APIs and
   cross-skill contradictions (`0f2e23b`) and add `choreograph` changes, `gestures`,
@@ -219,7 +227,7 @@ The [policy](../policies/frontend-design.md) carries the rules. In short:
 
 ## Pins
 
-Pins live in two places that must agree: `DESIGN_SOURCES` in `scripts/install_apps.py`
+Pins live in two places that must agree: `SKILL_SOURCES` in `scripts/install_apps.py`
 (what is installed) and `skills-lock.json` (what was reviewed: `ref` and a content hash
 per skill). A test fails when they disagree or a source is not pinned to a full commit.
 
@@ -228,7 +236,9 @@ per skill). A test fails when they disagree or a source is not pinned to a full 
 | `emilkowalski/skill` | `64eb3deb9a5fbfa041faf783e0bc3fd635872e9c` | HEAD of 2026-11-15 (no tags) | all 20 | 2026-11-19 |
 | `Leonxlnx/taste-skill` | `f6b76575f949707b4e3c37cd86cb44b0b98643e8` | v2.5.1 | `design-taste-frontend` | 2026-11-19 |
 | `nextlevelbuilder/ui-ux-pro-max-skill` | `2de1134dc4d1cfe112934611ae5803ae17a1bd7e` | after v2.15.0 | `ui-ux-pro-max` only | 2026-11-19 |
-| Impeccable CLI (npm) | `impeccable@4.8.0` | 4.8.0 | `impeccable` | 2026-11-04 |
+| `addyosmani/agent-skills` | `8c99fa36d90068c82d547f7c12a9d67a3e95f4ee` | 0.6.17 | `security-and-hardening`, `deprecation-and-migration` | 2026-11-19 |
+| `trailofbits/skills` | `149d7b21f4067765b82e67029730b42d228ef4b4` | HEAD of 2026-11-19 | `sharp-edges` only | 2026-11-19 |
+| Impeccable CLI (npm) | `impeccable@4.10.0` | 4.10.0 (skill downloaded at install) | `impeccable` | 2026-11-19 |
 | skills CLI (npm) | `skills@1.7.6` | 1.7.6 (npm latest 1.9.0) | installer | 2026-11-19 |
 
 Tags can move, so pins are full commits and the table records the tag only as a label.
@@ -263,13 +273,13 @@ hits, or adds something the policy would route to.
    `npx --yes skills@1.7.6 add <owner/repo>#<full commit> --skill <name or *> --yes --agent claude-code`.
    It writes `skills-lock.json` there.
 3. Copy that source's entries into the repository's `skills-lock.json`, and change the
-   commit in `DESIGN_SOURCES`. Never edit a hash by hand.
+   commit in `SKILL_SOURCES`. Never edit a hash by hand.
 4. If a skill was renamed, added or dropped, update the routing table in the policy. Its
    names must exist in the lock, and skills that only the user can invoke
    (`disable-model-invocation: true`) stay out of it.
 5. Run `python -B -m unittest discover -s tests`, add a line to the
    [design history](history.md), and commit.
-6. The user re-runs `python scripts/install_apps.py --design-skills` and starts a new
+6. The user re-runs `python scripts/install_apps.py --skills` and starts a new
    chat. Only the user runs the installer.
 
 ### Bumping a CLI
@@ -279,8 +289,9 @@ hits, or adds something the policy would route to.
   Then change `SKILLS_CLI`.
 - **impeccable:** read the changelog. Install it in a scratch folder with
   `npx --yes impeccable@<version> install --no-hooks --yes --providers=claude` and diff
-  the installed skill. Then change `IMPECCABLE_CLI`. The launcher's first-run binary
-  download makes this the one pin whose content the lock does not hash.
+  the launcher (`cli/bin/cli.js` in the npm tarball) and the installed files. Then change
+  `IMPECCABLE_CLI`. Every CLI version downloads the current skill and engine, so this
+  is the one source whose content neither the pin nor the lock fixes.
 
 ### Rolling back
 
@@ -329,9 +340,10 @@ on screenshots against the floor, which is still open.
 
 ## Open items
 
-- A live eval case for a UI change, graded on the gate and the floor.
-- Impeccable 4.8.0 → 4.10.0 review.
-- The same change in the organization's edition, which shares these skills.
+- A live eval case for a UI change graded on screenshots, beyond the
+  `ui-floor-states` case, which grades the code.
+- The organization's edition does not route design skills (its 2026-10-01 review); it
+  holds a product-first UI floor instead.
 
 ## Sources
 

@@ -17,7 +17,7 @@ fails, use its documented fallback and read `PRODUCT.md` and `DESIGN.md` directl
 Add the specialist the task names. A skill missing on this machine is reported, not
 improvised. Without `impeccable`, apply the gate, floor and finish below by hand and
 say so. The user installs the skills by running
-`python scripts/install_apps.py --design-skills` in the Tinker checkout.
+`python scripts/install_apps.py --skills` in the Tinker checkout.
 
 | Task | Skill |
 | --- | --- |

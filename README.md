@@ -165,23 +165,25 @@ says so. Do this once per project, and let `/tinker learn` refine it over time.
   [providers](docs/providers.md#claude-code) into `~/.claude/settings.json`. A UI change
   then gets a live pass you can watch when its playbook has a `Live pass` recipe.
 
-#### Design skills
+#### Design and engineering skills
 
 UI work loads third-party design skills ([frontend design](policies/frontend-design.md)):
 Impeccable for every UI edit, Emil Kowalski's motion and polish skills, Taste for sites
-with no design system, and UI UX Pro Max as a lookup. They are not part of this
-repository; install them at user level, for every project, with Node.js 18+ (re-run
-after a pin changes):
+with no design system, and UI UX Pro Max as a lookup. Code work loads three pinned
+engineering skills (below). They are not part of this repository; install them at user
+level, for every project, with Node.js 18+ (re-run after a pin changes):
 
 ```bash
-python scripts/install_apps.py --design-skills --dry-run   # shows the npx commands
-python scripts/install_apps.py --design-skills             # or: --app claude|codex|antigravity
+python scripts/install_apps.py --skills --dry-run   # shows the npx commands
+python scripts/install_apps.py --skills             # or: --app claude|codex|antigravity
 ```
 
 It runs the pinned `skills` and `impeccable` CLIs with telemetry off and without
 Impeccable's design hook (enable that per project with `/impeccable hooks on`). Emil
-Kowalski's skills, Taste and UI UX Pro Max come from their upstream repositories at full
-commits, and Impeccable from its pinned CLI. `skills-lock.json` records the reviewed
+Kowalski's skills, Taste, UI UX Pro Max and the engineering skills come from their
+upstream repositories at full commits, and Impeccable from its pinned CLI, which
+downloads Impeccable's current skill. `--design-skills` still works as an alias.
+`skills-lock.json` records the reviewed
 versions. Taste 2.5.1 brings its own Stop hook. Claude Code adds it once that skill
 is invoked, and it holds a turn only while a Taste build is armed. The [design skills study](docs/design-skills.md) explains why each
 source was chosen and how to bump or roll back a pin. Unlike the Tinker install, this
@@ -189,12 +191,13 @@ works next to another Tinker installation.
 
 #### Engineering skills
 
-Code changes, defects and reviews use superpowers, ponytail and two pinned addyosmani
-skills at named steps ([engineering skills](policies/engineering-skills.md)): test
-first, root cause before a fix, fresh evidence before "done", and security and removal
-checks on backend changes. Each has a fallback, so a host without them applies the
-rule by hand. The [engineering skills study](docs/engineering-skills.md) lists the
-reviewed versions and how to install them.
+Code changes, defects and reviews use superpowers, ponytail and three pinned skills
+(addyosmani's `security-and-hardening` and `deprecation-and-migration`, Trail of Bits'
+`sharp-edges`) at named steps ([engineering skills](policies/engineering-skills.md)):
+test first, root cause before a fix, fresh evidence before "done", and security,
+removal and misuse checks on backend changes. Each has a fallback, so a host without
+them applies the rule by hand. The [engineering skills study](docs/engineering-skills.md)
+lists the reviewed versions and how to install the two plugins.
 
 #### Routines
 

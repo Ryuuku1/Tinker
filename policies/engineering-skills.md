@@ -2,8 +2,8 @@
 
 Code changes, defects and reviews use the engineering skills the host lists, each at
 the step named below. UI work uses [frontend design](frontend-design.md) in the same
-way. The user installs them: the superpowers and ponytail plugins, and two pinned
-skills from addyosmani/agent-skills. The
+way. The user installs them: the superpowers and ponytail plugins, and the pinned
+skills from `python scripts/install_apps.py --skills`. The
 [engineering skills study](../docs/engineering-skills.md) records the reviewed versions
 and how to install them. Claude lists their skills with the plugin prefix, while other
 hosts may list them without it.
@@ -23,6 +23,7 @@ message.
 | The review's simplicity pass | `ponytail:ponytail-review` | Review step 2: flag added code that the codebase, standard library or an existing dependency already covers |
 | A change at a trust boundary: authentication or access, external input, uploads, secrets, outbound fetches, personal data or model output; and its review | `security-and-hardening` | [Backend rules](#backend-rules), security |
 | Removing or replacing an API, feature, setting or schema column | `deprecation-and-migration` | [Backend rules](#backend-rules), removal |
+| Designing or reviewing an API, configuration option or interface that other code or operators use for security choices | `sharp-edges` | Check that the easy path is the safe one: secure defaults, dangerous options named as such, and failures that fail closed |
 
 ## Scope of the strict rules
 

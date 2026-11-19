@@ -17,8 +17,9 @@ read, and a home whose apps.json it did not write (another installation can shar
 tinker-<name>. Where another Tinker is enabled, Claude gets this one installed but turned off, and
 Codex and Antigravity are left out. Run it yourself, not through an agent. --dry-run prints the
 plan; --uninstall removes only what apps.json records, after each app confirms its plugin is gone. --write-descriptors regenerates
-this checkout's project descriptors. --design-skills instead installs the third-party design skills
-globally through their own CLIs (npx); their files are theirs, never recorded in apps.json.
+this checkout's project descriptors. --skills (alias --design-skills) instead installs the pinned
+third-party design and engineering skills globally through their own CLIs (npx); their files are theirs,
+never recorded in apps.json.
 An install also schedules scripts/update.py --check for this checkout, daily by default (Windows Task
 Scheduler; elsewhere it prints the crontab line): --update-check-hours 1-23 checks more often, 0 removes
 it. Uninstalling the last installation made from this checkout removes it.
@@ -71,17 +72,24 @@ TOOLS = {
 TIERS = {"light": {"claude": "model: haiku\neffort: low\nomitClaudeMd: true\n"}}
 FINAL = {"read": "Read/search and return findings only; the Lead saves any requested artifact.",
          "write": "Edit or execute writing commands only while explicitly holding sole writing ownership."}
-# The design skills policies/frontend-design.md routes UI work to, pinned to the full commits skills-lock.json
-# records as reviewed on 2026-11-19 (docs/design-skills.md: how to bump one). Impeccable's hook stays off: a global
-# install would write it into whatever folder the installer runs in. Taste's Stop hook is its skill's own, added
-# once that skill is invoked; v2.5.0 (822e0b9d872e10deb931afad2c6c2bd943cf4c7b) is the pin without it.
-DESIGN_SOURCES = (  # (source#commit, skill)
+# The third-party skills policies/frontend-design.md and policies/engineering-skills.md route work to, pinned to the
+# full commits skills-lock.json records as reviewed on 2026-11-19 (docs/design-skills.md: how to bump one).
+# Impeccable's hook stays off: a global install would write it into whatever folder the installer runs in. Taste's
+# Stop hook is its skill's own, added once that skill is invoked; v2.5.0 (822e0b9d872e10deb931afad2c6c2bd943cf4c7b)
+# is the pin without it. The superpowers and ponytail plugins are the user's own installs (docs/engineering-skills.md).
+SKILL_SOURCES = (  # (source#commit, skill)
     ("emilkowalski/skill#64eb3deb9a5fbfa041faf783e0bc3fd635872e9c", "*"),  # no tags upstream
     ("Leonxlnx/taste-skill#f6b76575f949707b4e3c37cd86cb44b0b98643e8", "*"),  # v2.5.1
     # after v2.15.0; its other skills need paid image APIs or keys
     ("nextlevelbuilder/ui-ux-pro-max-skill#2de1134dc4d1cfe112934611ae5803ae17a1bd7e", "ui-ux-pro-max"),
+    ("addyosmani/agent-skills#8c99fa36d90068c82d547f7c12a9d67a3e95f4ee", "security-and-hardening"),  # 0.6.17
+    ("addyosmani/agent-skills#8c99fa36d90068c82d547f7c12a9d67a3e95f4ee", "deprecation-and-migration"),
+    # read-only (allowed-tools Read Grep Glob); CC-BY-SA-4.0, so Tinker links it and never copies its text
+    ("trailofbits/skills#149d7b21f4067765b82e67029730b42d228ef4b4", "sharp-edges"),
 )
-SKILLS_CLI, IMPECCABLE_CLI = "skills@1.7.6", "impeccable@4.8.0"
+# Impeccable's CLI pins the installer, not the skill: every version downloads the current skill bundle and engine
+# (4.8.0 and 4.10.0 installed identical files on 2026-11-19), so the guardrails are --no-hooks and NO_TELEMETRY.
+SKILLS_CLI, IMPECCABLE_CLI = "skills@1.7.6", "impeccable@4.10.0"
 SKILL_AGENTS = {"claude": "claude-code", "codex": "codex", "antigravity": "antigravity"}
 IMPECCABLE_PROVIDERS = {"claude": "claude", "codex": "codex", "antigravity": "antigravity"}
 NO_TELEMETRY = {"DO_NOT_TRACK": "1", "DISABLE_TELEMETRY": "1", "IMPECCABLE_NO_TELEMETRY": "1"}
@@ -906,17 +914,17 @@ class Installer:
                                      f"files stay in place for recovery: {self.recovery(app)}")
         return registered
 
-    # ---- third-party design skills
-    def design_skills(self, apps):
-        """Install the design skills for these apps at user level with their own CLIs, without telemetry."""
-        for source, skill in DESIGN_SOURCES:
+    # ---- third-party skills
+    def skills(self, apps):
+        """Install the pinned design and engineering skills for these apps at user level with their own CLIs, without telemetry."""
+        for source, skill in SKILL_SOURCES:
             self.cli("design", "npx", ["--yes", SKILLS_CLI, "add", source, "--global", "--skill", skill, "--yes",
                                        "--agent", *(SKILL_AGENTS[a] for a in apps)], env=NO_TELEMETRY, timeout=600)
         self.cli("design", "npx", ["--yes", IMPECCABLE_CLI, "install", "--global", "--no-hooks", "--yes",
                                    "--providers=" + ",".join(IMPECCABLE_PROVIDERS[a] for a in apps)],
                  env=NO_TELEMETRY, timeout=600)
         if not self.failed and not self.dry:
-            self.step("design", "Next", "Start a new chat. Re-run --design-skills to update them.")
+            self.step("design", "Next", "Start a new chat. Re-run --skills to update them.")
         return self.finish(save=False)
 
     # ---- uninstall
@@ -1016,8 +1024,9 @@ def main(argv=None):
     parser.add_argument("--python", default=getattr(sys, "_base_executable", sys.executable),
                         help="interpreter the hooks run (never a virtual environment launcher)")
     parser.add_argument("--write-descriptors", action="store_true", help="regenerate this checkout's project descriptors")
-    parser.add_argument("--design-skills", action="store_true",
-                        help="install the third-party design skills at user level with npx (needs Node.js)")
+    parser.add_argument("--skills", "--design-skills", action="store_true", dest="skills",
+                        help="install the pinned third-party design and engineering skills at user level with npx "
+                             "(needs Node.js)")
     parser.add_argument("--update-check-hours", type=int, choices=range(25), default=24, metavar="0-24",
                         help="check whether this checkout is behind origin daily (24, the default) or every N hours, "
                              "with no agent (Windows Task Scheduler); 0 removes the check")
@@ -1029,8 +1038,8 @@ def main(argv=None):
     installer = Installer(args.home, args.python, args.dry_run, args.skip_app_cli, instance=args.instance)
     if args.dry_run:
         print("[dry run] nothing is written and no app CLI runs")
-    if args.design_skills:
-        return installer.design_skills(apps)
+    if args.skills:
+        return installer.skills(apps)
     if args.uninstall:
         code = installer.uninstall(apps)
         others = [f for f in tinker_update.installations(args.home, ROOT) if f["instance"] != args.instance]

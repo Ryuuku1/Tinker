@@ -64,6 +64,13 @@
       "skillPath": "skills/choreograph/SKILL.md",
       "computedHash": "48ced2600ef6bd5524ecd3da74c3b395ab86471a022a9ef91e420846140c842b"
     },
+    "deprecation-and-migration": {
+      "source": "addyosmani/agent-skills",
+      "ref": "8c99fa36d90068c82d547f7c12a9d67a3e95f4ee",
+      "sourceType": "github",
+      "skillPath": "skills/deprecation-and-migration/SKILL.md",
+      "computedHash": "5b6d695fac255087957d27b7006d5aba2dcafbfed0dd3bae93b10ae3a7547568"
+    },
     "design-taste-frontend": {
       "source": "Leonxlnx/taste-skill",
       "ref": "f6b76575f949707b4e3c37cd86cb44b0b98643e8",
@@ -140,6 +147,20 @@
       "sourceType": "github",
       "skillPath": "skills/review-animations/SKILL.md",
       "computedHash": "60049d4d140565fe2fd22c240a6ba921069cf88c3460d7561ac772d11145ec9f"
+    },
+    "security-and-hardening": {
+      "source": "addyosmani/agent-skills",
+      "ref": "8c99fa36d90068c82d547f7c12a9d67a3e95f4ee",
+      "sourceType": "github",
+      "skillPath": "skills/security-and-hardening/SKILL.md",
+      "computedHash": "e637d98a4144f15bffeb29a00031d0e3a26bdd3364b8d6f4f3f635a8b97e71a7"
+    },
+    "sharp-edges": {
+      "source": "trailofbits/skills",
+      "ref": "149d7b21f4067765b82e67029730b42d228ef4b4",
+      "sourceType": "github",
+      "skillPath": "plugins/sharp-edges/skills/sharp-edges/SKILL.md",
+      "computedHash": "4f66a4f2edbb3e196a2a1a09393320d98eddbf2e6561754d4361a31b6286319f"
     },
     "ui-ux-pro-max": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
