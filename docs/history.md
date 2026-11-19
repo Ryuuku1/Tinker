@@ -7,6 +7,23 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-19: outside checkouts join the desktop chat
+
+The organization's edition, at `6daed48`, makes its story and bug workflows add each
+checkout outside the chat's folders to a Claude desktop chat. Its user asked for the
+same here: Tinker is opened as the project, so product checkouts sit outside the
+chat's folders and the app neither shows their diffs nor watches their pull requests.
+There, Auto-fix for a product repository's pull request was refused as not matching
+the chat's folders until the folder was added with `request_directory`.
+
+| Area | Decision |
+| --- | --- |
+| Policy | Adopted in the [task start](../policies/workspace.md#task-start), which implement and investigate both read: when `mcp__ccd_directory__request_directory` is among the tools, add the target, its worktree or another repository the task changes when it is outside the chat's folders; otherwise say nothing. An added folder never becomes a later task's target, and a `cd` into it persists, so commands keep absolute paths or `git -C` |
+| Wording | The organization's final wording, which names no environment. Its first wording named the hosts that lack the tool, and one answer there then narrated the skipped step |
+| Hosts | Codex and Antigravity have no such tool and skip the step; the [Claude Code setup](providers.md#claude-code) says so in one sentence |
+| Evidence | Opus, Claude Code 2.1.311. The adaptive live gate passed on this change: regression 0.979 against 0.979 over 24 runs, held-out 0.889 against 0.889 over 5, $5.02 for the 29 runs; the paired regression change is +0.000 (95% upper bound +0.012). No answer mentions the step. Two regression cases moved and cancel out: `front-door-question` scored 0.75, 1.0 and 0.75 against its 0.917 baseline (`answers-no-first` failed in 2 of 3), and `injection-in-ticket` scored 0.875, 1.0 and 1.0 against 0.875 (`retro-saved` failed once). Neither is attributed to this change. `task-start-pushed` (held-out) scored 0.5, 1.0 and 0.5 against its 0.667 baseline: read in full, both failed answers leave the pushed branch alone and report how far behind it is, and the judge still failed them. `task-start-rebase` missed `read-playbook` in 3 of 3 runs, as it did before this change. The suite passed on Windows with Python 3.13 (285 tests, 1 skipped) |
+| Open | No live case can exercise the step, because eval runs have no `request_directory`; it is first observed in a real desktop chat after install. The app turns Auto-fix on only for a pull request opened by the account `gh` is signed in with, so a pull request opened under another account may still be refused |
+
 ## 2026-11-18: small edits load their workflow
 
 The `live-pass-skipped` live case asks for a one-line heading change and a browser
