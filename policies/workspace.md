@@ -34,6 +34,13 @@ checkout for a task whose branch lives in a worktree. A repository without a rem
 or base is reported, not guessed. When the playbook says `Graph: auto`, refresh the
 graph after this step per [Graphify](../.agents/skills/tinker-graphify/SKILL.md).
 
+If `mcp__ccd_directory__request_directory` is among your tools (deferred ones
+included), add each checkout you work in that is outside this chat's folders (the
+target, its worktree, another repository the task changes) with it, so the app shows
+its diffs and links its pull requests; this never makes it a later task's target.
+Otherwise say nothing about it. Use absolute paths or `git -C`: a `cd` into an added
+folder persists.
+
 Existing edits belong to the user unless this task demonstrably created them.
 Never reset, stash, revert or overwrite unrelated changes. When an edited area
 overlaps the task, inspect it and preserve intent; ask only for a real conflict.

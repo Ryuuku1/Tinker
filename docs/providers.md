@@ -37,6 +37,9 @@ Sources: [project instructions](https://learn.chatgpt.com/docs/agent-configurati
 
 Authenticate with Claude Code's own sign-in flow, then launch
 `claude --plugin-dir . --add-dir <absolute-product-path>` in this checkout.
+In the desktop app, the [task start](../policies/workspace.md#task-start) adds each
+checkout outside the chat's folders with `request_directory`, so the app shows its
+diffs and can link and watch its pull requests; chats without that tool skip it.
 CLAUDE.md imports canonical company instructions. The plugin exposes the same
 physical skills; .claude/agents/ supplies nine project specialists. Inspect the
 installed host's memory, skills and agent views; restart existing sessions for
