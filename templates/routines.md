@@ -31,7 +31,7 @@ only for a Claude plan: auto memory reaches no other host.
   at 12:15) and let the task skip unless it is the first Monday of the month.
 - Plan: `schedule-plan --app <claude|codex|antigravity> --role researcher --repo <Tinker checkout> --cron "15 12 * * 1" --task "<task>"`
 - Task: Skip unless it is the month's first Monday. Compare installed Claude Code, Codex,
-  Graphify and docs/design-skills.md pins with upstream. Recheck
+  Graphify and docs/*-skills.md pins with upstream. Recheck
   docs/providers.md's hook and tool docs against TOOL_KINDS in scripts/tinker_runtime.py
   and the installer matchers, and provider models, prices and prompting guidance
   against role tiers and skills. Report discrepancies and features that could replace

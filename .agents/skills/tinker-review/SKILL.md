@@ -18,7 +18,8 @@ not already loaded. A delegated reviewer also reads the
    behavior (a task checkpoint when one exists), changed code and relevant
    callers/tests. Inspect correctness, regressions, boundary cases, security,
    concurrency and compatibility proportional to the change. Flag added code the
-   codebase, standard library or an existing dependency already covers.
+   codebase, standard library or an existing dependency already covers (the
+   simplicity pass in [engineering skills](../../../policies/engineering-skills.md)).
 3. Return findings with severity, file/line, concrete trigger, consequence and
    supporting evidence. Suggest a focused correction without implementing it.
    Avoid speculative warnings, duplicate findings and style-only noise.

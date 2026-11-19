@@ -7,6 +7,20 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-19: engineering skills at named steps
+
+The user asked whether superpowers and ponytail were still installed, whether backend
+work went through them, and which other best-practice repositories were worth using.
+The [engineering skills study](engineering-skills.md) holds the evidence.
+
+| Area | Decision |
+| --- | --- |
+| Cause | Both plugins were installed, but no workflow named them. Superpowers' "1% chance" session rule and ponytail's hook made them ambient, so their use depended on the model, and some superpowers skills conflict with Tinker's plans, branches and helpers |
+| Policy | [Engineering skills](../policies/engineering-skills.md) routes test first, systematic debugging, verification, receiving review, ponytail and ponytail-review at named steps, each with a fallback, and lists the skills left unrouted with the reason. Implement, investigate, review and the Engineer charter link it |
+| Backend | Two addyosmani skills at a pinned commit: `security-and-hardening` at trust boundaries and `deprecation-and-migration` for removals. Backend rules for security, removal and observability apply without them |
+| Sources | Fourteen repositories checked; trailofbits `sharp-edges` waits for an install route, the rest add no backend practice or bring a second framework |
+| Open | Ponytail 5.3.3 is not reviewed. Codex and Antigravity get the addyosmani skills only by a manual copy. No live case grades a backend change against these rules yet |
+
 ## 2026-11-19: design gate, floor and pinned design skills
 
 The user asked for UI work that stops looking generic, using five design repositories,

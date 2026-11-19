@@ -17,16 +17,15 @@ then do the [task start](../../../policies/workspace.md#task-start): its
    callers and an analogous implementation. Ask only for missing information
    that blocks a safe result. Check any access outside the repository (a database, a
    design file, a cloud resource) now with one cheap call; report a failure at once.
-2. Choose the smallest safe change, climbing this ladder to the first rung that
-   holds: does the code need to exist at all; does the codebase already
-   have it; does the standard library or an existing dependency cover it; only then
-   write new code. Never add a dependency for what those cover, and never trim
+2. From here on follow [engineering skills](../../../policies/engineering-skills.md).
+   Choose the smallest safe change: does the code need to exist; does the codebase,
+   standard library or an existing dependency cover it; only then write new code. Never add a dependency for what those cover, and never trim
    validation, error handling, security or accessibility to save lines. State a
    short plan for multi-step work; no abstractions made only for the ticket.
    A change across areas the playbook gates separately, or of 8+ points, first gets
    [slices](../../../policies/workspace.md#slices) in its checkpoint, run one at a time.
-3. Change only the required code and relevant behavioral tests. Prefer a failing
-   test before changing behavior when useful; no tests that only mirror wording or
+3. Change only the required code and relevant behavioral tests. Behavior changes
+   start with a failing test; no tests that only mirror wording or
    trivial implementation details. Inspect dependency, generated-file and schema
    effects when present.
 4. Run the playbook's gates, narrowest first; widen only for shared contracts or

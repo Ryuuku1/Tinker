@@ -187,6 +187,15 @@ is invoked, and it holds a turn only while a Taste build is armed. The [design s
 source was chosen and how to bump or roll back a pin. Unlike the Tinker install, this
 works next to another Tinker installation.
 
+#### Engineering skills
+
+Code changes, defects and reviews use superpowers, ponytail and two pinned addyosmani
+skills at named steps ([engineering skills](policies/engineering-skills.md)): test
+first, root cause before a fix, fresh evidence before "done", and security and removal
+checks on backend changes. Each has a fallback, so a host without them applies the
+rule by hand. The [engineering skills study](docs/engineering-skills.md) lists the
+reviewed versions and how to install them.
+
 #### Routines
 
 Ask `tinker schedule defaults` to set up, in your host's own scheduler, the weekly

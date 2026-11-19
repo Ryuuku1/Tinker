@@ -89,6 +89,18 @@ class PackageTests(unittest.TestCase):
         pinned = set(json.loads((ROOT / "skills-lock.json").read_text(encoding="utf-8"))["skills"]) | {"impeccable"}
         self.assertEqual(names - pinned, set())
 
+    def test_code_workflows_route_engineering_skills_with_fallbacks(self):
+        for path in (".agents/skills/tinker-implement/SKILL.md", ".agents/skills/tinker-investigate/SKILL.md",
+                     ".agents/skills/tinker-review/SKILL.md", "roles/engineer.md"):
+            self.assertIn("policies/engineering-skills.md)", (ROOT / path).read_text(encoding="utf-8"), path)
+        policy = (ROOT / "policies/engineering-skills.md").read_text(encoding="utf-8")
+        rows = re.findall(r"^\| [^|]+ \| `([a-z:-]+)` \| ([^|]*) \|$", policy, re.M)
+        self.assertGreaterEqual(len(rows), 8)
+        study = (ROOT / "docs/engineering-skills.md").read_text(encoding="utf-8")
+        for skill, fallback in rows:
+            self.assertTrue(fallback.strip(), skill)  # a host without the skill still applies the rule
+            self.assertIn(skill.split(":")[0], study)  # every routed source has a reviewed pin
+
     def test_claude_reviewer_has_only_file_read_tools(self):
         text = (ROOT / ".claude/agents/tinker-reviewer.md").read_text()
         tools = re.search(r"^tools: (.+)$", text, re.M).group(1).split(", ")

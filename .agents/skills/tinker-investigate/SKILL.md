@@ -8,6 +8,7 @@ description: Investigate a defect, failing test or unexpected behavior and fix i
 Resolve this package's [AGENTS.md](../../../AGENTS.md) and applicable policies if
 not already loaded. Read target guidance and preserve the original working state;
 do the [task start](../../../policies/workspace.md#task-start) before changing code.
+Follow [engineering skills](../../../policies/engineering-skills.md) throughout.
 
 1. Establish the observed symptom, expected behavior, concrete failing input and
    last known working context, and the reporter's real scenario: the platform or UI
