@@ -29,7 +29,7 @@ graph request, a justified broad topology question, or task start under
 - Defect: load [investigate](.agents/skills/tinker-investigate/SKILL.md).
 - Review: load [review](.agents/skills/tinker-review/SKILL.md).
 - Product discovery or design: load [shape](.agents/skills/tinker-shape/SKILL.md).
-- Any UI or motion work: add the [frontend design](policies/frontend-design.md) skills.
+- Any UI or motion work: follow [frontend design](policies/frontend-design.md) before editing.
 - Stories, documentation, diagrams, ADRs or release notes: load
   [artifacts](.agents/skills/tinker-artifacts/SKILL.md).
 - Team status, schedules or approvals: load [team](.agents/skills/tinker-team/SKILL.md).

@@ -3,7 +3,8 @@
 Prompt templates for a host's own scheduler. Nothing here creates a schedule: create
 one only when the user asks, through the
 [team workflow](../.agents/skills/tinker-team/SKILL.md) (or the front door's
-`schedule defaults`), which validates each plan with `schedule-plan`. Each run is
+`schedule defaults`), which validates each plan with `schedule-plan`. A routine already
+scheduled keeps the prompt it was created with; update it to adopt a change here. Each run is
 unattended, so consequential operations are denied and its prompt asks for file tools
 (a command or fetch that needs an approval would stall it); it proposes and reports, and
 the user decides in a later, attended chat. Pick times when the machine is usually on: a
@@ -29,12 +30,12 @@ only for a Claude plan: auto memory reaches no other host.
 - Schedule: `15 12 1 * *` is not in the supported cron subset; use `15 12 * * 1` (Mondays
   at 12:15) and let the task skip unless it is the first Monday of the month.
 - Plan: `schedule-plan --app <claude|codex|antigravity> --role researcher --repo <Tinker checkout> --cron "15 12 * * 1" --task "<task>"`
-- Task: Skip unless it is the month's first Monday. Compare installed Claude Code, Codex
-  and Graphify with their channels' latest releases. Recheck
+- Task: Skip unless it is the month's first Monday. Compare installed Claude Code, Codex,
+  Graphify and docs/design-skills.md pins with upstream. Recheck
   docs/providers.md's hook and tool docs against TOOL_KINDS in scripts/tinker_runtime.py
-  and the installer matchers, and the provider's models, prices and prompting guidance
+  and the installer matchers, and provider models, prices and prompting guidance
   against role tiers and skills. Report discrepancies and features that could replace
-  Tinker code or cut cost, with URL and date, in .tinker/reports/upgrade-<date>.md.
+  Tinker code or cut cost (URL, date) in .tinker/reports/upgrade-<date>.md.
   Change nothing else.
 
 The next learn pass reads that report. For a Claude plan, add to the task: "Fetch only

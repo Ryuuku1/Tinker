@@ -368,11 +368,23 @@ class OwnershipTests(InstallCase):
     def test_design_skills_install_at_user_level_through_npx_without_telemetry(self):
         log = self.fake_cli()
         self.assertEqual(self.installer().design_skills(["claude", "codex"]), 0, "\n".join(self.lines))
-        skills = f"npx --yes {install_apps.SKILLS_CLI} add {{}} --global --skill * --yes --agent claude-code codex DO_NOT_TRACK=1"
+        skills = f"npx --yes {install_apps.SKILLS_CLI} add {{}} --global --skill {{}} --yes --agent claude-code codex DO_NOT_TRACK=1"
         self.assertEqual([c.strip() for c in log.read_text().splitlines()], [
-            skills.format("emilkowalski/skill"), skills.format("Leonxlnx/taste-skill"),
+            *(skills.format(source, skill) for source, skill in install_apps.DESIGN_SOURCES),
             f"npx --yes {install_apps.IMPECCABLE_CLI} install --global --no-hooks --yes --providers=claude,codex DO_NOT_TRACK=1"])
-        self.assertFalse((self.home / ".tinker").exists())  # their files are the CLIs', never recorded as Tinker's
+        self.assertFalse((self.home / ".tinker").exists())
+
+    def test_design_sources_are_pinned_commits_that_match_the_reviewed_lock(self):
+        lock = json.loads((ROOT / "skills-lock.json").read_text(encoding="utf-8"))["skills"]
+        locked = {f"{entry['source']}#{entry['ref']}" for entry in lock.values()}
+        for source, skill in install_apps.DESIGN_SOURCES:
+            self.assertRegex(source, r"^[\w.-]+/[\w.-]+#[0-9a-f]{40}$")  # tags can move; a full commit cannot
+            self.assertIn(source, locked)
+            if skill != "*":
+                self.assertEqual(f"{lock[skill]['source']}#{lock[skill]['ref']}", source)
+        self.assertEqual(locked, {source for source, _ in install_apps.DESIGN_SOURCES})
+        self.assertRegex(install_apps.SKILLS_CLI, r"^skills@\d+\.\d+\.\d+$")
+        self.assertRegex(install_apps.IMPECCABLE_CLI, r"^impeccable@\d+\.\d+\.\d+$")  # their files are the CLIs', never recorded as Tinker's
 
 
 class ActivationTests(InstallCase):

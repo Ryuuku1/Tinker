@@ -16,7 +16,8 @@ symbols and types with the fast compiler diagnostics in
 when independent verification or integration complexity warrants it. Use the chosen
 implementation/investigation workflow and [evidence policy](../policies/evidence.md).
 For C#/.NET, consult [the optional profile](../profiles/dotnet.md). For UI
-work, load the skills [frontend design](../policies/frontend-design.md) picks.
+work, follow [frontend design](../policies/frontend-design.md): its gate before the
+first edit, its skills, its floor and its finish evidence.
 
 Acquire writing ownership of your assigned working tree before editing or running
 writing commands; nobody else writes there meanwhile. Operate within explicit paths and permissions.

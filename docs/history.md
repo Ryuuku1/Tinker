@@ -7,6 +7,21 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-19: design gate, floor and pinned design skills
+
+The user asked for UI work that stops looking generic, using five design repositories,
+with a study of how to keep it working first. The [design skills study](design-skills.md)
+holds the evidence and the upkeep procedure.
+
+| Area | Decision |
+| --- | --- |
+| Cause | Inferred from the rules as they stood: routing was advisory ("usually one or two"), nothing asked for a direction before CSS, a product without `DESIGN.md` got invented defaults, verification had no design gate, and the installed skills had drifted from the reviewed lock (Taste past v2.5.0, all 17 of Emil's skills changed) |
+| Policy | [Frontend design](../policies/frontend-design.md) now loads `impeccable` for every UI edit and adds a gate before the first edit (read the product's system, name the mode, capture before changing, a written direction when nothing exists, refinement keeps the identity). It also adds precedence, an anti-generic floor restated from Taste, open-design and UI UX Pro Max, and finish evidence that names the skill used. Impeccable's `DESIGN.md` format is the canonical one |
+| Sources | UI UX Pro Max joins as a lookup (`ui-ux-pro-max` only; its sibling skills need paid APIs). open-design is not installed: its daemon runs Claude with `bypassPermissions`, its telemetry cannot be fully turned off and a bundled skill pushes. design-md-chrome is a user-side capture tool, and awesome-claude has nothing to install |
+| Pins | Every source is a full commit in `DESIGN_SOURCES`, matching the `ref` the skills CLI writes into `skills-lock.json`, and a test fails when they disagree. Taste v2.5.1 brings a skill-scoped Stop hook; v2.5.0 is the fallback without it. The monthly upgrade scan also compares the lock's refs with upstream |
+| Evidence | The three pinned `skills@1.7.6 add` commands ran at project scope in an empty folder: 22 skills installed, and all 22 hashes matched an independent recomputation. An independent read-only review found ten points: the floor could override a product's identity, Impeccable's first-run download, Taste's hook under a helper, the read-only skill list, the Designer skipping the capture step, tool output in the product, the monthly scan's reach, a rollback the test would reject, unsaved evidence, and CRLF role files. All ten were fixed, and the gate's capture and direction steps were limited to changes that make visual decisions. On a clean worktree of `f654286` with the final change applied, the suite ran 286 tests on Windows with Python 3.13: OK, 1 skipped. Live gate not run, and no live design case exists yet |
+| Open | No live case grades a UI change against the floor yet. Impeccable stays on 4.8.0 pending review of 4.10.0. The organization's edition is unchanged |
+
 ## 2026-11-19: outside checkouts join the desktop chat
 
 The organization's edition, at `6daed48`, makes its story and bug workflows add each

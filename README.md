@@ -168,9 +168,10 @@ says so. Do this once per project, and let `/tinker learn` refine it over time.
 #### Design skills
 
 UI work loads third-party design skills ([frontend design](policies/frontend-design.md)):
-Emil Kowalski's motion and polish skills, Taste and Impeccable. They are not part of this
-repository; install them at user level, for every project, with Node.js 18+ (re-run to
-update them):
+Impeccable for every UI edit, Emil Kowalski's motion and polish skills, Taste for sites
+with no design system, and UI UX Pro Max as a lookup. They are not part of this
+repository; install them at user level, for every project, with Node.js 18+ (re-run
+after a pin changes):
 
 ```bash
 python scripts/install_apps.py --design-skills --dry-run   # shows the npx commands
@@ -178,9 +179,13 @@ python scripts/install_apps.py --design-skills             # or: --app claude|co
 ```
 
 It runs the pinned `skills` and `impeccable` CLIs with telemetry off and without
-Impeccable's design hook (enable that per project with `/impeccable hooks on`). The
-skills come from their upstream repositories; `skills-lock.json` records the reviewed
-versions. Unlike the Tinker install, this works next to another Tinker installation.
+Impeccable's design hook (enable that per project with `/impeccable hooks on`). Emil
+Kowalski's skills, Taste and UI UX Pro Max come from their upstream repositories at full
+commits, and Impeccable from its pinned CLI. `skills-lock.json` records the reviewed
+versions. Taste 2.5.1 brings its own Stop hook. Claude Code adds it once that skill
+is invoked, and it holds a turn only while a Taste build is armed. The [design skills study](docs/design-skills.md) explains why each
+source was chosen and how to bump or roll back a pin. Unlike the Tinker install, this
+works next to another Tinker installation.
 
 #### Routines
 
@@ -299,8 +304,8 @@ hosts, invoke the `tinker` skill or just say the form ("tinker status").
 Roles are persistent instructions; real workers are native host agents, used only
 when useful: the Lead sizes the team per task for the best result per cost, with no
 fixed ceiling, one writer per working tree and no recursive delegation. Small jobs
-stay with the Lead. UI work also loads the design skills (Impeccable, Emil Kowalski's
-motion and polish skills, Taste) that [frontend design](policies/frontend-design.md) picks. Unavailable helpers mean transparent Lead
+stay with the Lead. UI work also follows [frontend design](policies/frontend-design.md): a design gate
+before the first edit, the design skills it picks, an anti-generic floor and screenshot evidence. Unavailable helpers mean transparent Lead
 work; role switching is never presented as independent review. The Explorer is the
 one cost-tiered helper: in Claude Code it runs on the small model at low effort with
 only its own charter (no `CLAUDE.md`); everything else uses your session's model.

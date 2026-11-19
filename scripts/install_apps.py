@@ -71,10 +71,16 @@ TOOLS = {
 TIERS = {"light": {"claude": "model: haiku\neffort: low\nomitClaudeMd: true\n"}}
 FINAL = {"read": "Read/search and return findings only; the Lead saves any requested artifact.",
          "write": "Edit or execute writing commands only while explicitly holding sole writing ownership."}
-# The design skills policies/frontend-design.md routes UI work to. The CLI versions are pinned; the skill content is
-# upstream's (skills-lock.json records the hashes reviewed on 2026-11-04). Hooks stay off: a global install would
-# write Impeccable's hook into whatever folder the installer runs in.
-DESIGN_SOURCES = ("emilkowalski/skill", "Leonxlnx/taste-skill")
+# The design skills policies/frontend-design.md routes UI work to, pinned to the full commits skills-lock.json
+# records as reviewed on 2026-11-19 (docs/design-skills.md: how to bump one). Impeccable's hook stays off: a global
+# install would write it into whatever folder the installer runs in. Taste's Stop hook is its skill's own, added
+# once that skill is invoked; v2.5.0 (822e0b9d872e10deb931afad2c6c2bd943cf4c7b) is the pin without it.
+DESIGN_SOURCES = (  # (source#commit, skill)
+    ("emilkowalski/skill#64eb3deb9a5fbfa041faf783e0bc3fd635872e9c", "*"),  # no tags upstream
+    ("Leonxlnx/taste-skill#f6b76575f949707b4e3c37cd86cb44b0b98643e8", "*"),  # v2.5.1
+    # after v2.15.0; its other skills need paid image APIs or keys
+    ("nextlevelbuilder/ui-ux-pro-max-skill#2de1134dc4d1cfe112934611ae5803ae17a1bd7e", "ui-ux-pro-max"),
+)
 SKILLS_CLI, IMPECCABLE_CLI = "skills@1.7.6", "impeccable@4.8.0"
 SKILL_AGENTS = {"claude": "claude-code", "codex": "codex", "antigravity": "antigravity"}
 IMPECCABLE_PROVIDERS = {"claude": "claude", "codex": "codex", "antigravity": "antigravity"}
@@ -903,8 +909,8 @@ class Installer:
     # ---- third-party design skills
     def design_skills(self, apps):
         """Install the design skills for these apps at user level with their own CLIs, without telemetry."""
-        for source in DESIGN_SOURCES:
-            self.cli("design", "npx", ["--yes", SKILLS_CLI, "add", source, "--global", "--skill", "*", "--yes",
+        for source, skill in DESIGN_SOURCES:
+            self.cli("design", "npx", ["--yes", SKILLS_CLI, "add", source, "--global", "--skill", skill, "--yes",
                                        "--agent", *(SKILL_AGENTS[a] for a in apps)], env=NO_TELEMETRY, timeout=600)
         self.cli("design", "npx", ["--yes", IMPECCABLE_CLI, "install", "--global", "--no-hooks", "--yes",
                                    "--providers=" + ",".join(IMPECCABLE_PROVIDERS[a] for a in apps)],
