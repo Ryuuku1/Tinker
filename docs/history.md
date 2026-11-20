@@ -7,6 +7,18 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-20: a question reply that names the repository first
+
+`front-door-question` scored 0.833 in the run that re-accepted the baseline. The fault
+was the behavior, not the grader, so its `case.yaml` stays as it is.
+
+| Area | Decision |
+| --- | --- |
+| Evidence | Across the stored runs, the four replies that open with the repository got 12 of 12 PASS votes. Every reply that puts "No" before `product/shop` failed on the majority. The judge's only lapses were passes for replies that never name the repository on the first line, and since 19 November about half of the replies did not name it there |
+| Front door | The question route now says the reply opens `<repo>: <answer>`. The front door already asked for the repository in the first line, and AGENTS.md asks for the answer first; the example states the order once. The general `<task>` sentence is unchanged, because a task's first output is the `Triage:` line |
+| Check | `run --case front-door-question --runs 3`: all three replies open `product/shop: No.`, 9 of 9 judge votes PASS, score 1.0 in each run (0.34 USD) |
+| Baseline | Not re-accepted. A partial run would overwrite the set summaries in `accepted.json`. The case is unchanged and stays paired, and its baseline still holds 0.833 until the next full run |
+
 ## 2026-11-20: a heldout grader without judge noise
 
 The live gate on the audit passed regression (0.979) but failed heldout (0.833 against

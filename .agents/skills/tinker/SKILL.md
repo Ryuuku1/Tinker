@@ -13,7 +13,7 @@ checkout (or `root` in `~/.tinker/config.json` when installed).
 Do it now, in this chat. Identify the target repository as the Lead charter says
 (never guess one), name it in your first line, then route as the charter does. A
 question asking for no change, fix or run takes the charter's question route, with no
-workflow skill.
+workflow skill; the reply opens `<repo>: <answer>`.
 
 ## No task
 
