@@ -6,8 +6,8 @@ Hook events read the app's hook JSON on stdin:
                  PreInvocation, without the charter, which is a plugin rule there)
   prompt-submit  presence; the scheduled-run marker; `approve <id>` typed by the user
   pre-tool       the approval gate: consequential operations ask through the app, or are
-                 denied with a request id (none in Claude's bypass mode); tampering with
-                 Tinker is never allowed
+                 denied with a request id (none in Claude's bypass and auto modes);
+                 tampering with Tinker is never allowed
   post-tool      Claude only: a long test, build or lint output reaches the model as its
                  failures and last lines; the full output is saved under the temp folder
   stop           presence; an unattended run's final message becomes its outcome
@@ -46,8 +46,9 @@ DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 CHARTER = ("AGENTS.md", "policies", "roles", "templates", "profiles", ".agents/skills")
 # Claude asks through its own prompt; in these modes nobody answers it, so the typed path is used.
 TYPED_CLAUDE_MODES = {"dontAsk"}
-# The user chose no approval prompts in these modes, so the gate adds none; tamper and unattended runs still deny.
-QUIET_CLAUDE_MODES = {"bypassPermissions"}
+# The user chose no approval prompts in these modes (auto leaves each call to Claude Code's own classifier), so the
+# gate adds none; tamper and unattended runs still deny.
+QUIET_CLAUDE_MODES = {"bypassPermissions", "auto"}
 
 
 # ---------------------------------------------------------------- locations and files
@@ -275,6 +276,7 @@ def inside(path, root):
 
 PWSH_QUOTES = str.maketrans("\u2018\u2019\u201a\u201b\u201c\u201d\u201e", "''''\"\"\"")
 HEREDOC_WORD = re.compile(r"(?:[^\s;&|<>'\"\\]|\\.|'[^']*'|\"(?:[^\"\\]|\\.)*\")*", re.S)  # quotes may hold spaces
+NULL_DEVICES = {"pwsh": r"|(?i:\$null|nul)", "cmd": r"|(?i:nul)"}  # besides /dev/null, redirects that write no file
 
 
 def lex(command, shell="posix"):
@@ -424,8 +426,9 @@ def lex(command, shell="posix"):
                 raw.append(command[i:k])
                 i = k
                 continue
-            if c == ">" and not re.match(r">>?\|?\s*(?:&\s*(?:\d+|-)|/dev/null)(?![^\s;&|<>()])", command[i:]):
-                state["redirect"] = True  # 2>&1, >&- and >/dev/null write no file
+            if c == ">" and not re.match(r">>?\|?\s*(?:&\s*(?:\d+|-)|/dev/null" + NULL_DEVICES.get(shell, "") +
+                                         r")(?![^\s;&|<>()])", command[i:]):
+                state["redirect"] = True  # 2>&1, >&-, >/dev/null, PowerShell's 2>$null and cmd's >NUL write no file
             end_word()
             raw.append(c)
             i += 1
@@ -438,7 +441,8 @@ def lex(command, shell="posix"):
     return segments
 
 
-LEADERS = {"sudo", "env", "nohup", "time", "command", "builtin", "exec", "nice", "call"}
+LEADERS = {"sudo", "env", "nohup", "time", "command", "builtin", "exec", "nice", "call",
+           "if", "then", "elif", "else", "while", "until", "do", "!", "{"}  # reserved words lead the command they guard
 
 
 def verb_index(words):
@@ -491,7 +495,8 @@ RULES = [
     ("deploy.publish", _rx(r"\b(?:npm|pnpm|yarn|cargo)\s+publish\b|\b(?:dotnet\s+)?nuget(?:\.exe)?\s+push\b"
                            r"|\btwine\s+upload\b|\bdocker\s+(?:image\s+)?push\b|\bterraform\s+(?:apply|destroy)\b"
                            r"|\bkubectl\s+(?:apply|delete|rollout)\b|\bhelm\s+(?:install|upgrade|uninstall|rollback)\b")),
-    ("credential.change", _rx(r"\bgh\s+auth\s+(?:login|logout|refresh|token|setup-git)\b"
+    ("credential.read", _rx(r"\bgh\s+auth\s+token\b")),  # prints a token: it changes nothing, but still asks
+    ("credential.change", _rx(r"\bgh\s+auth\s+(?:login|logout|refresh|setup-git)\b"
                               r"|\bgit\b.*\bcredential(?:-\w+)?\s+(?:approve|reject|erase|store)\b"
                               r"|\bgit\b.*\bconfig\b.*\bcredential\.|\b(?:npm|pnpm|yarn)\s+(?:login|logout|adduser|token)\b"
                               r"|\bcmdkey(?:\.exe)?\s+/(?:add|delete|generic)|\b(?:az|gcloud|aws)\s+(?:login|logout|auth|configure)\b")),
@@ -499,10 +504,13 @@ RULES = [
                           r"|Invoke-RestMethod|DownloadString|DownloadFile)\b"
                           r"|\b(?:sh|bash|zsh)\b.*(?:\$\(|<\()\s*(?:curl|wget)\b")),
     ("shell.encoded", _rx(r"\b(?:pwsh|powershell)(?:\.exe)?\b.*\s-(?:e|ec|en|enc\w*)(?=[\s:]|$)")),
-    ("host.resume", _rx(r"\bcodex(?:\.exe|\.cmd)?\s.*(?:\bexec\b|\bresume\b|\s--last\b)")),
+    # A resumed chat keeps its id, so an `approve <id>` sent through it would approve this chat's own request.
+    ("host.resume", _rx(r"\bcodex(?:\.exe|\.cmd)?\s.*(?:\bexec\b|\bresume\b|\s--last\b)"
+                        r"|\bclaude(?:\.exe|\.cmd)?\s(?:.*\s)?(?:-r|--resume|-c|--continue|--session-id)(?=[\s=]|$)")),
 ]
 UNATTENDED_RULES = [("git.push", _rx(r"\bgit\b.*\bpush\b")), ("git.commit", _rx(r"\bgit\b.*\bcommit\b"))]
-COMMIT_MESSAGE = _rx(r"(\s(?:-m|--message)(?:\s+|=))(\"(?:[^\"\\$`]|\\.)*\"|'[^']*')")  # literal messages only
+# Literal messages only; -am, -sm and the like end in -m (git's flags that take no value come before it).
+COMMIT_MESSAGE = _rx(r"(\s(?:-[asnqve]*m|--message)(?:\s+|=))(\"(?:[^\"\\$`]|\\.)*\"|'[^']*')")
 DOWNLOADERS = _rx(r"\b(?:curl|wget|iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b")
 RUNNERS = {"sh", "bash", "zsh", "iex", "invoke-expression", "pwsh", "powershell", "python", "python3",
            "py", "node", "cmd", "perl", "ruby"}
@@ -518,7 +526,7 @@ READ_ONLY = {"rg", "grep", "findstr", "cat", "type", "head", "tail", "wc", "ls",
              "select-string", "sls", "get-childitem", "gci", "test-path", "get-item", "gi", "resolve-path",
              "stat", "file", "echo", "write-output", "pwd", "get-location",
              "printf", "find", "sort", "uniq", "cut", "tr", "basename", "dirname", "realpath", "du", "which",
-             "cmp", "sha256sum"}
+             "cmp", "sha256sum", "md5sum", "get-filehash", "diff", "test", "[", "for"}  # for: only its word list
 FIND_ACTIONS = {"-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"}
 GIT_READ_ONLY = {"diff", "show", "log", "grep", "status", "blame", "ls-files", "rev-parse", "branch-name",
                  "show-ref", "merge-base", "rev-list", "for-each-ref", "describe", "cat-file", "ls-tree", "name-rev",
@@ -739,6 +747,8 @@ def read_only(seg, verb, args, shell="posix"):
         return False
     if verb == "rg" and any(w.startswith("--pre") for w in args):
         return False
+    if verb == "for" and any(re.search(r"[/\\~*?\[$]", w) for w in args):
+        return False  # a path, glob or variable in the list feeds the loop body, so its words are judged
     return verb in READ_ONLY
 
 
@@ -1314,7 +1324,8 @@ def repository_lines(root, cwd):
 
 
 APPROVAL_NOTES = {
-    "claude": "Consequential operations show the app's Allow/Deny prompt. In unattended runs they are denied.",
+    "claude": "Consequential operations show the app's Allow/Deny prompt, except in bypass and auto modes, where the "
+              "user chose no prompts. In unattended runs they are denied.",
     "codex": "Consequential operations are denied with a request id; the user approves by typing `approve <id>` in this chat, then the exact call is retried once, unchanged.",
     "antigravity": "Consequential operations always ask through the app's own approval prompt.",
 }
@@ -1567,7 +1578,7 @@ def decide(host, payload, out):
         return out.deny(f"{tag} This chat is an unattended run ({restricted}): consequential operations are denied."
                         f"{unjudged}{hint} {ending}")
     if host == "claude" and call["permission_mode"] in QUIET_CLAUDE_MODES:
-        save_session(host, call["session"], record, state="working", last_action=f"ran in bypass mode ({','.join(sorted(labels))})")
+        save_session(host, call["session"], record, state="working", last_action=f"ran in {call['permission_mode']} mode ({','.join(sorted(labels))})")
         return out.noop()
     typed = host == "codex" or (host == "claude" and call["permission_mode"] in TYPED_CLAUDE_MODES)
     if not typed:

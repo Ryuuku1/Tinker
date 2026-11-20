@@ -29,7 +29,7 @@ database, scheduler service or simulated execution.
 | `policies/` | Evidence, delegation, safety, workspace (including task start), tools, knowledge, learning (retros and the gated learn pass), application verification (including browser live passes) | When the step needs them |
 | `templates/` | Agent playbook section, checkpoint, knowledge candidate, domain pack, verification recipe, routine prompts, user story, ADR | When producing that artifact |
 | `profiles/` | Opt-in stack conventions, subordinate to the product repository | Only for matching work |
-| `.claude/`, `.codex/`, `.agents/agents/`, `.gemini/` | Generated native descriptors: discovery and requested tools; `.claude/settings.json` adds destructive-Git deny rules and the Playwright configuration | By each host |
+| `.claude/`, `.codex/`, `.agents/agents/` (`.gemini/agents/` is a hand-kept reviewer) | Generated native descriptors: discovery and requested tools; `.claude/settings.json` adds destructive-Git deny rules and the Playwright configuration | By each host |
 | `scripts/tinker_runtime.py` | In-app runtime: lifecycle hooks (in Claude also the trim of long test, build and lint output), the test-log filter, `status`, `schedule-plan` | By host hooks, once installed |
 | `scripts/install_apps.py` | Opt-in user-level installer and descriptor generator; `--instance <name>` installs beside another Tinker | By the user, in a terminal |
 | `scripts/update.py` | Self-update: fast-forwards the default branch when the checkout is on it, clean and without commits of its own, then re-runs the installer for each stale installation made from this checkout; `--check` only fetches and records how far behind it is | By the user in a terminal (the gate allows an agent only `--check` and `--dry-run`); `--check` daily by the installer's scheduled check |
@@ -96,9 +96,10 @@ pre-tool, stop and session end for all three hosts. A gated call passes four ste
    `deny`, and `{}` for no opinion. Codex parses but does not support `ask` (the hook
    fails and the tool runs), so Codex denies with a request id; the user types
    `approve <id>` in that chat. In Claude Code's `dontAsk` mode the same typed path
-   is used because no prompt appears. In its `bypassPermissions` mode the gate adds no
-   prompt: the user chose none, so a labelled call runs, while tampering with Tinker's
-   state and restricted runs are still denied.
+   is used because no prompt appears. In its `bypassPermissions` and `auto` modes the gate
+   adds no prompt: the user chose none (auto leaves each call to Claude Code's own
+   classifier), so a labelled call runs, while tampering with Tinker's state and
+   restricted runs are still denied.
 
 A typed grant binds to a versioned operation fingerprint: host, chat, tool, working
 directory and the complete tool input, including edit and patch contents, argv array

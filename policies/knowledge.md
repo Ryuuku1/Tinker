@@ -48,7 +48,7 @@ shared improvement must explain the lesson using portable repository-relative
 paths, symbols and revisions, without local absolute paths or raw note excerpts.
 Revalidate its claims without requiring access to the contributor's private files.
 
-A learning pass ("review recent lessons", "propose improvements") follows the
+A lessons review ("review recent lessons", "propose improvements"; not the learn pass) follows the
 [team workflow](../.agents/skills/tinker-team/SKILL.md): at most three proposals,
 each with evidence, destination and a relevant behavioral case. Proposing is not
 applying. Only an explicit learn pass under the [learning policy](learning.md#learn)

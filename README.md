@@ -408,8 +408,9 @@ update fails, and reports each app separately: one app can be current while anot
 is stale or waiting for a recovery command. Force pushes, protected-branch pushes,
 branch deletion, discarding work, recursive deletes, remote changes, publishing and
 credential changes need your approval; scheduled runs cannot approve anything. In
-Claude Code's bypass mode it asks nothing: you chose no prompts, so it denies only
-tampering with Tinker's state and unattended runs. It also
+Claude Code's bypass and auto modes it asks nothing: you chose no prompts (auto leaves
+each call to Claude Code's own classifier), so it denies only tampering with Tinker's
+state and unattended runs. It also
 schedules the daily update check of [section 7](#7-keep-it-up-to-date). See
 [per-app details and limits](docs/providers.md#optional-user-level-install).
 
@@ -439,9 +440,9 @@ ignored `.tinker/knowledge/`; checkpoints and notes never enter product reposito
 | `roles/` | Specialist charters; their front matter generates the native agents |
 | `policies/` | Evidence, safety, workspace (task start), delegation, tools, knowledge, learning, app verification |
 | `templates/` | Agent playbook, checkpoint, ADR, user story, routines, domain pack, recipes |
-| `scripts/` | Installer, hook runtime, self-update, Graphify helper, live eval runner, test-log filter, merged-branch cleanup, usage report, platform helper |
+| `scripts/` | Installer, hook runtime, self-update, Graphify helper, live eval runner, test-log filter, merged-branch cleanup, usage report |
 | `evals/` | Offline case catalog and grader; live Claude cases under `evals/live/` |
-| `.claude/`, `.codex/`, `.agents/agents/`, `.gemini/` | Generated native descriptors and Claude project settings |
+| `.claude/`, `.codex/`, `.agents/agents/` | Generated native descriptors and Claude project settings; `.gemini/agents/` holds the hand-kept Antigravity reviewer |
 | `.tinker/` (ignored) | Your local state: checkpoints, retros, notes, graphs, reports, evidence |
 
 ### Boundaries and validation

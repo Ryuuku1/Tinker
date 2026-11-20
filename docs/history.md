@@ -7,7 +7,19 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
-## 2026-11-20: bypass mode never prompts
+## 2026-11-20: gate quick wins, stale text and line endings
+
+Phase 2 of the 2026-11-20 audit of Tinker: the fixes that needed no design decision.
+
+| Area | Change |
+| --- | --- |
+| Resumed Claude chats | `claude --resume`, `-r`, `--continue`, `-c` and `--session-id` are `host.resume`, as Codex's resume already was: a resumed chat keeps its id, so an `approve <id>` sent through it could approve that chat's own request (whether Claude keeps the id is not verified; the label is defensive). Plain `claude -p` stays unlabelled |
+| Reads stay reads | `diff`, `test`, `[`, `md5sum` and `Get-FileHash` are read-only; `if`/`then`/`else`/`while`/`do`/`!`/`{` lead the command they guard, so a read inside them is judged as a read and a write still is not; a `for` list of plain words is a read, while one with a path, glob or variable is still judged; PowerShell `2>$null` and cmd `>NUL` write no file |
+| Labels | `gh auth token` is `credential.read` (it still asks: it prints a token); `git commit -am "<message>"` no longer has its message text judged as a command |
+| Stale text | Eval case count, per-case helper limits, the accepted live baseline, a removed script, the hand-kept `.gemini/agents/` reviewer, the team skill's live-case pointer, and "lessons review" versus the learn pass |
+| Line endings | `.gitattributes` sets `* text=auto eol=lf`; 67 files with CRLF on disk (3 of them committed that way) are LF (an agent's text-mode write on Windows can still put CRLF on disk). Two empty untracked folder trees (`teams/` and a literal `%SystemDrive%` path) are gone |
+
+## 2026-11-20: bypass and auto modes never prompt
 
 The user saw approval prompts in Claude Code's bypass mode and asked for none there.
 
@@ -15,6 +27,7 @@ The user saw approval prompts in Claude Code's bypass mode and asked for none th
 | --- | --- |
 | Project settings | The six ask rules for remote branch deletes are gone: Claude Code shows an ask rule's prompt even in bypass mode. Deny rules stay and hold in every mode; default mode still prompts for a remote branch delete because no rule allows it |
 | Hook gate | In Claude's `bypassPermissions` mode a labelled call runs with no prompt. Tampering with Tinker's state and unattended runs are still denied; `dontAsk` keeps the typed path |
+| Auto mode | A later prompt the user took for bypass came from `auto` mode (chat log: `auto` at the call, `bypassPermissions` 90 s later). `auto` joins the quiet modes: Claude Code's classifier judges each call there, so force pushes, recursive deletes and publishes no longer get a second, Tinker prompt in auto. The session note now names the mode |
 | Not removable | Claude Code still prompts in bypass mode for its own critical-path `rm`/`rmdir` checks and for questions the model asks; no setting turns those off |
 
 ## 2026-11-19: one installer for pinned skills, and live cases for the floors

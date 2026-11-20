@@ -63,7 +63,7 @@ bypass mode, where the user chose no prompts), pre-allowed edits under `.tinker/
 [live passes](../policies/app-verification.md#live-pass-in-a-browser). A remote branch
 delete therefore prompts only in default mode, where no rule allows it. Deny rules
 hold in every permission mode, including bypass; the installed hook gate covers
-other projects, and in bypass mode it asks nothing and denies only tampering with
+other projects, and in bypass and auto modes it asks nothing and denies only tampering with
 Tinker's state and unattended runs. Install the browser plugin once with
 `claude plugin install playwright@claude-plugins-official`. Project settings do not
 reach chats opened elsewhere, so add the same `env` block to `~/.claude/settings.json`
@@ -279,7 +279,7 @@ acceptance cases succeed.
 | Host discovery | Live 2026-09-23/24: skills and eight agents loaded; plugin validation passed | Desktop task loaded AGENTS.md and skills (2026-09-23); CLI 0.146.0 present, not run live | Not verified (no scoped live interface, no `agy` on PATH on 2026-09-26) |
 | Tool restrictions | Requested by descriptors; not verified live | Same | Same |
 | Hook behavior | Live 2026-09-24 for the runtime before this refactor (context, ask, block in default and bypass modes, session end). The 2026-09-26 runtime: sample-payload tests. The output trim (2026-11-17): sample-payload tests only, not yet checked in an installed app | Documented formats and shell self-tests only | Documented formats and shell self-tests only (`cmd /c` on Windows, `sh -c` elsewhere) |
-| Task execution | Behavioral cases not verified; no accepted baseline | Not verified (a delegation probe timed out; see below) | Not verified |
+| Task execution | The offline catalog (`evals/cases.json`) not run; live baseline accepted 2026-11-17 (`evals/live/accepted.json`: regression 0.979 over 28 runs, heldout 0.889 over 5, model opus) | Not verified (a delegation probe timed out; see below) | Not verified |
 
 Earlier Codex notes: a read-only smoke run recognized the Lead, roles, skills and
 limits from project context; a disposable feature/delegation probe timed out after

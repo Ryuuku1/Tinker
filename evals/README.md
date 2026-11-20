@@ -8,7 +8,7 @@ There are four different claims:
    empty test runs, stale review, malformed records, path boundaries, coverage,
    duplicates and review completeness. These test the tooling, not the agents.
 3. Behavioral evaluations: real host sessions with inspected artifacts and native
-   traces. The 47 cases in [cases.json](cases.json) define prompts, setup, measurable
+   traces. The cases in [cases.json](cases.json) define prompts, setup, measurable
    observations and additional human review. None is passed merely by existing.
 4. Live Claude Code evals: the cases in [live](live/) run real Claude Code sessions
    through `claude plugin eval` and grade themselves; `scripts/eval_live.py gate`
@@ -119,8 +119,8 @@ manifest under `.tinker/evals/<run-id>/`; synthetic records never establish one.
 
 The grader derives `workers_total`, `peak_active_helpers`, `peak_active_writers`
 and `returned_workers` from `activity.events`. These fields cannot be supplied
-as scalar observations. Total workers has no universal upper bound; the catalog
-limits peak helpers to two and peak writers to one. The Lead counts as a writer.
+as scalar observations. Total workers has no universal upper bound; each case
+sets its own peak-helper limit (0 to 4) and allows at most one active writer. The Lead counts as a writer.
 
 Normalize native events into records with exactly `event`, `actor` and `lines`.
 Use the actual native helper identity, or `lead` for the Lead. List events in
