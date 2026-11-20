@@ -255,7 +255,8 @@ python scripts/usage_report.py --days 7         # tokens and estimated cost per 
 `reload.py` fetches, removes only worktrees and branches proven merged (an ancestor of
 the default branch, every commit already upstream, or the head of a merged pull
 request), keeps anything dirty, locked or in use, and fast-forwards the default branch.
-The installed gate asks before it runs without `--dry-run`. `usage_report.py` reads
+The installed gate asks before it runs without `--dry-run`, except in Claude Code's
+bypass mode. `usage_report.py` reads
 Claude Code and Codex session logs; Claude rows are priced at list prices, Codex rows
 show tokens only, and Antigravity is not measured.
 
