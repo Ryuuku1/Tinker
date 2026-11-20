@@ -269,11 +269,12 @@ class RunTests(TempCase):
                                                      "error": error}]}}
         log = self.fake_claude(cases=[case("alpha", 1.0), case("beta", 0.5), case("gamma", 0, "timed out")],
                                rerun_score=1.0)
-        code, out = self.main("run", "--adaptive", "--force", "--ablation", "with-without", root=self.checkout,
-                              temp=self.runs)
+        code, out = self.main("run", "--adaptive", "--force", "--ablation", "with-without", "--keep-temp",
+                              root=self.checkout, temp=self.runs)
         self.assertEqual(code, 0, out)
         first, again = [c["args"] for c in self.calls(log) if c["args"][:2] == ["plugin", "eval"]]
         self.assertNotIn("--case", first)
+        self.assertIn("--keep-temp", again)
         for flag, value in (("--case", "beta"), ("--runs", "2"), ("--ablation", "none")):
             self.assertEqual(again[again.index(flag) + 1], value, flag)
         self.assertIn("1 case(s) fell short", out)

@@ -413,7 +413,7 @@ def short_in_baseline(accepted, args):
 def eval_command(claude, args):
     return [claude, "plugin", "eval", ".", "--eval-dir", BUNDLE_EVALS, "--scaffold", "--allow-tools", "Write", "Edit",
             "--trust-plugin", "--no-publish", "--model", args.model, "--judge-model", args.judge_model,
-            "--concurrency", str(args.jobs)]
+            "--concurrency", str(args.jobs)] + (["--keep-temp"] if args.keep_temp else [])
 
 
 def run(args, root, temp=None):
@@ -444,8 +444,6 @@ def run(args, root, temp=None):
         command += ["--tag", *args.tag]
     if args.runs:
         command += ["--runs", str(args.runs)]
-    if args.keep_temp:
-        command += ["--keep-temp"]
     print(f"Run folder: {run_dir} ({total} agent runs)", flush=True)
     code = subprocess.run(command, cwd=bundle, env=env).returncode
     if not result.is_file():
