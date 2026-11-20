@@ -73,7 +73,7 @@ the final diff. A timeout, skipped reviewer or failed invocation is not a review
 Stop repeated identical tool failures and change approach; do not silently retry
 through a more privileged provider. Native session follow-ups are sufficient.
 
-Read-only specialist profiles return briefs, designs and research to the Lead.
+Read-only specialist profiles return findings and research to the Lead.
 If an authorized artifact needs writing, the Lead saves it after reacquiring
 ownership, or assigns it to a configured writing role. A role name never grants
 new tools. Browser/source access unavailable to a specialist can be collected by

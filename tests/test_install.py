@@ -177,7 +177,7 @@ class RenderTests(InstallCase):
         self.assertIn("omitClaudeMd: true\n", explorer)  # without the CLAUDE.md that would import the Lead charter
         self.assertNotIn("model:", reviewer)
         agents = sorted((self.home / ".codex" / "agents").glob("tinker-*.toml"))
-        self.assertEqual(len(agents), 9)
+        self.assertEqual(len(agents), 4)
         import tomllib
         for path in agents:
             data = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -188,7 +188,7 @@ class RenderTests(InstallCase):
             plugin = self.home / ".gemini" / "config" / "plugins" / "tinker"
             self.assertTrue((plugin / "rules" / "AGENTS.md").is_file())
             self.assertFalse((plugin / "AGENTS.md").exists())
-            self.assertEqual(len(list((plugin / "agents").glob("tinker-*.md"))), 9)
+            self.assertEqual(len(list((plugin / "agents").glob("tinker-*.md"))), 4)
         config = json.loads((state / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(config["root"], str(ROOT))
         record = json.loads((state / "apps.json").read_text(encoding="utf-8"))

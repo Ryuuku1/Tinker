@@ -33,8 +33,8 @@ graph request, a justified broad topology question, or task start under
 - Stories, documentation, diagrams, ADRs or release notes: load
   [artifacts](.agents/skills/tinker-artifacts/SKILL.md).
 - Status, schedules, learn, eval, playbook drafts and `/tinker` forms: [front door](.agents/skills/tinker/SKILL.md).
-- Research, testing or delivery: the relevant charter below, with no unrelated
-  implementation phases.
+- Research, testing or delivery alone: only that phase (research per the
+  [Researcher](roles/researcher.md) charter), with no unrelated implementation phases.
 
 An addressed role ("Designer, ...") selects that expertise: a native specialist
 when available, else say the Lead applies it; no command is required. Substantial
@@ -73,12 +73,9 @@ helper per independent piece worth its overhead; small or coupled work stays at
 spawning**. The Lead integrates results and owns the final answer.
 
 Before delegation read [delegation policy](policies/delegation.md), then only the
-selected charter: [Product Manager](roles/product-manager.md),
-[Designer](roles/designer.md), [Engineer](roles/engineer.md),
-[Test Engineer](roles/test-engineer.md), [Reviewer](roles/reviewer.md),
-[Researcher](roles/researcher.md), [Technical Writer](roles/technical-writer.md),
-[Delivery Engineer](roles/delivery-engineer.md), or the cheap search-only
-[Explorer](roles/explorer.md).
+selected charter: [Engineer](roles/engineer.md), [Reviewer](roles/reviewer.md),
+[Researcher](roles/researcher.md) or the cheap search-only [Explorer](roles/explorer.md).
+Product, design, writing, testing and delivery expertise lives in the workflows.
 Missing capability or quota means transparent Lead execution; never simulate
 teammate dialogue or call role switching independent review. A worker is not a
 contribution until its actual result returns and is checked.

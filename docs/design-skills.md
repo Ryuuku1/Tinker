@@ -55,7 +55,7 @@ These are inferences from Tinker's rules as they stood, not measurements.
 5. **Unpinned skills drifted.** Taste's installed copy was an untagged commit between
    v2.5.0 and v2.5.1, and all 17 of Emil's skills changed after the lock was reviewed.
    What agents loaded was not what had been reviewed.
-6. **Helpers could not run the skills.** Read-only Designer helpers cannot run Impeccable
+6. **Helpers could not run the skills.** Read-only helpers cannot run Impeccable
    or Taste scripts, so delegated design work fell back to prose.
 
 The opposite failure matters too. Mumu's owner rejected a full redesign and asked for

@@ -137,9 +137,9 @@ class PackageTests(unittest.TestCase):
         for pattern in (".tinker/", ".claude/settings.local.json", ".env", "__pycache__/"):
             self.assertIn(pattern, lines)
 
-    def test_native_descriptors_resolve_all_nine_canonical_charters(self):
+    def test_native_descriptors_resolve_all_four_canonical_charters(self):
         roles = {p.stem for p in (ROOT / 'roles').glob('*.md')}
-        self.assertEqual(len(roles), 9)  # Lead is canonical AGENTS.md.
+        self.assertEqual(len(roles), 4)  # Lead is canonical AGENTS.md.
         for directory, suffix in (('.codex/agents', '.toml'), ('.claude/agents', '.md'),
                                   ('.agents/agents', '.md')):
             files = list((ROOT / directory).glob('tinker-*' + suffix))
@@ -161,7 +161,7 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(re.search(r'^trigger: (.+)$', text, re.M).group(1), 'always_on')
         target = re.search(r'^@(.+)$', text, re.M).group(1)
         self.assertEqual((rule.parent / target).resolve(), ROOT / 'AGENTS.md')
-        for role in ('reviewer', 'researcher', 'product-manager', 'designer'):
+        for role in ('reviewer', 'researcher'):
             with self.subTest(role=role):
                 reader = (ROOT / f'.agents/agents/tinker-{role}.md').read_text()
                 self.assertEqual(set(re.findall(r'^  - (\w+)$', reader, re.M)),

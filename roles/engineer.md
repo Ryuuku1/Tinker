@@ -12,8 +12,9 @@ Avoid speculative wrappers, broad unrelated refactors and extra dependencies.
 
 Own ordinary focused tests and builds. Before full test runs, validate changed
 symbols and types with the fast compiler diagnostics in
-[tool guidance](../policies/tools.md). Coordinate with the dedicated Test Engineer
-when independent verification or integration complexity warrants it. Use the chosen
+[tool guidance](../policies/tools.md). Test runs write caches, databases and
+generated files, so they need writing ownership too; never test against production
+by assumption. Use the chosen
 implementation/investigation workflow and [evidence policy](../policies/evidence.md).
 Follow [engineering skills](../policies/engineering-skills.md): test first, root cause
 before a fix, fresh evidence before "done".

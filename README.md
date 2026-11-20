@@ -303,18 +303,14 @@ hosts, invoke the `tinker` skill or just say the form ("tinker status").
 | Role | Responsibility |
 | --- | --- |
 | [Lead](AGENTS.md) | Own the outcome, coordinate and integrate |
-| [Product Manager](roles/product-manager.md) | Needs, scope and acceptance |
-| [Designer](roles/designer.md) | User flows, interactions and visual direction |
 | [Engineer](roles/engineer.md) | Implementation and defect investigation |
-| [Test Engineer](roles/test-engineer.md) | Meaningful tests and verification |
 | [Reviewer](roles/reviewer.md) | Independent assessment of actual changes |
 | [Researcher](roles/researcher.md) | Evidence-backed technical answers |
-| [Technical Writer](roles/technical-writer.md) | Usable product documentation |
-| [Delivery Engineer](roles/delivery-engineer.md) | Release preparation and authorized delivery |
 | [Explorer](roles/explorer.md) | Cheap read-only search: files, symbols, callers, conventions |
 
-Roles are persistent instructions; real workers are native host agents, used only
-when useful: the Lead sizes the team per task for the best result per cost, with no
+Product, design, writing, testing and delivery expertise lives in the workflows,
+which the Lead runs itself. Roles are persistent instructions; real workers are
+native host agents, used only when useful: the Lead sizes the team per task for the best result per cost, with no
 fixed ceiling, one writer per working tree and no recursive delegation. Small jobs
 stay with the Lead. UI work also follows [frontend design](policies/frontend-design.md): a design gate
 before the first edit, the design skills it picks, an anti-generic floor and screenshot evidence. Unavailable helpers mean transparent Lead
@@ -332,7 +328,7 @@ Markdown first, GitHub issues or a project board only on approval) and **Graphif
 the front door itself covers status, schedules and lesson reviews. Implementation and review
 follow a minimalism ladder: does the code need to exist, does the codebase or the
 standard library already cover it, and never trim validation or error handling to
-save lines. Research, testing and delivery use their charters directly. Running UI,
+save lines. Research uses the Researcher charter; testing and delivery stay with the Lead. Running UI,
 API or CLI changes are checked per [application verification](policies/app-verification.md).
 Optional [domain packs](templates/domain-pack.md) load only when you name one or the
 repository's instructions link it.

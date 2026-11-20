@@ -785,8 +785,10 @@ class LifecycleTests(Fixture):
     def test_domain_packs_and_candidates_are_never_injected(self):
         folder = self.root / ".tinker" / "knowledge" / self.tb.repo_key(self.repo)
         folder.mkdir(parents=True)
-        (folder / "payments.md").write_bytes((ROOT / "evals" / "fixtures" / "domain-pack" / "payments.md").read_bytes())
-        (folder / "lesson.md").write_bytes((ROOT / "evals" / "fixtures" / "learning" / "candidate-valid.md").read_bytes())
+        (folder / "payments.md").write_text("---\npack_id: payments\n---\n\n# Payments domain pack\n\n"
+                                            "- A refund never exceeds the captured amount.\n", encoding="utf-8")
+        (folder / "lesson.md").write_text("---\nstatus: candidate\nconfidence: inferred\n---\n\n"
+                                          "Run the focused tests before the full suite.\n", encoding="utf-8")
         text = self.start()
         self.assertNotIn("payments", text)
         self.assertNotIn("lesson.md", text)

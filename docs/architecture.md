@@ -24,7 +24,7 @@ database, scheduler service or simulated execution.
 | Part | What it is | Loaded or run |
 | --- | --- | --- |
 | `AGENTS.md` | The Lead: routing, delegation budget, boundaries | Every session (native import or rule) |
-| `roles/` | Nine specialist charters (the Explorer a cheap search-only helper); front matter generates native descriptors | Only the selected charter |
+| `roles/` | Four specialist charters (Engineer, Reviewer, Researcher and the cheap search-only Explorer); front matter generates native descriptors | Only the selected charter |
 | `.agents/skills/` | Seven skills: the `tinker` front door (also status, schedules and lesson reviews) and the shape, implement, investigate, review, artifacts and Graphify workflows | Only the selected workflow |
 | `policies/` | Evidence, delegation, safety, workspace (including task start), tools, knowledge, retro, learning (the gated learn pass), application verification (including browser live passes) | When the step needs them |
 | `templates/` | Agent playbook section, checkpoint, knowledge candidate, domain pack, verification recipe, routine prompts, user story, ADR | When producing that artifact |

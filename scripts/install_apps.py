@@ -57,7 +57,7 @@ CODEX_MATCHER = "^(Bash|apply_patch|automation_update)$"  # automation_update is
 # Antigravity's anchoring is undocumented, so the names stay unanchored: an extra match asks, a missed one is silent.
 # `schedule` alone is anchored so tools such as a schedule listing never reach the gate.
 ANTIGRAVITY_MATCHER = "run_command|code_action|write_to_file|replace_file_content|multi_replace_file_content|^schedule$"
-ABOUT = "Tinker software team: Lead charter, nine specialists, workflows, approvals and presence."
+ABOUT = "Tinker software team: Lead charter, four specialists, workflows, approvals and presence."
 AUTHOR = {"name": "Tinker"}
 TOOLS = {
     "read": {"claude": "Read, Grep, Glob", "antigravity": ["view_file", "grep_search", "find_by_name", "list_dir"],

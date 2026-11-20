@@ -17,7 +17,7 @@ indexing. A missing or failed graph is reported while source inspection continue
 In the desktop app add/open this checkout as the project. In a terminal start
 `codex --add-dir <absolute-product-path>` here. Trust the project when appropriate
 so project configuration loads. AGENTS.md provides Lead behavior, .agents/skills/
-contains seven skills, and .codex/agents/ defines nine native specialists.
+contains seven skills, and .codex/agents/ defines four native specialists.
 The project sets no helper cap of its own (Codex's default applies; the Lead sizes
 the team); each specialist disables its own multi-agent tools. Reader roles request read-only sandboxing and disable the shell
 feature; writers request workspace-write. No model is pinned.
@@ -41,7 +41,7 @@ In the desktop app, the [task start](../policies/workspace.md#task-start) adds e
 checkout outside the chat's folders with `request_directory`, so the app shows its
 diffs and can link and watch its pull requests; chats without that tool skip it.
 CLAUDE.md imports canonical company instructions. The plugin exposes the same
-physical skills; .claude/agents/ supplies nine project specialists. Inspect the
+physical skills; .claude/agents/ supplies four project specialists. Inspect the
 installed host's memory, skills and agent views; restart existing sessions for
 discovery of new descriptors.
 
@@ -101,7 +101,7 @@ Sources: [imports](https://code.claude.com/docs/en/memory),
 Open this checkout as a project. In Customizations inspect the workspace rule,
 skills and custom agents. The .agents/rules/tinker.md rule uses
 `trigger: always_on` and references `@../../AGENTS.md` relative to the rule file.
-Seven skills remain in .agents/skills/; nine descriptors live in .agents/agents/.
+Seven skills remain in .agents/skills/; four descriptors live in .agents/agents/.
 These are distinct from the retained Gemini CLI descriptors.
 
 For Antigravity 2.0, confirm this checkout is an active Project folder, then

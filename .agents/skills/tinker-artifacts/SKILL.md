@@ -5,9 +5,10 @@ description: Produce engineering artifacts - user stories, documentation, diagra
 
 # Produce an engineering artifact
 
-Resolve this package's [AGENTS.md](../../../AGENTS.md) and load the
-[Technical Writer](../../../roles/technical-writer.md) charter, or the
-[Product Manager](../../../roles/product-manager.md) for stories. Unclear scope
+Resolve this package's [AGENTS.md](../../../AGENTS.md). Write for a named audience,
+with its prerequisites and expected outcomes; update an existing source of truth
+before adding another, and put no ticket-specific architecture files or team handoff
+reports in a product repository. Unclear scope
 needs [shape](../tinker-shape/SKILL.md) first; code changes need
 [implement](../tinker-implement/SKILL.md).
 

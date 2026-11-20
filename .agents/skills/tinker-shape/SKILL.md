@@ -5,10 +5,12 @@ description: Shape a software idea or design request into a usable product brief
 
 # Shape a software request
 
-Resolve this package's [AGENTS.md](../../../AGENTS.md) and load only the relevant
-[Product Manager](../../../roles/product-manager.md) or
-[Designer](../../../roles/designer.md) charter. Honor the user's requested output:
-an idea discussion does not authorize implementation.
+Resolve this package's [AGENTS.md](../../../AGENTS.md). Honor the user's requested
+output: an idea discussion does not authorize implementation. A design also follows
+[frontend design](../../../policies/frontend-design.md): cover the flow, content,
+hierarchy, interaction and keyboard states, empty, loading and error states and
+responsive layout; separate recommendations from behavior observed in a browser, and
+never invent screenshots, usability findings or user research.
 
 1. Identify the outcome, audience and requested artifact. Inspect the existing
    product, target instructions and similar flows before asking discoverable

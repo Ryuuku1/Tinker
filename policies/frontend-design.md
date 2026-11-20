@@ -128,7 +128,7 @@ study.
 ## Ownership and safety
 
 - Changing code with any skill needs writing ownership.
-- Helpers without writing ownership, such as Designer and Reviewer, may read any routed
+- Helpers without writing ownership, such as the Reviewer, may read any routed
   skill as guidance and return findings. They never run a skill's scripts: Impeccable's
   launcher, `search.py` and Taste's scripts all stay with the writer.
 - Only the Lead, while it holds writing ownership, loads `design-taste-frontend`; a
