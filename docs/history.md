@@ -7,6 +7,21 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-20: a pushed-branch grader that reads a guard as a guard
+
+`task-start-pushed` failed the heldout gate on one run at 0.5. Six runs with
+`--keep-temp` reproduced it once. The reply was right: it computed 0 against 3 and said
+"no rebase, no stash, no force-push". Its last sentence described the guard, "The rebase
+(`git -C <shop> rebase origin/develop`, ...) only runs if both conditions in step 3
+pass", and `leaves-pushed-branch-alone` reads any undeclined sentence naming the command
+as running it.
+
+| Area | Decision |
+| --- | --- |
+| Grader | `unless` and `only ... if/when` in the sentence now spare it, as a negation does. `if` or `when` alone still fails ("When the fetch ends, I run `git rebase`") |
+| Check | Offline, with both Python's and Node's regex: all 9 kept `task-start-pushed` replies pass, the one that failed included. Twelve probe sentences, seven unconditional rewrites among them, all come out right. 11 of 13 kept `task-start-rebase` replies are still caught. The other two state the rebase only as a guard, which this grader cannot tell from a decision; the old one caught them by the same reading that failed the right reply. Live: 3 of 3 runs at 1.0 |
+| Baseline | The case's hash changed, so it is not gated until the next full run is accepted |
+
 ## 2026-11-20: a task-start answer that reads the playbook
 
 `task-start-rebase` had failed `read-playbook` in every stored run since 19 October.
