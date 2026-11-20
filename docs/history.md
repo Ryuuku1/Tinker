@@ -22,7 +22,7 @@ decision: "Which one? If A, do you accept ...?".
 | Skill | Grill mode: "a follow-up that depends on the answer waits for it" |
 | Eval runner | `--keep-temp` now reaches adaptive reruns and baseline top-ups. The failing run was a rerun and had left no trace |
 | Check | Offline, three haiku votes per reply with the eval's criterion (an approximation of its judge prompt). Old criterion: 8 of the 23 right replies drew a FAIL vote. New one: all 23 pass unanimously, the bundled reply fails unanimously, and two made-up two-decision replies fail. The regexes match all 24. Live: 6 of 6 runs at 1.0, every vote PASS |
-| Baseline | The case's grader changed, so it is not gated until a full run re-accepts it |
+| Baseline | Re-accepted from a full run at `307a0e3` with `--keep-temp`: both sets pass, regression at 1.0 over 22 runs, and the case at 1.0 over 3 with every vote PASS |
 
 ## 2026-11-20: a pushed-branch grader that reads a guard as a guard
 
