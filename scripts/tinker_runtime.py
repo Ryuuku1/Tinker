@@ -477,7 +477,7 @@ RULES = [
     ("git.destructive", _rx(r"\bgit\b.*\b(?:reset\b.*--hard|clean\b.*(?:\s-[a-z]*f|\s--force\b)"
                             r"|checkout\b.*(?:\s-f\b|\s--force\b|\s--(?=\s|$)|\s\.(?=\s|$))"
                             r"|switch\b.*(?:\s-f\b|\s--force\b|\s--discard-changes\b)"
-                            r"|restore\b(?!.*--staged)|stash\s+(?:drop|clear)\b"
+                            r"|restore\b(?!.*--staged)|stash\s+clear\b"
                             r"|worktree\s+remove\b.*(?:\s-f\b|\s--force\b))")),
     ("file.deleteRecursive", _rx(r"\b(?:rm|ri|rd|rmdir|del|erase|Remove-Item)\b(?!.*--cached)"
                                  r".*\s(?:-[fiv]*r[fiv]*|--recursive|-rec\w*)\b"

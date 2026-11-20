@@ -311,7 +311,7 @@ class PackageTests(unittest.TestCase):
         settings = json.loads((ROOT / '.claude/settings.json').read_text(encoding='utf-8'))
         deny, ask = settings['permissions']['deny'], settings['permissions']['ask']
         for pattern in ('git *push*--force*', 'git *reset*--hard*', 'git clean -*', 'git restore *',
-                        'git *branch* -D *', 'git *stash drop*', 'git *worktree remove*--force*'):
+                        'git *branch* -D *', 'git *stash clear*', 'git *worktree remove*--force*'):
             for tool in ('Bash', 'PowerShell'):
                 self.assertIn(f'{tool}({pattern})', deny)
         # Claude Code shows an ask rule's prompt even in bypass mode, where the user chose no prompts.

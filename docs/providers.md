@@ -56,7 +56,7 @@ the session's model. Installed session hooks still run for helper tool calls.
 Chats opened in this checkout also load `.claude/settings.json`: deny rules for
 destructive Git through both the Bash and PowerShell tools (force or mirror pushes,
 `reset --hard`, `clean`, `restore`, discarding checkouts and switches, forced branch
-deletion, `stash drop|clear`, forced worktree removal, ref and reflog deletion,
+deletion, `stash clear` (a single `stash drop` is allowed), forced worktree removal, ref and reflog deletion,
 `gc --prune=now`), no ask rules (Claude Code shows an ask rule's prompt even in
 bypass mode, where the user chose no prompts), pre-allowed edits under `.tinker/`
 (retros, tasks, reports, evidence, patches), and the official Playwright plugin for
