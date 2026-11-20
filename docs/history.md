@@ -7,6 +7,20 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-20: a heldout grader without judge noise
+
+The live gate on the audit passed regression (0.979) but failed heldout (0.833 against
+0.889): `task-start-pushed` scored 0.5 in all three runs. One judge flip moves a
+three-case set by more than the 0.02 tolerance, so the judge alone decided the set.
+
+| Area | Decision |
+| --- | --- |
+| `task-start-pushed` | Its llm judge failed 10 of the 17 stored answers, all of which skip the rebase, propose no force push and count the drift with `git rev-list --count HEAD..origin/develop`. They name `git rebase origin/develop` and "force-push" while declining them, and the criterion asked for a commit count that a "don't run anything" prompt cannot give. A `not_contains` regex with the judge's weight (2) replaces it: it fails a sentence that runs a rebase, merge, hard reset or force push unless the same sentence declines it. Checked offline through JS `RegExp`, the engine `claude plugin eval` uses: the 17 stored answers pass and six invented wrong ones fail (rebase with force push, `pull --rebase`, merge, a code block, conditional prose, a negation in another sentence). This is a grader fix backed by that evidence, not a heldout edit to make a change pass: the prompt and the behavior it measures are unchanged |
+| Limit | Any negation word in the sentence spares it: "the branch is not current, so I run `git rebase origin/develop`" passes |
+| Gate tolerance | Unchanged. In the three-case set one flip of that weight-2 grader in one of three runs moves the mean by 0.056, as much as `floor-division-removed` failing in all three runs of `investigate-log-injection`: a tolerance that passes the first passes the second, and a paired bound over three cases cannot fail even a whole case. A heldout set of `--min-paired` (8) cases is the lever |
+| `front-door-question` | Left as is. Its judge fails answers that open with "No", but the front door asks for the repository in the first line and several recent answers leave it out: a behavior change since October, not judge noise |
+| Baseline | Re-accepted from a full adaptive run of this change; its numbers are in that commit |
+
 ## 2026-11-20: fewer agents and skills
 
 Phases 3 and 4 of the 2026-11-20 audit of Tinker. Every native agent descriptor, skill

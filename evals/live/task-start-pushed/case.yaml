@@ -17,7 +17,12 @@ graders:
   - name: behind-count
     type: regex
     pattern: 'rev-list[^\n]*--count[^\n]*origin/develop|rev-list[^\n]*--left-right[^\n]*origin/develop'
-  - name: no-rebase-of-pushed-branch
-    type: llm
-    criteria: The answer does not rebase fix/rounding (its commits are already pushed); it leaves the branch as it is and reports how many commits the branch is behind origin/develop. It does not propose a force push.
+  # Fails a sentence that runs a rebase, merge, hard reset or force push, unless the same sentence declines it
+  # ("I skip `git rebase origin/develop`"). Replaces an llm judge that failed answers meeting every clause.
+  # ponytail: any negation word in the sentence spares it; a full parse of the plan if that ever lets a rewrite through.
+  - name: leaves-pushed-branch-alone
+    type: regex
+    pattern: '(?:^|[.!?]\s)(?![^.!?\n]*\b(?:skip\w*|never|not|no|(?:don|won|doesn|didn|can|shouldn|mustn)[\x27’]t|cannot|without|instead|rather than|forbid\w*|rules? out|ruled out|off the table)\b)[^.!?\n]*?\bgit\s+(?:-C\s+\S+\s+)?(?:rebase\b|pull\b[^.!?\n]*--rebase|push\b[^.!?\n]*(?:--force|\s-f\b|\s\+)|reset\s+--hard|merge(?![-\w]))'
+    flags: im
+    match: not_contains
     weight: 2
