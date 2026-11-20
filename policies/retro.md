@@ -4,12 +4,13 @@ The implement, investigate, review and shape workflows end with a retro: local
 evidence for the [learn pass](learning.md#learn). A question answered without edits or
 investigation needs none.
 
-1. Save its lines first to the Tinker checkout's ignored
+1. Save its lines first to the Tinker root's ignored
    `.tinker/retros/<yyyy-mm-dd>-<ticket or 2-4 word slug>-<workflow>.md` (add `-2`, `-3`
-   when taken), with front matter `date`, `workflow`, `repository` (the folder name),
-   `ticket` when there is one and, for implement and investigate, `round`: 1 for a
-   first delivery, 2, 3 and so on when the user or a reviewer sent the work back. Say
-   so when the session cannot write files.
+   when taken). That is the root this session names, never the folder an installed copy
+   of this policy was read from. Use front matter `date`, `workflow`, `repository`
+   (the folder name), `ticket` when there is one and, for implement and investigate,
+   `round`: 1 for a first delivery, 2, 3 and so on when the user or a reviewer sent the
+   work back. Say so when the session cannot write files.
 2. Then close the final message with the same lines under `Retro`, at most five, and
    nothing after them:
    - What cost time or went wrong, if anything (at most two lines).

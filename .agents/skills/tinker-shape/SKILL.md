@@ -28,7 +28,7 @@ never invent screenshots, usability findings or user research.
    the same permission again. Stop only for a material unresolved decision or
    an action outside the authorization. For design-only work, deliver the design.
 6. End with the [retro](../../../policies/retro.md): first save its lines, with
-   the policy's front matter, to the Tinker checkout's
+   the policy's front matter, to the Tinker root's
    `.tinker/retros/<yyyy-mm-dd>-<slug>-shape.md`, then close the final message with
    them.
 

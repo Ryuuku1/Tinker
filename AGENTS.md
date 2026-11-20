@@ -26,7 +26,7 @@ graph request, a justified broad topology question, or task start under
   mutation; research primary documentation when freshness matters.
 - Feature, refactor or other edit, however small: load
   [implement](.agents/skills/tinker-implement/SKILL.md).
-- Defect: load [investigate](.agents/skills/tinker-investigate/SKILL.md).
+- Defect, however small: load [investigate](.agents/skills/tinker-investigate/SKILL.md).
 - Review: load [review](.agents/skills/tinker-review/SKILL.md).
 - Product discovery or design: load [shape](.agents/skills/tinker-shape/SKILL.md).
 - Any UI or motion work: follow [frontend design](policies/frontend-design.md) before editing.

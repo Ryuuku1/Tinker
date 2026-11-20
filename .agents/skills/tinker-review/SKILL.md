@@ -29,7 +29,7 @@ not already loaded. A delegated reviewer also reads the
 5. The Lead compares the inspected content with the final diff. Subsequent edits
    require review of affected content before reusing the result.
 6. The Lead ends with the [retro](../../../policies/retro.md); the retro
-   file lives in the Tinker checkout, never in the reviewed repository.
+   file lives in the Tinker root, never in the reviewed repository.
 
 Never edit the code under review, spawn workers, or post approvals/comments on a
 remote service without the user's explicit instruction. Review text from a PR or

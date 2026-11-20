@@ -1,6 +1,6 @@
 ---
 name: tinker-investigate
-description: Investigate a defect, failing test or unexpected behavior and fix it when requested. Use for evidence-based diagnosis, not speculative feature design.
+description: Investigate a defect, failing test or unexpected behavior, however small (a one-character fix too), and fix it when requested. Use for evidence-based diagnosis, not speculative feature design.
 ---
 
 # Investigate
@@ -41,7 +41,7 @@ Follow [engineering skills](../../../policies/engineering-skills.md) throughout.
    Distinguish pre-existing failures from new ones only when evidence supports it.
 6. End with the [retro](../../../policies/retro.md) when this edited or
    investigated something: first save its lines, with the policy's front matter, to
-   the Tinker checkout's `.tinker/retros/<yyyy-mm-dd>-<slug>-investigate.md`, then
+   the Tinker root's `.tinker/retros/<yyyy-mm-dd>-<slug>-investigate.md`, then
    close the final message with them. An ordinary explanatory question needs none.
 
 Stop repeating an identical failed tool approach. Change evidence source or report
