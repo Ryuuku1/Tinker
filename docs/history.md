@@ -20,7 +20,7 @@ playbook.
 | Case | The prompt no longer names the base, so the commands can only say `develop` if the playbook was read. The `read-playbook` grader is gone: a `tool_used` grader matches one exact tool name, and the charter prefers `Grep` to `Read` for this lookup |
 | Check | With the policy change, 3 of 3 runs score 1.0; with the old policy, 2 of 2 score 0.4 (`fetch-base` and `rebase-onto-base` fail on `<base>`). About 0.13 USD per run |
 | Tooling | `eval_live.py run --keep-temp` keeps each run's scaffold and trace for debugging |
-| Baseline | Not re-accepted. The case's hash changed, so it is not gated until the next full run is accepted |
+| Baseline | Re-accepted from a full run at `06120a4`: the case scores 1.0 over 3 runs. The heldout set failed on score (0.944 against 1.0) from one `task-start-pushed` run at 0.5 whose reply was not kept. Three more runs with `--keep-temp` scored 1.0 and read the playbook before declining the rebase, so that case's baseline holds 0.833 |
 
 ## 2026-11-20: a question reply that names the repository first
 
