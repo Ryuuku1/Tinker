@@ -37,7 +37,8 @@ never invent screenshots, usability findings or user research.
 When the user asks to be grilled, or to stress-test or close the gaps in a plan:
 walk the plan's decision tree, dependencies first. Ask one decision at a time
 (a host's question tool may batch a few independent ones), each with your
-recommended answer and its tradeoff. Answer from the code, docs or history
+recommended answer and its tradeoff; a follow-up that depends on the answer waits
+for it. Answer from the code, docs or history
 whatever they can settle, and say what you looked up; only real choices reach the
 user. Keep a running list of settled decisions. Change nothing until the user
 confirms the summary as shared understanding; then deliver the brief as in step 4.

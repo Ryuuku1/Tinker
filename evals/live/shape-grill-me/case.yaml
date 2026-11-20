@@ -27,7 +27,18 @@ graders:
     input_match: 'product[\\/]'
     min: 0
     max: 0
-  - name: one-question-with-recommendation
+  # The reply says what the code settles (notes live in ~/.notes.json) instead of asking it.
+  # ponytail: a reply that names the file and still asks where notes are stored passes; a judge clause if one appears.
+  - name: states-what-the-code-settles
+    type: regex
+    pattern: 'notes\.json'
+  - name: recommends-an-answer
+    type: regex
+    pattern: 'recommend'
+    flags: i
+  # One fact only. The old judge also weighed storage, the recommendation and change claims, and failed replies that
+  # met every clause when they previewed later questions or closed by asking the same question again.
+  - name: one-decision-now
     type: llm
-    criteria: The final message asks the user exactly one decision question (a single numbered or lettered list of options for that one decision is fine) and gives its recommended answer with a short reason. It does not ask anything the code answers - such as where or in which format notes are stored (a JSON file written by notes/store.py) - and does not claim to have changed any file.
+    criteria: 'The final message asks the user to settle one decision now. Count decisions, not question marks: a heading question and a closing line that asks the same thing again in other words are one decision, and its options, an "or something else?" and a preview of topics for later turns are all part of it. It fails only when it also asks the user to settle a different decision now, for example "Which one? If A, do you also accept this tag syntax?".'
     weight: 2

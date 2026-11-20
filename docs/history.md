@@ -7,6 +7,23 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-20: a grill-me judge that counts decisions
+
+`shape-grill-me` scored 0.6 on 5 of the 24 distinct replies that results keep in the
+judge's `evidence`, always on `one-question-with-recommendation`. That judge checked four
+facts at once: one question, a recommendation, nothing the code answers, and no claim of
+a change. Four of the five that failed were right. They previewed later questions as a list, or closed by asking the
+first question again, and passing replies did both too. The fifth really asked a second
+decision: "Which one? If A, do you accept ...?".
+
+| Area | Decision |
+| --- | --- |
+| Graders | Two facts became regexes on the reply: it names `notes.json` (what the code settles) and it recommends. The judge `one-decision-now` keeps one fact, written to count decisions rather than question marks. The change claim is left to the Write/Edit graders |
+| Skill | Grill mode: "a follow-up that depends on the answer waits for it" |
+| Eval runner | `--keep-temp` now reaches adaptive reruns and baseline top-ups. The failing run was a rerun and had left no trace |
+| Check | Offline, three haiku votes per reply with the eval's criterion (an approximation of its judge prompt). Old criterion: 8 of the 23 right replies drew a FAIL vote. New one: all 23 pass unanimously, the bundled reply fails unanimously, and two made-up two-decision replies fail. The regexes match all 24. Live: 6 of 6 runs at 1.0, every vote PASS |
+| Baseline | The case's grader changed, so it is not gated until a full run re-accepts it |
+
 ## 2026-11-20: a pushed-branch grader that reads a guard as a guard
 
 `task-start-pushed` failed the heldout gate on one run at 0.5. Six runs with
