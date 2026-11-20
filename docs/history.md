@@ -20,7 +20,7 @@ as running it.
 | --- | --- |
 | Grader | `unless` and `only ... if/when` in the sentence now spare it, as a negation does. `if` or `when` alone still fails ("When the fetch ends, I run `git rebase`") |
 | Check | Offline, with both Python's and Node's regex: all 9 kept `task-start-pushed` replies pass, the one that failed included. Twelve probe sentences, seven unconditional rewrites among them, all come out right. 11 of 13 kept `task-start-rebase` replies are still caught. The other two state the rebase only as a guard, which this grader cannot tell from a decision; the old one caught them by the same reading that failed the right reply. Live: 3 of 3 runs at 1.0 |
-| Baseline | The case's hash changed, so it is not gated until the next full run is accepted |
+| Baseline | Re-accepted from a full run at `16f608d` with `--keep-temp`: both sets pass, heldout at 1.0 over 5 runs, and the case at 1.0 over 3 |
 
 ## 2026-11-20: a task-start answer that reads the playbook
 
