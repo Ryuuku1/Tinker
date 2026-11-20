@@ -7,6 +7,22 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-20: fewer agents and skills
+
+Phases 3 and 4 of the 2026-11-20 audit of Tinker. Every native agent descriptor, skill
+description and loaded policy costs context in every chat; the cuts keep what has a
+distinct tool set or isolates noisy context, and fold the rest into the workflows.
+
+| Area | Decision |
+| --- | --- |
+| Front door | The team skill is gone: status and schedules are front door sections. They were one routing choice with two entry points |
+| Specialists | Four roles remain: Engineer (writes), Explorer (cheap search), Researcher (bounded question) and Reviewer (independent read). Designer, Product Manager, Technical Writer, Test Engineer and Delivery Engineer had the Lead's own tools and no separate context to protect; their guidance moved into shape, artifacts, implement and the engineer charter |
+| Retro | The retro is its own policy, so a workflow end loads it without the learn pass |
+| Routines | Weekly and monthly routines are gone; the generic plan and the daily graph refresh remain |
+| Offline catalog | `evals/cases.json`, its grader, suite and fixtures are gone: the live cases cover the same behaviors with a real agent |
+| Learn pass | The retros' candidate lessons were already covered by a policy or a workflow step, or belong in a product playbook. The strongest (stage only the task's paths in a checkout another session shares) scored 1.0 on base in a draft live case, so no rule was added; the lesson stays in that product's notes |
+| Open | Researcher web tools without the project instructions, and splitting the task start out of the workspace policy, need host-specific installer changes the Windows eval cannot measure |
+
 ## 2026-11-20: gate quick wins, stale text and line endings
 
 Phase 2 of the 2026-11-20 audit of Tinker: the fixes that needed no design decision.
