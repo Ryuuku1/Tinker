@@ -444,6 +444,8 @@ def run(args, root, temp=None):
         command += ["--tag", *args.tag]
     if args.runs:
         command += ["--runs", str(args.runs)]
+    if args.keep_temp:
+        command += ["--keep-temp"]
     print(f"Run folder: {run_dir} ({total} agent runs)", flush=True)
     code = subprocess.run(command, cwd=bundle, env=env).returncode
     if not result.is_file():
@@ -704,6 +706,8 @@ def parser():
     r.add_argument("--accepted", help=f"baseline whose short cases --adaptive re-runs (default {LIVE.as_posix()}/"
                                       "accepted.json)")
     r.add_argument("--force", action="store_true", help="skip the five-hour usage check")
+    r.add_argument("--keep-temp", action="store_true",
+                   help="keep each run's scaffold and trace (tracePath in the result) for debugging")
     r.add_argument("--percent-per-run", type=float, default=0.4,
                    help="share of the five-hour window one agent run is assumed to use (default 0.4)")
     g = sub.add_parser("gate", help="compare a result with the accepted baseline")

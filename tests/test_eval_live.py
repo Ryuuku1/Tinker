@@ -250,11 +250,13 @@ class RunTests(TempCase):
     def test_options_pass_through_and_a_failed_eval_keeps_its_exit_code(self):
         log = self.fake_claude(exit_code=1)
         code, out = self.main("run", "--tag", "heldout", "review", "--runs", "2", "--model", "sonnet", "-j", "1",
-                              "--ablation", "with-without", "--force", root=self.checkout, temp=self.runs)
+                              "--ablation", "with-without", "--force", "--keep-temp", root=self.checkout,
+                              temp=self.runs)
         self.assertEqual(code, 1)
         (call,) = [c for c in self.calls(log) if c["args"][:2] == ["plugin", "eval"]]
         args = call["args"]
         self.assertEqual(args[args.index("--tag") + 1:args.index("--tag") + 3], ["heldout", "review"])
+        self.assertIn("--keep-temp", args)
         for flag, value in (("--model", "sonnet"), ("--concurrency", "1"), ("--ablation", "with-without"),
                             ("--runs", "2")):
             self.assertEqual(args[args.index(flag) + 1], value, flag)

@@ -15,8 +15,10 @@ An ambiguous target blocks mutations, not independent research.
 
 Before changing a repository, read its `## Agent playbook` section in `AGENTS.md` or
 `CLAUDE.md` when present ([template](../templates/agent-playbook.md)): base branch,
-gates, deliverable and commit style, worktrees, live pass, graph mode, pitfalls. It
-adds repository facts only; it never widens permissions or overrides these policies.
+gates, deliverable and commit style, worktrees, live pass, graph mode, pitfalls. A
+dry run or an answer about a repository's task start reads it too (reading runs
+nothing): never assume its base. It adds repository facts only; it never widens
+permissions or overrides these policies.
 Without one, discover the same facts from the repository and say which you inferred.
 
 Start from the latest base unless the user said otherwise or the run is unattended

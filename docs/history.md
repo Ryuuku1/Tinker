@@ -7,6 +7,21 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-20: a task-start answer that reads the playbook
+
+`task-start-rebase` had failed `read-playbook` in every stored run since 19 October.
+Asked to list the task-start commands, the agent answered from the workspace policy
+alone and used the base the prompt gave it, or `<base>`, without opening the target's
+playbook.
+
+| Area | Decision |
+| --- | --- |
+| Policy | The task start now says a dry run or an answer about a repository's task start reads its playbook too, and never assumes the base. A similar line in the question route of `AGENTS.md` changed nothing (3 of 3 runs still skipped the playbook), so `AGENTS.md` is unchanged |
+| Case | The prompt no longer names the base, so the commands can only say `develop` if the playbook was read. The `read-playbook` grader is gone: a `tool_used` grader matches one exact tool name, and the charter prefers `Grep` to `Read` for this lookup |
+| Check | With the policy change, 3 of 3 runs score 1.0; with the old policy, 2 of 2 score 0.4 (`fetch-base` and `rebase-onto-base` fail on `<base>`). About 0.13 USD per run |
+| Tooling | `eval_live.py run --keep-temp` keeps each run's scaffold and trace for debugging |
+| Baseline | Not re-accepted. The case's hash changed, so it is not gated until the next full run is accepted |
+
 ## 2026-11-20: a question reply that names the repository first
 
 `front-door-question` scored 0.833 in the run that re-accepted the baseline. The fault
