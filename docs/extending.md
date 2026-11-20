@@ -25,7 +25,7 @@ the worker budget.
 Create `.agents/skills/<unique-name>/SKILL.md`, with `name` matching its folder and
 a short `description` identifying when to use it. Keep workflow content focused;
 link shared policy instead of copying it. Relative links resolve from the skill
-directory. Update the Lead's routing links and the intentional eight-skill package
+directory. Update the Lead's routing links and the intentional seven-skill package
 check only when the new workflow genuinely deserves expansion. The Claude manifest
 already points at the canonical parent directory.
 
@@ -86,16 +86,12 @@ baseline. `tests/test_eval_live.py` checks every case's structure and scaffold w
 a model. The learn pass follows the same rules automatically
 ([learning policy](../policies/learning.md)).
 
-For every host, change behavior against the `regression` cases in `evals/cases.json`; keep `held-out`
-cases for acceptance only, and never edit one to make a change pass (a test pins their
-digest). Record observed runs, write a suite manifest and run `python evals/suite.py`;
-compare two manifests with `python evals/suite.py compare` only when host, model, case
-definitions and configuration match. See the [evaluation guide](../evals/README.md).
-Structural checks verify packaging, not agent compliance. Keep failed comparisons
+Codex and Antigravity have no behavioral eval: structural checks verify packaging,
+not agent compliance. Keep failed comparisons
 visible; changing the accepted baseline cannot turn a regression into evidence of
 improvement. Report missing live runs as `not-verified` for each affected host.
-Maintenance routines (weekly maintenance, monthly upgrade scan, daily graph refresh)
-are opt-in prompt templates in [routines](../templates/routines.md).
+Scheduled runs (a role's task on a repository, or the daily graph refresh) are opt-in;
+[routines](../templates/routines.md) says how to create one.
 
 ## Upgrade safely
 

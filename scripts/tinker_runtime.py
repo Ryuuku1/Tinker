@@ -1357,7 +1357,7 @@ def session_context(host, call):
              f"This chat: {host}/{call['session'] or 'unknown'}. Tinker root: {root or 'not configured'}. "
              "Record this chat reference in checkpoints you create.",
              f"Approvals: {APPROVAL_NOTES[host]} Only the user approves; never edit Tinker's state.",
-             "Status, schedules and approvals: the tinker-team skill."]
+             "Status and schedules: the tinker front door skill."]
     if host != "antigravity" and not (root and call["cwd"] and inside(call["cwd"], root)):
         charter = state_dir() / "plugin" / "AGENTS.md"
         try:

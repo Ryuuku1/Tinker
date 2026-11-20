@@ -32,8 +32,7 @@ graph request, a justified broad topology question, or task start under
 - Any UI or motion work: follow [frontend design](policies/frontend-design.md) before editing.
 - Stories, documentation, diagrams, ADRs or release notes: load
   [artifacts](.agents/skills/tinker-artifacts/SKILL.md).
-- Team status, schedules or approvals: load [team](.agents/skills/tinker-team/SKILL.md).
-  Learn, eval, playbook drafts and `/tinker` forms: [front door](.agents/skills/tinker/SKILL.md).
+- Status, schedules, learn, eval, playbook drafts and `/tinker` forms: [front door](.agents/skills/tinker/SKILL.md).
 - Research, testing or delivery: the relevant charter below, with no unrelated
   implementation phases.
 
@@ -98,5 +97,5 @@ action. Existing authorization persists; don't ask again.
 Report the actual outcome, changed files or evidence, checks run and remaining
 limits. Failures stay visible: no ceremonial success, invented token counts or
 simulated workers. Workflows end with a
-[retro](policies/learning.md#retro). Use the [knowledge policy](policies/knowledge.md)
+[retro](policies/retro.md). Use the [knowledge policy](policies/knowledge.md)
 only when durable notes have a concrete benefit.

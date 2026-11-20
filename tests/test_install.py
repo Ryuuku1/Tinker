@@ -133,7 +133,7 @@ class GeneratorTests(unittest.TestCase):
         for lead in ("AGENTS.md", "rules/AGENTS.md"):
             tree = install_apps.charter_tree(ROOT, lead_path=lead)
             self.assertIn(lead, tree)
-            self.assertIn("skills/tinker-team/SKILL.md", tree)
+            self.assertIn("skills/tinker/SKILL.md", tree)
             for rel, text in tree.items():
                 for target in re.findall(r"\]\(([^\s)]+)\)", text):
                     if target.startswith(("https://", "http://", "#")):
@@ -159,7 +159,7 @@ class RenderTests(InstallCase):
         state = self.home / ".tinker"
         self.assertEqual((state / "runtime" / "tinker_runtime.py").read_bytes(), (ROOT / "scripts" / "tinker_runtime.py").read_bytes())
         bundle = state / "plugin"
-        for rel in (install_apps.MARKER_FILE, "AGENTS.md", "skills/tinker-team/SKILL.md", "agents/reviewer.md",
+        for rel in (install_apps.MARKER_FILE, "AGENTS.md", "skills/tinker/SKILL.md", "agents/reviewer.md",
                     ".claude-plugin/plugin.json", ".claude-plugin/marketplace.json", "plugin.json",
                     ".agents/plugins/marketplace.json", "hooks/claude.json", "hooks/codex.json"):
             self.assertTrue((bundle / rel).is_file(), rel)
@@ -207,12 +207,12 @@ class RenderTests(InstallCase):
         brew = "/opt/homebrew/opt/python@3.12/bin/python3.12"  # where Homebrew keeps it on macOS
         self.assertTrue(install_apps.SAFE_PATH.match(brew), "Antigravity must accept Homebrew's interpreter")
         tree = install_apps.charter_tree(ROOT, python=brew)
-        skill, team = tree["skills/tinker/SKILL.md"], tree["skills/tinker-team/SKILL.md"]
+        skill = tree["skills/tinker/SKILL.md"]
         if os.name == "nt":
             self.assertIn("`python scripts/reload.py", skill)
         else:
             self.assertIn(f"`{brew} scripts/reload.py", skill)
-            self.assertIn(f'`{brew} "', team)
+            self.assertIn(f'`{brew} "', skill)
             for text in tree.values():
                 self.assertNotRegex(text, r"(?<![\w.-])python (?=scripts/|\")")
 
@@ -784,10 +784,9 @@ class InstanceTests(InstallCase):
                 self.assertEqual(handler["args"][-2:], ["--instance", "personal"])
                 self.assertEqual(Path(handler["args"][2]), state / "runtime" / "tinker_runtime.py")
         front = (bundle / "skills" / "tinker" / "SKILL.md").read_text(encoding="utf-8")
-        team = (bundle / "skills" / "tinker-team" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("`root` in `~/.tinker-personal/config.json`", front)
-        self.assertIn('scripts/tinker_runtime.py" --instance personal`', team)
-        self.assertNotRegex(front + team, r"~/\.tinker(?![\w-])")
+        self.assertIn('scripts/tinker_runtime.py" --instance personal`', front)
+        self.assertNotRegex(front, r"~/\.tinker(?![\w-])")
         env = dict(os.environ, USERPROFILE=str(self.home), HOME=str(self.home))
         runtime = [PYTHON, "-I", "-S", str(state / "runtime" / "tinker_runtime.py")]
         status = subprocess.run([*runtime, "--instance", "personal", "status"], capture_output=True, env=env,

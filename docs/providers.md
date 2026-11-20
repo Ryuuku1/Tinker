@@ -17,7 +17,7 @@ indexing. A missing or failed graph is reported while source inspection continue
 In the desktop app add/open this checkout as the project. In a terminal start
 `codex --add-dir <absolute-product-path>` here. Trust the project when appropriate
 so project configuration loads. AGENTS.md provides Lead behavior, .agents/skills/
-contains eight skills, and .codex/agents/ defines nine native specialists.
+contains seven skills, and .codex/agents/ defines nine native specialists.
 The project sets no helper cap of its own (Codex's default applies; the Lead sizes
 the team); each specialist disables its own multi-agent tools. Reader roles request read-only sandboxing and disable the shell
 feature; writers request workspace-write. No model is pinned.
@@ -101,7 +101,7 @@ Sources: [imports](https://code.claude.com/docs/en/memory),
 Open this checkout as a project. In Customizations inspect the workspace rule,
 skills and custom agents. The .agents/rules/tinker.md rule uses
 `trigger: always_on` and references `@../../AGENTS.md` relative to the rule file.
-Eight skills remain in .agents/skills/; nine descriptors live in .agents/agents/.
+Seven skills remain in .agents/skills/; nine descriptors live in .agents/agents/.
 These are distinct from the retained Gemini CLI descriptors.
 
 For Antigravity 2.0, confirm this checkout is an active Project folder, then
@@ -222,7 +222,7 @@ gone; the bundle stays while Claude or Codex still registers it. It never delete
 the runtime script: open chats keep running it, and a missing script makes Python
 exit 2, which Claude and Codex treat as a block. `apps.json` stays as the runtime's
 ownership record. Restart the apps, then delete `~/.tinker` yourself if unwanted.
-Scheduled runs start with a marker that makes them unattended. The team skill builds
+Scheduled runs start with a marker that makes them unattended. The front door builds
 schedule plans and the host's own scheduler runs them; Antigravity scheduling is
 manual and unverified.
 
@@ -279,7 +279,7 @@ acceptance cases succeed.
 | Host discovery | Live 2026-09-23/24: skills and eight agents loaded; plugin validation passed | Desktop task loaded AGENTS.md and skills (2026-09-23); CLI 0.146.0 present, not run live | Not verified (no scoped live interface, no `agy` on PATH on 2026-09-26) |
 | Tool restrictions | Requested by descriptors; not verified live | Same | Same |
 | Hook behavior | Live 2026-09-24 for the runtime before this refactor (context, ask, block in default and bypass modes, session end). The 2026-09-26 runtime: sample-payload tests. The output trim (2026-11-17): sample-payload tests only, not yet checked in an installed app | Documented formats and shell self-tests only | Documented formats and shell self-tests only (`cmd /c` on Windows, `sh -c` elsewhere) |
-| Task execution | The offline catalog (`evals/cases.json`) not run; live baseline accepted 2026-11-17 (`evals/live/accepted.json`: regression 0.979 over 28 runs, heldout 0.889 over 5, model opus) | Not verified (a delegation probe timed out; see below) | Not verified |
+| Task execution | Live baseline accepted 2026-11-17 (`evals/live/accepted.json`: regression 0.979 over 28 runs, heldout 0.889 over 5, model opus) | Not verified (a delegation probe timed out; see below) | Not verified |
 
 Earlier Codex notes: a read-only smoke run recognized the Lead, roles, skills and
 limits from project context; a disposable feature/delegation probe timed out after

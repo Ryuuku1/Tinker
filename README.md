@@ -201,9 +201,8 @@ lists the reviewed versions and how to install the two plugins.
 
 #### Routines
 
-Ask `tinker schedule defaults` to set up, in your host's own scheduler, the weekly
-maintenance (retros review, stale notes, up to three proposed improvements), the
-monthly upgrade scan and a daily graph refresh for projects with `Graph: auto`
+Ask `tinker schedule <what> <when>` to create, in your host's own scheduler, a role's
+run on a repository or a daily graph refresh for projects with `Graph: auto`
 ([routines](templates/routines.md)). They run unattended, so they only report.
 
 #### First live eval baseline (needed for `/tinker learn`)
@@ -243,7 +242,7 @@ more often, `0` removes it); on macOS and Linux the installer prints the crontab
 to add instead. `python scripts/update.py --schedule` and `--unschedule` manage it
 directly and never touch a task that runs another checkout's script.
 
-`team status` shows any app still running an older copy. Your local state under
+`/tinker status` shows any app still running an older copy. Your local state under
 `.tinker/` (notes, checkpoints, retros, graphs, eval results) is git-ignored and
 survives pulls.
 
@@ -289,14 +288,14 @@ hosts, invoke the `tinker` skill or just say the form ("tinker status").
 | --- | --- |
 | `/tinker <task>` | Routes the task to the right workflow in this chat; a question gets a direct answer with `path:line` evidence |
 | `/tinker` | Where you stand: branch, changed files, open checkpoints and up to three next steps |
-| `/tinker status` | Health (checkout behind its remote at the last update check, stale installs, routines that stopped reporting), install state, open checkpoints, recent retros, the eval baseline, the latest maintenance report, cost per workflow |
+| `/tinker status` | Health (checkout behind its remote at the last update check, stale installs), install state, open checkpoints, recent retros, the eval baseline, the newest report, cost per workflow |
 | `/tinker update` | Checks whether this checkout is behind its remote and gives you the command that pulls and reinstalls |
 | `/tinker reload [path ...]` | Pulls the default branch and removes worktrees and branches proven merged; reports what it kept |
 | `/tinker remember <fact>` | Saves the fact as a knowledge candidate that every host reads |
 | `/tinker playbook <repo>` | Drafts that repository's `## Agent playbook` section for your approval |
 | `/tinker learn [focus]` | Turns recent retros into at most three gated edits on a `tinker/learn-<date>` branch |
 | `/tinker eval [args]` | Runs the live eval cases and the gate (asks first before more than 20 runs) |
-| `/tinker schedule <what> <when>` | Creates a routine in the host's scheduler; `schedule defaults` offers the standard ones |
+| `/tinker schedule <what> <when>` | Creates a scheduled run in the host's scheduler: a role's task on a repository, or the daily graph refresh |
 | `/tinker help` | Lists these forms |
 
 ### Your team
@@ -325,12 +324,12 @@ only its own charter (no `CLAUDE.md`); everything else uses your session's model
 
 ### Workflows
 
-Seven workflows sit behind the front door: **shape** (briefs, user flows and
+Six workflows sit behind the front door: **shape** (briefs, user flows and
 acceptance criteria, plus a grill mode that settles a plan one decision at a time and
 looks up what the code already answers), **implement**, **investigate**, **review**,
 **artifacts** (user stories, documentation, diagrams, ADRs and release notes, saved as
-Markdown first, GitHub issues or a project board only on approval), **Graphify** and
-**team** (status, schedules, approvals, lesson reviews). Implementation and review
+Markdown first, GitHub issues or a project board only on approval) and **Graphify**;
+the front door itself covers status, schedules and lesson reviews. Implementation and review
 follow a minimalism ladder: does the code need to exist, does the codebase or the
 standard library already cover it, and never trim validation or error handling to
 save lines. Research, testing and delivery use their charters directly. Running UI,
@@ -436,12 +435,12 @@ ignored `.tinker/knowledge/`; checkpoints and notes never enter product reposito
 | Path | Holds |
 | --- | --- |
 | `AGENTS.md` | The Lead charter, loaded in every session |
-| `.agents/skills/` | The front door and the seven workflows |
+| `.agents/skills/` | The front door and the six workflows |
 | `roles/` | Specialist charters; their front matter generates the native agents |
-| `policies/` | Evidence, safety, workspace (task start), delegation, tools, knowledge, learning, app verification |
+| `policies/` | Evidence, safety, workspace (task start), delegation, tools, knowledge, retro, learning, app verification |
 | `templates/` | Agent playbook, checkpoint, ADR, user story, routines, domain pack, recipes |
 | `scripts/` | Installer, hook runtime, self-update, Graphify helper, live eval runner, test-log filter, merged-branch cleanup, usage report |
-| `evals/` | Offline case catalog and grader; live Claude cases under `evals/live/` |
+| `evals/` | Live Claude cases under `evals/live/` and the [evaluation guide](evals/README.md) |
 | `.claude/`, `.codex/`, `.agents/agents/` | Generated native descriptors and Claude project settings; `.gemini/agents/` holds the hand-kept Antigravity reviewer |
 | `.tinker/` (ignored) | Your local state: checkpoints, retros, notes, graphs, reports, evidence |
 
@@ -452,11 +451,11 @@ external messages and destructive actions need explicit authorization. Native
 permissions enforce access; instructions alone are not a sandbox, and the installed
 gate classifies command text, so it guards against mistakes rather than sandboxing.
 
-Run `python -m unittest discover -s tests` for package, installer, grader and runner
+Run `python -m unittest discover -s tests` for package, installer, gate and runner
 checks, and `claude plugin validate --json .` for the Claude manifest (warnings about
 the missing author and the root `CLAUDE.md` are expected). These prove structure, not
-agent behavior. The [evaluation guide](evals/README.md) covers the offline cases for
-all hosts and the live Claude cases; a configured host is not automatically verified.
+agent behavior. The [evaluation guide](evals/README.md) covers the live Claude cases;
+a configured host is not automatically verified.
 See [architecture](docs/architecture.md), [design history](docs/history.md) and
 [extension guidance](docs/extending.md). Original Gemini CLI files remain as
 secondary compatibility; they do not constitute Antigravity support.

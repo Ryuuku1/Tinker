@@ -28,7 +28,7 @@ not already loaded. A delegated reviewer also reads the
    can supply independently obtained test output.
 5. The Lead compares the inspected content with the final diff. Subsequent edits
    require review of affected content before reusing the result.
-6. The Lead ends with the [retro](../../../policies/learning.md#retro); the retro
+6. The Lead ends with the [retro](../../../policies/retro.md); the retro
    file lives in the Tinker checkout, never in the reviewed repository.
 
 Never edit the code under review, spawn workers, or post approvals/comments on a

@@ -39,7 +39,7 @@ Follow [engineering skills](../../../policies/engineering-skills.md) throughout.
    reporter's scenario, not only the path the report names. Inspect the final diff and
    report actual results using [evidence policy](../../../policies/evidence.md).
    Distinguish pre-existing failures from new ones only when evidence supports it.
-6. End with the [retro](../../../policies/learning.md#retro) when this edited or
+6. End with the [retro](../../../policies/retro.md) when this edited or
    investigated something: first save its lines, with the policy's front matter, to
    the Tinker checkout's `.tinker/retros/<yyyy-mm-dd>-<slug>-investigate.md`, then
    close the final message with them. An ordinary explanatory question needs none.

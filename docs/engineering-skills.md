@@ -67,7 +67,7 @@ re-running the installer. At `8c99fa3`, `security-and-hardening` also ships
 
 ## Upkeep
 
-The monthly upgrade routine checks each pin. A skill bump follows
+A [pin check](design-skills.md#pin-check), on request, compares each pin with upstream. A skill bump follows
 [bumping a skill pin](design-skills.md#bumping-a-skill-pin): read the diff, run the
 pinned scratch install, copy its lock entries, and change `SKILL_SOURCES`. A plugin
 whose new version adds hooks, telemetry, network calls or writes outside the product

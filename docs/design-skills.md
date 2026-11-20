@@ -251,15 +251,13 @@ that run wrote, the recomputed hashes and the script are kept on the reviewing m
 
 ## Maintenance
 
-### Monthly check
+### Pin check
 
-The [monthly upgrade scan](../templates/routines.md#monthly-upgrade-scan) also compares
+There is no scheduled scan: ask for a pin check when you want one. It compares
 each `ref` in `skills-lock.json` and the two design CLIs pinned in the installer
 (`SKILLS_CLI`, `IMPECCABLE_CLI`) with upstream. That means new commits for a source
 without tags, such as Emil Kowalski's, and new tags or npm releases otherwise. It reports
-in `.tinker/reports/upgrade-<date>.md` and changes nothing. A scan scheduled before
-2026-11-19 keeps its old prompt, so update it from the template (or re-create it with
-`/tinker schedule defaults`) before it covers the pins.
+and changes nothing.
 A newer upstream is not a reason to bump. Bump when a release fixes something Tinker
 hits, or adds something the policy would route to.
 
@@ -316,7 +314,7 @@ have no `ref`, and the test rejects them. For Taste,
 
 | Risk | Guardrail |
 | --- | --- |
-| Upstream changes content silently | Full-commit pins, lock hashes, a test that pins and lock agree, the monthly report |
+| Upstream changes content silently | Full-commit pins, lock hashes, a test that pins and lock agree, the pin check |
 | A skill replaces a product's identity | Precedence puts the product first; Taste only for sites with no system; refinement preserves |
 | ui-ux-pro-max output taken as a design | It is a candidate list; its picks pass the floor and the direction, never persist on their own |
 | Taste's Stop hook holds a session | Only the Lead with writing ownership loads it; its gate ends after its rounds; the fallback pin removes it |

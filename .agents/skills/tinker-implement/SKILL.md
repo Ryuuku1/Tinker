@@ -43,7 +43,7 @@ then do the [task start](../../../policies/workspace.md#task-start): its
    actual changes, verification, limitations and a proposed commit message in the
    repository's style. Complete all authorized local work; prepare a concrete
    result before asking about a consequential action.
-7. End with the [retro](../../../policies/learning.md#retro): first save its lines, with
+7. End with the [retro](../../../policies/retro.md): first save its lines, with
    the policy's front matter, to the Tinker checkout's
    `.tinker/retros/<yyyy-mm-dd>-<slug>-implement.md`, then close the final message
    with them.

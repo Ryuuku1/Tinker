@@ -17,16 +17,16 @@ it wrote, and evaluations that keep self-improvement honest.
 Tinker is a portable operating agreement for an AI engineering team, executed by
 the host the user already runs: Codex, Claude Code or Antigravity. Instructions carry
 the team; native host capabilities carry execution and permissions; a few small
-standard-library scripts cover what instructions cannot; offline tooling and a live
-Claude Code runner judge evidence. There is no daemon, model router, orchestration CLI, provider launcher,
+standard-library scripts cover what instructions cannot; a live Claude Code runner
+judges behavior. There is no daemon, model router, orchestration CLI, provider launcher,
 database, scheduler service or simulated execution.
 
 | Part | What it is | Loaded or run |
 | --- | --- | --- |
 | `AGENTS.md` | The Lead: routing, delegation budget, boundaries | Every session (native import or rule) |
 | `roles/` | Nine specialist charters (the Explorer a cheap search-only helper); front matter generates native descriptors | Only the selected charter |
-| `.agents/skills/` | Eight skills: the `tinker` front door and the shape, implement, investigate, review, artifacts, Graphify and team workflows | Only the selected workflow |
-| `policies/` | Evidence, delegation, safety, workspace (including task start), tools, knowledge, learning (retros and the gated learn pass), application verification (including browser live passes) | When the step needs them |
+| `.agents/skills/` | Seven skills: the `tinker` front door (also status, schedules and lesson reviews) and the shape, implement, investigate, review, artifacts and Graphify workflows | Only the selected workflow |
+| `policies/` | Evidence, delegation, safety, workspace (including task start), tools, knowledge, retro, learning (the gated learn pass), application verification (including browser live passes) | When the step needs them |
 | `templates/` | Agent playbook section, checkpoint, knowledge candidate, domain pack, verification recipe, routine prompts, user story, ADR | When producing that artifact |
 | `profiles/` | Opt-in stack conventions, subordinate to the product repository | Only for matching work |
 | `.claude/`, `.codex/`, `.agents/agents/` (`.gemini/agents/` is a hand-kept reviewer) | Generated native descriptors: discovery and requested tools; `.claude/settings.json` adds destructive-Git deny rules and the Playwright configuration | By each host |
@@ -36,9 +36,9 @@ database, scheduler service or simulated execution.
 | `scripts/graphify_project.py` | Clean-commit Graphify graphs | On a graph request, or at task start when a playbook says `Graph: auto` |
 | `scripts/filter_test_log.py` | Command line for the runtime's test-log filter: keeps failures and totals of a noisy log, states what it trimmed | By the Lead, on noisy output |
 | `scripts/reload.py` | Fetches, removes worktrees and branches proven merged, fast-forwards the default branch | By the user, or `/tinker reload` (the gate asks unless `--dry-run`) |
-| `scripts/usage_report.py` | Tokens and estimated cost per workflow from Claude Code and Codex session logs | By the user, `status` and the weekly routine |
+| `scripts/usage_report.py` | Tokens and estimated cost per workflow from Claude Code and Codex session logs | By the user and `status` |
 | `scripts/eval_live.py` | Live Claude Code eval runner and gate | By the user, or `/tinker eval` and `learn` |
-| `evals/` | Case catalog, evidence grader, suite acceptance, disposable fixtures; live cases in `evals/live/` | Offline by a person; live cases through `eval_live.py` |
+| `evals/` | Live Claude Code cases in `evals/live/` and the evaluation guide | Through `eval_live.py` |
 
 ## Request flow
 
@@ -198,18 +198,8 @@ placeholder `graph.html` keeps the graph usable for queries.
 
 ## Evaluation
 
-`evals/cases.json` defines behavioral cases, each in a `regression` or `held-out` set
-and optionally limited to named hosts. `evals/grade.py` grades one observation record
-against its case from hashed, line-referenced evidence. `evals/suite.py` accepts a
-suite: expected coverage comes from the catalog, never from the runs present;
-duplicates, malformed evidence, failed checks and synthetic records presented as live
-acceptance are rejected; acceptance also needs every declared human review complete.
-Runs compare only when set, hosts, models, case definitions and configuration match,
-and comparison reports case-level changes, never an aggregate score. Cost, tokens
-and duration appear only as measured, with their source. No accepted baseline exists
-until complete observed evidence is recorded; see the [evaluation guide](../evals/README.md).
-
-For Claude Code there is also a live runner, `scripts/eval_live.py`: it snapshots the
+Behavior is measured in Claude Code only ([evaluation guide](../evals/README.md)).
+The live runner, `scripts/eval_live.py`, snapshots the
 working tree into its own temporary folder, renders the plugin bundle there and runs
 `claude plugin eval` over `evals/live/<case>/case.yaml` (regression and held-out sets),
 checking the five-hour usage window before large runs. Its `gate` compares a result

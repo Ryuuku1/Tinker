@@ -48,10 +48,10 @@ class PackageTests(unittest.TestCase):
                     self.assertTrue(dest.is_relative_to(ROOT))
                     self.assertTrue(dest.exists())
 
-    def test_eight_unique_discoverable_skills(self):
+    def test_seven_unique_discoverable_skills(self):
         skills = own_skills()
-        self.assertEqual(len(skills), 8)
-        self.assertEqual(len([p for p in package_files() if p.name == "SKILL.md"]), 8)
+        self.assertEqual(len(skills), 7)
+        self.assertEqual(len([p for p in package_files() if p.name == "SKILL.md"]), 7)
         names = set()
         for path in skills:
             text = path.read_text(encoding="utf-8")
@@ -136,17 +136,6 @@ class PackageTests(unittest.TestCase):
         lines = (ROOT / ".gitignore").read_text().splitlines()
         for pattern in (".tinker/", ".claude/settings.local.json", ".env", "__pycache__/"):
             self.assertIn(pattern, lines)
-
-    def test_cases_have_unique_identity_and_reviewable_contracts(self):
-        cases = json.loads((ROOT / "evals/cases.json").read_text())
-        self.assertGreaterEqual(len(cases), 14)
-        self.assertEqual(len({case["id"] for case in cases}), len(cases))
-        for case in cases:
-            self.assertTrue(case["prompt"] and case["setup"] and case["manual_review"])
-            fields = [rule["field"] for rule in case["rules"]]
-            self.assertEqual(len(fields), len(set(fields)))
-            self.assertIn("peak_active_helpers", fields)
-            self.assertIn("peak_active_writers", fields)
 
     def test_native_descriptors_resolve_all_nine_canonical_charters(self):
         roles = {p.stem for p in (ROOT / 'roles').glob('*.md')}
@@ -258,12 +247,12 @@ class PackageTests(unittest.TestCase):
             sys.path.remove(str(ROOT / 'scripts'))
         text = (ROOT / 'templates/routines.md').read_text(encoding='utf-8')
         plans = re.findall(r'`(schedule-plan [^`]+)`', text)
-        self.assertEqual(len(plans), 3)
+        self.assertEqual(len(plans), 2)
         for plan in plans:  # schedule-plan refuses a plan without any of these
             for option in ('--app', '--role', '--repo', '--cron', '--task'):
                 self.assertIn(option, plan)
-        crons = re.findall(r'--cron "([^"]+)"', text)
-        self.assertEqual(len(crons), 3)
+        crons = [cron for cron in re.findall(r'--cron "([^"]+)"', text) if not cron.startswith('<')]
+        self.assertEqual(len(crons), 1)
         for task in re.findall(r'- Task: (.*?)(?=\n\n|\nIn Claude|\Z)', text, re.S):
             self.assertLessEqual(len(' '.join(task.split())), 500)  # schedule-plan keeps one line of 500
         for cron in crons:
@@ -278,7 +267,7 @@ class PackageTests(unittest.TestCase):
     def test_workflows_start_from_the_playbook_and_end_with_a_retro(self):
         for skill in ('implement', 'investigate', 'review', 'shape'):
             text = (ROOT / f'.agents/skills/tinker-{skill}/SKILL.md').read_text(encoding='utf-8')
-            self.assertIn('../../../policies/learning.md#retro', text, skill)
+            self.assertIn('../../../policies/retro.md', text, skill)
         for skill in ('implement', 'investigate'):
             text = (ROOT / f'.agents/skills/tinker-{skill}/SKILL.md').read_text(encoding='utf-8')
             self.assertIn('../../../policies/workspace.md#task-start', text, skill)
@@ -288,8 +277,11 @@ class PackageTests(unittest.TestCase):
         self.assertIn('--untracked-files=no', workspace)
         self.assertIn('rev-list --count HEAD --not --remotes', workspace)
         self.assertIn('never stash, rebase or\nforce-push', workspace)
+        retro = (ROOT / 'policies/retro.md').read_text(encoding='utf-8')
+        for anchor in ('# Retro\n', '.tinker/retros/', '`round`', 'no secrets'):
+            self.assertIn(anchor, retro)
         learning = (ROOT / 'policies/learning.md').read_text(encoding='utf-8')
-        for anchor in ('\n## Retro\n', '\n## Learn\n', '.tinker/retros/', 'tinker/learn-', 'heldout'):
+        for anchor in ('\n## Learn\n', 'tinker/learn-', 'heldout'):
             self.assertIn(anchor, learning)
         playbook = (ROOT / 'templates/agent-playbook.md').read_text(encoding='utf-8')
         self.assertIn('## Agent playbook', playbook)

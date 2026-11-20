@@ -1,31 +1,11 @@
-# Retros and eval-gated learning
+# Eval-gated learning
 
-Two parts: a short retro after each workflow, kept locally as evidence, and a learn
-pass that turns that evidence into at most three small edits, kept only when the live
-evaluation gate passes. Knowledge notes and candidates stay under the
-[knowledge policy](knowledge.md); this policy covers changes to instructions.
-
-## Retro
-
-The implement, investigate, review and shape workflows end their final message with a
-`Retro` section of at most five lines, and nothing follows it:
-
-- What cost time or went wrong, if anything (at most two lines).
-- Optionally one proposed delta edit: add or change one bullet, never rewrite a section,
-  naming its destination: a Tinker skill, policy, role or template; the target
-  repository's `## Agent playbook` section ([template](../templates/agent-playbook.md));
-  or a local knowledge candidate. Do not apply it now.
-
-Before the final message, save the same lines to the Tinker checkout's ignored
-`.tinker/retros/<yyyy-mm-dd>-<ticket or 2-4 word slug>-<workflow>.md` (add `-2`, `-3`
-when taken) with front matter `date`, `workflow`, `repository` (the folder name),
-`ticket` when there is one and, for implement and investigate, `round`: 1 for a first
-delivery, 2, 3 and so on when the user or a reviewer sent the work back (weekly
-maintenance counts those as rework). Skip the file for a question answered without
-edits or investigation, and say so when the session cannot write files. Retros never leave
-this machine, but learn cites them in shared commits: no secrets, credentials,
-personal or customer data, log or database excerpts, absolute paths or task-record
-paths. Cite repository-relative paths, symbols, commands and ticket ids instead.
+The learn pass turns [retros](retro.md) and eval results into at most three small
+edits to Tinker's instructions, kept only when the live evaluation gate passes.
+Knowledge notes and candidates stay under the [knowledge policy](knowledge.md).
+A lessons review ("review recent lessons", "propose improvements") runs step 1 only
+and stops: each proposal names its evidence, destination and the live case that
+would show it works. Proposing is not applying.
 
 ## Learn
 
@@ -33,11 +13,9 @@ A request such as "learn", "learn from recent work" or the front door's `learn [
 authorizes steps 1-5 below, including the commit in step 5; nothing more. The live gate
 needs the `claude` CLI; see the [evaluation guide](../evals/README.md).
 
-1. **Evidence.** Retros dated in the last 30 days (newest first, filtered by the focus
-   when given), open items of recent checkpoints under `.tinker/tasks/`, the latest
-   weekly maintenance report and upgrade report under `.tinker/reports/` (the upgrade
-   scan's release, model and practice proposals), and failing graders in the newest
-   result under `evals/live/results/`. Pick at most three delta edits, each tied to its
+1. **Evidence.** [Retros](retro.md) dated in the last 30 days (newest first, filtered by
+   the focus when given), open items of recent checkpoints under `.tinker/tasks/`, and
+   failing graders in the newest result under `evals/live/results/`. Pick at most three delta edits, each tied to its
    evidence; skip one whose bullet already exists. With nothing to pick, say so and stop.
 2. **Route.** Edits to Tinker's own files continue below. A fact about a product
    repository becomes a proposed bullet for its `## Agent playbook` section, shown to the
@@ -68,26 +46,6 @@ needs the `claude` CLI; see the [evaluation guide](../evals/README.md).
    baseline file. The message names the evidence for each edit in words another reader
    can check without the retros, and includes the gate table. Never push or merge: the
    user reviews and merges, then reinstalls Tinker into the apps if they use it there.
-
-## Weekly maintenance
-
-The weekly routine ([routines](../templates/routines.md)) writes
-`.tinker/reports/weekly-<date>.md` and proposes; it never edits instructions.
-
-- **Usage:** the `python scripts/usage_report.py --days 7` table (tokens and estimated
-  cost per workflow from this machine's Claude and Codex transcripts; Antigravity is not
-  measured). Flag a workflow whose cost per session rose by more than a third since the
-  previous report, with the sessions that drove it.
-- **Proposal queue:** carry the previous report's open proposals forward with their id
-  (`W<yyyy-mm-dd>-<n>`), age and how many weeks new evidence supported them; evidence for
-  a queued proposal raises its count instead of adding a duplicate. Drop a proposal after
-  four weeks without new evidence. At most three new proposals a week, each with its
-  evidence, destination and live eval case. Learn picks the oldest well-supported ones.
-- **Missing cases:** a failure seen in two or more retros or results that no live case
-  covers becomes a proposed `regression` case: name, prompt idea and a `regex` grader.
-- **Notes:** revalidate knowledge notes against current source, mark disproved ones
-  stale ([knowledge policy](knowledge.md)), and give the 30-day rework rate (retros with
-  `round` above 1).
 
 Learning never changes safety rules, authorization boundaries or delegation limits
 without the user asking for that specific change.
