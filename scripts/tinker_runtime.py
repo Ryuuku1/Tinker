@@ -6,7 +6,8 @@ Hook events read the app's hook JSON on stdin:
                  PreInvocation, without the charter, which is a plugin rule there)
   prompt-submit  presence; the scheduled-run marker; `approve <id>` typed by the user
   pre-tool       the approval gate: consequential operations ask through the app, or are
-                 denied with a request id; tampering with Tinker is never allowed
+                 denied with a request id (none in Claude's bypass mode); tampering with
+                 Tinker is never allowed
   post-tool      Claude only: a long test, build or lint output reaches the model as its
                  failures and last lines; the full output is saved under the temp folder
   stop           presence; an unattended run's final message becomes its outcome
@@ -45,6 +46,8 @@ DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 CHARTER = ("AGENTS.md", "policies", "roles", "templates", "profiles", ".agents/skills")
 # Claude asks through its own prompt; in these modes nobody answers it, so the typed path is used.
 TYPED_CLAUDE_MODES = {"dontAsk"}
+# The user chose no approval prompts in these modes, so the gate adds none; tamper and unattended runs still deny.
+QUIET_CLAUDE_MODES = {"bypassPermissions"}
 
 
 # ---------------------------------------------------------------- locations and files
@@ -1563,6 +1566,9 @@ def decide(host, payload, out):
         ending = f"Report what you would have run in your final message instead: {operation}"
         return out.deny(f"{tag} This chat is an unattended run ({restricted}): consequential operations are denied."
                         f"{unjudged}{hint} {ending}")
+    if host == "claude" and call["permission_mode"] in QUIET_CLAUDE_MODES:
+        save_session(host, call["session"], record, state="working", last_action=f"ran in bypass mode ({','.join(sorted(labels))})")
+        return out.noop()
     typed = host == "codex" or (host == "claude" and call["permission_mode"] in TYPED_CLAUDE_MODES)
     if not typed:
         save_session(host, call["session"], record, state="working", last_action=f"asked approval ({','.join(sorted(labels))})")

@@ -1,4 +1,5 @@
 """Structural checks only: these do not establish live model compliance."""
+import fnmatch
 import importlib
 import json
 from pathlib import Path
@@ -313,12 +314,12 @@ class PackageTests(unittest.TestCase):
                         'git *branch* -D *', 'git *stash drop*', 'git *worktree remove*--force*'):
             for tool in ('Bash', 'PowerShell'):
                 self.assertIn(f'{tool}({pattern})', deny)
-        self.assertIn('Bash(git *push*--delete*)', ask)
-        for tool in ('Bash', 'PowerShell'):
-            # A rule ending in `:*` is the legacy prefix form, whose other `*` match literally: the colon refspec
-            # (`git push origin :branch`, a deletion) needs `:**` to reach the ask list.
-            self.assertIn(f'{tool}(git *push* :**)', ask)
-            self.assertFalse([rule for rule in ask if rule.endswith(':*)')], ask)
+        # Claude Code shows an ask rule's prompt even in bypass mode, where the user chose no prompts.
+        self.assertEqual(ask, [])
+        # A rule ending in `:*` is the legacy prefix form, whose other `*` match literally.
+        self.assertFalse([rule for rule in deny if rule.endswith(':*)')], deny)
+        for command in ('git push origin --delete feat', 'git push origin -d feat', 'git push origin :feat'):
+            self.assertFalse([rule for rule in deny if fnmatch.fnmatchcase(f'Bash({command})', rule)], command)
         env = settings['env']
         self.assertEqual(env['PLAYWRIGHT_MCP_ISOLATED'], 'true')
         for origin in env['PLAYWRIGHT_MCP_ALLOWED_ORIGINS'].split(';'):

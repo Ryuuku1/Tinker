@@ -57,13 +57,14 @@ Chats opened in this checkout also load `.claude/settings.json`: deny rules for
 destructive Git through both the Bash and PowerShell tools (force or mirror pushes,
 `reset --hard`, `clean`, `restore`, discarding checkouts and switches, forced branch
 deletion, `stash drop|clear`, forced worktree removal, ref and reflog deletion,
-`gc --prune=now`), an approval prompt before deleting a remote branch (the colon
-refspec rule is `git *push* :**`: Claude Code reads a rule ending in `:*` as its legacy
-prefix syntax with every other `*` literal, so `:*` never fired), pre-allowed
-edits under `.tinker/` (retros, tasks, reports, evidence, patches), and the official
-Playwright plugin for [live passes](../policies/app-verification.md#live-pass-in-a-browser).
-Deny rules hold in every permission mode, including bypass; the installed hook gate
-covers other projects. Install the browser plugin once with
+`gc --prune=now`), no ask rules (Claude Code shows an ask rule's prompt even in
+bypass mode, where the user chose no prompts), pre-allowed edits under `.tinker/`
+(retros, tasks, reports, evidence, patches), and the official Playwright plugin for
+[live passes](../policies/app-verification.md#live-pass-in-a-browser). A remote branch
+delete therefore prompts only in default mode, where no rule allows it. Deny rules
+hold in every permission mode, including bypass; the installed hook gate covers
+other projects, and in bypass mode it asks nothing and denies only tampering with
+Tinker's state and unattended runs. Install the browser plugin once with
 `claude plugin install playwright@claude-plugins-official`. Project settings do not
 reach chats opened elsewhere, so add the same `env` block to `~/.claude/settings.json`
 for live passes there, with an absolute output folder inside this checkout:

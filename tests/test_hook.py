@@ -473,6 +473,18 @@ class ProtocolTests(Fixture):
         self.assertIn("tinker[tamper]", err)
         self.assertEqual(self.hook("pre-tool", "claude", self.bash("git status")), (0, "", ""))
 
+    def test_claude_bypass_mode_never_asks_but_still_denies_tamper_and_unattended_runs(self):
+        bypass = {"permission_mode": "bypassPermissions"}
+        self.assertEqual(self.hook("pre-tool", "claude", self.bash("git push --force origin feat", **bypass)), (0, "", ""))
+        self.assertEqual(self.hook("pre-tool", "claude", self.bash("rm -rf build", **bypass)), (0, "", ""))
+        code, out, err = self.hook("pre-tool", "claude", self.bash("echo x > ~/.tinker/state/x.json", **bypass))
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("tinker[tamper]", err)
+        self.hook("prompt-submit", "claude", {"session_id": "u1", "cwd": str(self.repo), "prompt": MARKER + " reviewer: x"})
+        code, _, err = self.hook("pre-tool", "claude", self.bash("git push --force origin feat", "u1", **bypass))
+        self.assertEqual(code, 2)
+        self.assertIn("unattended run", err)
+
     def test_codex_denies_with_a_request_id(self):
         code, out, err = self.hook("pre-tool", "codex", self.bash("git push --force origin feat"))
         self.assertEqual(code, 2)

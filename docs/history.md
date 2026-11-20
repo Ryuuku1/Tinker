@@ -7,6 +7,16 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-20: bypass mode never prompts
+
+The user saw approval prompts in Claude Code's bypass mode and asked for none there.
+
+| Area | Decision |
+| --- | --- |
+| Project settings | The six ask rules for remote branch deletes are gone: Claude Code shows an ask rule's prompt even in bypass mode. Deny rules stay and hold in every mode; default mode still prompts for a remote branch delete because no rule allows it |
+| Hook gate | In Claude's `bypassPermissions` mode a labelled call runs with no prompt. Tampering with Tinker's state and unattended runs are still denied; `dontAsk` keeps the typed path |
+| Not removable | Claude Code still prompts in bypass mode for its own critical-path `rm`/`rmdir` checks and for questions the model asks; no setting turns those off |
+
 ## 2026-11-19: one installer for pinned skills, and live cases for the floors
 
 Follow-up to the two entries below, closing their open items.

@@ -156,8 +156,8 @@ says so. Do this once per project, and let `/tinker learn` refine it over time.
 
 - **Destructive-Git guard.** Chats opened in this checkout load `.claude/settings.json`,
   which denies force pushes, `reset --hard`, `clean`, `restore`, forced branch and
-  worktree deletion and similar, and asks before deleting a remote branch. Installed
-  mode gets the equivalent from the approval gate.
+  worktree deletion and similar. It has no ask rules, so bypass mode never stops for
+  an approval. Installed mode gets the equivalent from the approval gate.
 - **Browser live passes.** Install the official Playwright plugin once:
   `claude plugin install playwright@claude-plugins-official`. Chats opened here are
   already configured for it (isolated profile, `localhost` and `127.0.0.1` only).
@@ -406,7 +406,9 @@ deletes only files it recorded with their hash, restores the previous files if a
 update fails, and reports each app separately: one app can be current while another
 is stale or waiting for a recovery command. Force pushes, protected-branch pushes,
 branch deletion, discarding work, recursive deletes, remote changes, publishing and
-credential changes need your approval; scheduled runs cannot approve anything. It also
+credential changes need your approval; scheduled runs cannot approve anything. In
+Claude Code's bypass mode it asks nothing: you chose no prompts, so it denies only
+tampering with Tinker's state and unattended runs. It also
 schedules the daily update check of [section 7](#7-keep-it-up-to-date). See
 [per-app details and limits](docs/providers.md#optional-user-level-install).
 

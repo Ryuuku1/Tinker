@@ -96,7 +96,9 @@ pre-tool, stop and session end for all three hosts. A gated call passes four ste
    `deny`, and `{}` for no opinion. Codex parses but does not support `ask` (the hook
    fails and the tool runs), so Codex denies with a request id; the user types
    `approve <id>` in that chat. In Claude Code's `dontAsk` mode the same typed path
-   is used because no prompt appears.
+   is used because no prompt appears. In its `bypassPermissions` mode the gate adds no
+   prompt: the user chose none, so a labelled call runs, while tampering with Tinker's
+   state and restricted runs are still denied.
 
 A typed grant binds to a versioned operation fingerprint: host, chat, tool, working
 directory and the complete tool input, including edit and patch contents, argv array

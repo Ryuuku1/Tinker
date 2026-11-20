@@ -20,7 +20,8 @@ reviewable result. Never infer permission to publish from permission to implemen
 When authorized already, proceed within that scope without repetitive approval.
 The optional installed plugin's pre-tool hook applies this list natively: the app
 asks, or denies with a request id the user approves in that chat, and unattended
-runs are denied. It classifies command text, so it is a guard, not a sandbox; the
+runs are denied. Claude Code's bypass mode is the user's standing approval, so there
+the hook adds no prompt and still denies tampering and unattended runs. It classifies command text, so it is a guard, not a sandbox; the
 [enforcement boundary](../docs/providers.md#what-is-enforced-where) lists which
 actions a hook enforces and which rest on these instructions alone.
 
