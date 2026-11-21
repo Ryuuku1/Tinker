@@ -487,7 +487,7 @@ def run(args, root, temp=None):
     kept = Path(root) / LIVE / "results" / f"{run_id}.json"
     kept.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(result, kept)
-    print(f"Result: {kept}")
+    print(f"Result: {kept.as_posix()}")  # forward slashes: an unquoted backslash path breaks in bash
     return code
 
 
@@ -612,6 +612,9 @@ def uneven_cases(means, accepted):
 
 def gate(args, root):
     result_path = Path(args.result)
+    if not result_path.is_file():  # Path("") is the current folder: an empty --result reads as a permission error
+        print(f"INVALID: --result {args.result!r} is not a result file; pass the path `run` printed after Result:.")
+        return 2
     accepted_path = accepted_file(args, root)
     try:
         result = json.loads(result_path.read_text(encoding="utf-8-sig"))

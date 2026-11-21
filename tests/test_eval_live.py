@@ -244,7 +244,7 @@ class RunTests(TempCase):
         # The result is copied back into the checkout's ignored results folder.
         (kept,) = list((self.checkout / "evals" / "live" / "results").glob("*.json"))
         self.assertEqual(kept.stem, run_dir.name.removeprefix("tinker_eval_"))
-        self.assertIn(f"Result: {kept}", out)
+        self.assertIn(f"Result: {kept.as_posix()}", out)  # forward slashes survive bash and PowerShell
         self.assertEqual(json.loads(kept.read_text(encoding="utf-8"))["suite"]["judgeModel"], eval_live.JUDGE_MODEL)
 
     def test_options_pass_through_and_a_failed_eval_keeps_its_exit_code(self):
@@ -475,6 +475,10 @@ class GateTests(TempCase):
         bad = self.tmp / "bad.json"
         bad.write_text("{", encoding="utf-8")
         self.assertEqual(self.gate(bad)[0], 2)
+        for path in ("", self.tmp):  # a path the shell lost, or a folder
+            code, out = self.gate(path)
+            self.assertEqual(code, 2)
+            self.assertIn("is not a result file", out)
 
     def test_another_model_never_passes_but_can_be_accepted(self):
         self.gate(self.result(), "--accept")
