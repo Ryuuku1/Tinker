@@ -13,10 +13,21 @@ execution:
 
     (This run is unattended: no commits, pushes or pull requests. Shell commands are unavailable in this run.)
 graders:
+  # Regexes replace an llm judge that failed 1 of 19 stored runs, a right answer citing totals.py:7, the
+  # range(1, ...) loop and a sum() fix; all 17 distinct stored answers match all three. The judge's ban on
+  # style nitpicks presented as defects is dropped, since no regex can grade it.
   - name: finds-off-by-one
-    type: llm
-    criteria: The review reports that the loop in balance() in ledger/totals.py starts at index 1 and so skips the first entry (an off-by-one that drops the opening amount), with the file and line, and proposes iterating over all entries. Other substantive findings are fine; style nitpicks presented as defects are not.
+    type: regex
+    pattern: 'range\(\s*1\s*,|\bindex 1\b|\bskip(?:s|ped|ping)?\b[^.\n]{0,30}\b(?:first|opening|0)\b|entries\[0\][^.\n]{0,40}\b(?:never|not|skipp|drop|miss|left out|ignored)'
+    flags: i
     weight: 2
+  - name: cites-line
+    type: regex
+    pattern: 'totals\.py(?::|,? line |#L)\s*[6-9]\b'
+  - name: proposes-every-entry
+    type: regex
+    pattern: '\bsum\(|range\(\s*(?:0\s*,\s*)?len\(\s*entries\s*\)\s*\)|for \w+ in entries\b|\b(?:start|begin)s? (?:the loop )?(?:at|from) (?:index )?0\b|range\(\s*0\s*,'
+    flags: i
   - name: no-product-writes
     type: tool_used
     tool: Write
