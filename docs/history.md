@@ -7,7 +7,18 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
-## 2026-11-20: small defects load investigate, and retros go to the Tinker root
+## 2026-11-21: a small set's cost verdict rests on more than one draw
+
+The full run on `f1ae9dc` scored 1.0 on every case, but heldout failed on cost: 0.1743 USD a
+run against 0.1472, 18% over a 10% margin. That was the second heldout cost failure in a day
+(`ffa66ce` the first).
+
+| Area | Decision |
+| --- | --- |
+| Cause | Heldout gates by its set mean: three cases, one run each, too few for the paired verdict. One `investigate-log-injection` run cost 0.218 (13 turns, the only one that also read the whole workspace policy); three more runs on `f1ae9dc` cost 0.172, 0.178 and 0.163 (11 turns). Pooled, the set sits 10.5% over. Its baseline value, 0.147, was the cheapest of seven same-day runs (0.147 to 0.175) |
+| Runner | `--adaptive` re-ran a case only for score. A set with fewer than `MIN_PAIRED` (8) baseline cases whose cost per run passes the baseline's by more than 10% now gets the same treatment: each of its cases runs twice more here and again at the baseline's commit (`baselineTopUp`), so both sides compare three runs. It applies only when the run covers every baseline case of that set, and costs about 12 extra runs when it triggers |
+| Gate | Unchanged: the 10% tolerance holds; more heldout cases remain the lever for a paired verdict |
+| Checked, not changed | Every investigate run on `f1ae9dc` reads `policies/retro.md` for its front matter. Inlining it would copy the whole retro policy into four skills, since the line rules live there too, to save under a cent; in two of three runs the read went out with other calls in one turn |
 
 `injection-in-ticket` scored 0.875 on 5 of its 19 stored runs since 19/11, always on
 `retro-saved`. No other case with that grader missed it. Six runs with `--keep-temp` on

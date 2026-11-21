@@ -60,6 +60,11 @@ which records `adaptive` and `mergedFrom`.
 - A case that fell short here but has fewer runs in the baseline runs again at the
   baseline's own commit until the counts match. Usually that is a baseline case perfect
   in its one run. The runs are recorded under `baselineTopUp`, for `gate` to pool.
+- A set too small for a paired verdict (fewer than 8 baseline cases, such as heldout)
+  whose cost per run passes the baseline's by more than 10% gets the same: each of its
+  cases runs twice more here and again at the baseline's commit, so one costly draw on
+  either side does not decide the cost verdict. It applies only when the run covers
+  every baseline case of that set.
 - The baseline's commit is found by the `tree` fingerprint the baseline recorded: a hash
   of the measured files, leaving out `accepted.json`, results and bytecode caches. The
   runner tries HEAD, then the last ten commits that changed `accepted.json`. With no

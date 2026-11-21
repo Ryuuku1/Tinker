@@ -349,6 +349,49 @@ class RunTests(TempCase):
         doc = json.loads(kept.read_text(encoding="utf-8"))
         self.assertEqual({c["name"]: len(c["arms"]["with"]) for c in doc["cases"]}, {"alpha": 3, "beta": 1, "gamma": 3})
 
+    def small_set_baseline(self, tree, **sets):
+        """A baseline whose heldout set has two cases at 0.2 USD a run, too few for a paired verdict."""
+        cases = {"h1": {"set": "heldout", "score": 1.0, "costPerRunUsd": 0.2, "runs": 1},
+                 "h2": {"set": "heldout", "score": 1.0, "costPerRunUsd": 0.2, "runs": 1}}
+        (self.checkout / "evals" / "live" / "accepted.json").write_text(json.dumps({
+            "model": "opus", "judgeModel": eval_live.JUDGE_MODEL, "adaptive": True, "tree": tree, "cases": cases,
+            "sets": sets or {"heldout": {"score": 1.0, "costPerRunUsd": 0.2, "runs": 2}}}), encoding="utf-8")
+
+    def test_adaptive_reruns_a_small_set_that_costs_more_on_both_sides(self):
+        # Both cases scored 1.0, but h1's one costly draw lifts the set 25% over the baseline: each case runs twice
+        # more here and twice at the baseline's commit, so one draw on either side does not decide the cost verdict.
+        head, fingerprint = self.committed_fingerprint()
+        self.small_set_baseline(fingerprint)
+        log = self.fake_claude(cases=[{"name": "h1", "arms": {"with": [{"score": 1.0, "costUsd": 0.3, "turns": 3}]}},
+                                      {"name": "h2", "arms": {"with": [{"score": 1.0, "costUsd": 0.2, "turns": 3}]}}],
+                               rerun_score=1.0)
+        code, out = self.main("run", "--adaptive", "--force", root=self.checkout, temp=self.runs)
+        self.assertEqual(code, 0, out)
+        calls = [c for c in self.calls(log) if c["args"][:2] == ["plugin", "eval"]]
+        self.assertEqual([(c["args"][c["args"].index("--case") + 1], "baseline" in Path(c["cwd"]).parts)
+                          for c in calls[1:]], [("h1", False), ("h2", False), ("h1", True), ("h2", True)])
+        self.assertIn("2 case(s) cost more than the baseline", out)
+        (kept,) = list((self.checkout / "evals" / "live" / "results").glob("*.json"))
+        doc = json.loads(kept.read_text(encoding="utf-8"))
+        self.assertEqual({c["name"]: len(c["arms"]["with"]) for c in doc["cases"]}, {"h1": 3, "h2": 3})
+        self.assertEqual(doc["mergedFrom"], ["rerun-h1.json", "rerun-h2.json"])
+        self.assertEqual(doc["baselineTopUp"]["commit"], head)
+        self.assertEqual({name: len(runs) for name, runs in doc["baselineTopUp"]["cases"].items()}, {"h1": 2, "h2": 2})
+
+    def test_adaptive_leaves_a_small_set_within_its_cost_or_only_partly_run(self):
+        _, fingerprint = self.committed_fingerprint()
+        def case(name, cost):
+            return {"name": name, "arms": {"with": [{"score": 1.0, "costUsd": cost, "turns": 3}]}}
+        for label, cases in (("within 10%", [case("h1", 0.23), case("h2", 0.2)]),
+                             ("one case of the set", [case("h1", 0.5)])):
+            with self.subTest(label):
+                self.small_set_baseline(fingerprint)
+                log = self.fake_claude(cases=cases, rerun_score=1.0)
+                log.unlink(missing_ok=True)
+                code, out = self.main("run", "--adaptive", "--force", root=self.checkout, temp=self.runs)
+                self.assertEqual(code, 0, out)
+                self.assertEqual(len([c for c in self.calls(log) if c["args"][:2] == ["plugin", "eval"]]), 1)
+
     def test_adaptive_ignores_a_baseline_measured_another_way(self):
         def case(name):
             return {"name": name, "arms": {"with": [{"score": 1.0, "costUsd": 0.2, "turns": 3}]}}

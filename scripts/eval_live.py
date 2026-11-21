@@ -9,9 +9,11 @@ run   Snapshots this checkout once (tracked and untracked files, never ignored o
       case says `runs:`, --ablation none. --adaptive then runs each case that fell short, in this run or in the
       accepted baseline, twice more and merges those runs into the result; a case that fell short here but has fewer
       baseline runs runs again at the baseline's own commit (found by its tree fingerprint), so both sides end with
-      the same count and one unlucky run on either side does not decide a gate. A call that starts more than 20
-      agent runs first reads the account's five-hour usage (one Haiku turn) and refuses when the runs likely won't
-      fit; --force skips the check.
+      the same count and one unlucky run on either side does not decide a gate. A set too small for a paired verdict
+      (fewer than 8 baseline cases, such as heldout) whose cost per run here passes the baseline's by more than 10%
+      gets the same treatment for each of its cases, so one costly draw does not decide it. A call that starts more
+      than 20 agent runs first reads the account's five-hour usage (one Haiku turn) and refuses when the runs likely
+      won't fit; --force skips the check.
       Graders are judged by one pinned model (--judge-model, default an exact Haiku id), recorded in the result, so
       an alias moving to a new release never shifts the scores the gate compares.
 gate  Compares a result with evals/live/accepted.json per set (regression, heldout), averaging per case and pooling
@@ -52,6 +54,7 @@ RERUNS = 2  # --adaptive: more runs for a case that fell short, so a single miss
 JUDGE_MODEL = "claude-haiku-5-5"  # an exact id: the CLI's `haiku` alias moves with each release
 UNRECORDED_JUDGE = "haiku"  # what a result or baseline without a judgeModel was judged by (the CLI default)
 MIN_PAIRED = 8
+COST_TOLERANCE = 0.10  # the gate's default: a set's cost per run may rise this much over the baseline's
 # Bundle files only another host reads, and the hooks (an eval measures the charter, not this machine's runtime).
 NOT_IN_BUNDLE = ("hooks/", "plugin.json", ".agents/plugins/")
 RENDER = r"""
@@ -182,16 +185,36 @@ def below_one(runs):
     return sum(float(r.get("score") or 0) for r in runs) < len(runs)
 
 
-def rerun_short(args, claude, base, bundle, env, doc, run_dir, short_before=()):
-    """--adaptive: run each case that fell short here or in the baseline (short_before) RERUNS more times, unless it
+def costly_cases(doc, accepted, args):
+    """--adaptive: the cases of each set too small for a paired verdict (fewer than MIN_PAIRED baseline cases) whose
+    mean cost per run here passes the baseline's by more than COST_TOLERANCE, when this run covers every baseline
+    case of the set; there one costly draw would otherwise decide the gate."""
+    if not measured_alike(accepted, args):
+        return set()
+    here = {case.get("name"): with_runs(case) for case in doc.get("cases") or []}
+    costly = set()
+    for name, totals in (accepted.get("sets") or {}).items():
+        members = [case for case, means in (accepted.get("cases") or {}).items() if means.get("set") == name]
+        if not members or len(members) >= MIN_PAIRED or not all(complete(here.get(case)) for case in members):
+            continue
+        cost = mean([mean([float(r.get("costUsd") or 0) for r in here[case]]) for case in members])
+        if cost > float(totals.get("costPerRunUsd") or 0) * (1 + COST_TOLERANCE):
+            costly.update(members)
+    return costly
+
+
+def rerun_short(args, claude, base, bundle, env, doc, run_dir, short_before=(),
+                why="fell short, here or in the baseline"):
+    """--adaptive: run each case that fell short here or is named in short_before RERUNS more times, unless it
     already has more than RERUNS runs, and merge those runs into the result document."""
     def fell_short(case):
         runs = with_runs(case)
         return complete(runs) and len(runs) <= RERUNS and (below_one(runs) or case.get("name") in short_before)
     short = [case for case in doc.get("cases") or [] if fell_short(case)]
-    doc["adaptive"], doc["mergedFrom"] = True, []
+    doc["adaptive"] = True
+    doc.setdefault("mergedFrom", [])
     if short:
-        print(f"Adaptive: {len(short)} case(s) fell short, here or in the baseline; each runs {RERUNS} more times: "
+        print(f"Adaptive: {len(short)} case(s) {why}; each runs {RERUNS} more times: "
               f"{', '.join(c['name'] for c in short)}", flush=True)
     refusal = (None if args.force or RERUNS * len(short) <= USAGE_CHECK_ABOVE
                else usage_refusal(claude, RERUNS * len(short), args.percent_per_run))
@@ -214,16 +237,17 @@ def rerun_short(args, claude, base, bundle, env, doc, run_dir, short_before=()):
         doc["mergedFrom"].append(again_path.name)
 
 
-def baseline_topup(args, root, claude, env, doc, run_dir, accepted):
-    """--adaptive: run each case that fell short here but has fewer runs in the baseline again at the baseline's own
-    measured tree until the counts match, and record those runs as baselineTopUp for the gate to pool. A baseline
-    case perfect in its one adaptive run otherwise weighs against three runs here."""
+def baseline_topup(args, root, claude, env, doc, run_dir, accepted, costly=()):
+    """--adaptive: run each case that fell short here, or was re-run for cost (costly), but has fewer runs in the
+    baseline again at the baseline's own measured tree until the counts match, and record those runs as baselineTopUp
+    for the gate to pool. A baseline case perfect in its one adaptive run otherwise weighs against three runs here."""
     if not measured_alike(accepted, args) or not accepted.get("tree"):
         return
     needs = {}
     for case in doc.get("cases") or []:
         runs, before = with_runs(case), (accepted.get("cases") or {}).get(case.get("name"))
-        if before and complete(runs) and below_one(runs) and before["runs"] < len(runs):
+        if (before and complete(runs) and (below_one(runs) or case.get("name") in costly)
+                and before["runs"] < len(runs)):
             needs[case["name"]] = len(runs) - before["runs"]
     if not needs:
         return
@@ -455,7 +479,10 @@ def run(args, root, temp=None):
     if args.adaptive:
         accepted = read_accepted(args, root)
         rerun_short(args, claude, base, bundle, env, doc, run_dir, short_in_baseline(accepted, args))
-        baseline_topup(args, root, claude, env, doc, run_dir, accepted)
+        costly = costly_cases(doc, accepted, args)
+        rerun_short(args, claude, base, bundle, env, doc, run_dir, costly,
+                    why="cost more than the baseline in a set too small to pair")
+        baseline_topup(args, root, claude, env, doc, run_dir, accepted, costly)
     result.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8", newline="\n")
     kept = Path(root) / LIVE / "results" / f"{run_id}.json"
     kept.parent.mkdir(parents=True, exist_ok=True)
@@ -713,7 +740,7 @@ def parser():
     g.add_argument("--accept", action="store_true", help="record this result as the new baseline")
     g.add_argument("--accepted", help=f"baseline file (default {LIVE.as_posix()}/accepted.json)")
     g.add_argument("--score-tolerance", type=float, default=0.02)
-    g.add_argument("--cost-tolerance", type=float, default=0.10)
+    g.add_argument("--cost-tolerance", type=float, default=COST_TOLERANCE)
     g.add_argument("--min-paired", type=int, default=MIN_PAIRED,
                    help=f"shared cases a set needs for the paired per-case verdict (default {MIN_PAIRED})")
     return top
