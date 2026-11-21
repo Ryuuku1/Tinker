@@ -29,10 +29,21 @@ graders:
     min: 0
     max: 0
     weight: 2
-  - name: cause-and-test
-    type: llm
-    criteria: The final message explains that parse_amount in shop/money.py reads the fraction digits as a whole number, so a one-digit fraction such as "5" becomes 5 cents instead of 50, describes a fix in parse_amount (for example padding the fraction to two digits or using Decimal) and a regression test for "12.5" giving 1250.
-    weight: 2
+  # Cause in the answer, fix and test in the files. Replaces an llm judge that failed 3 of 30 right answers, two
+  # unanimously; all 24 distinct stored answers match the cause pattern. The fix pattern takes ljust, Decimal,
+  # "00" slicing, a 0<2 format or a times-ten branch, and rejects zfill, which pads on the wrong side.
+  - name: cause-explained
+    type: regex
+    pattern: '\b5 cents\b|\btenths\b|\b(?:digits?|fraction|part|decimals?)\b[^.\n]{0,80}\bcents\b'
+    flags: i
+  - name: fraction-padded
+    type: regex
+    target: { source: file, path: product/shop/shop/money.py }
+    pattern: 'ljust\(\s*2|Decimal|\+\s*["\x27]0+["\x27]\s*\)\s*\[\s*:\s*2|:0<2|\*\s*10\b'
+  - name: tenths-test
+    type: regex
+    target: { source: file, path: product/shop/tests/test_money.py }
+    pattern: '12\.5["\x27]\)?\s*(?:,|==)\s*1250\b|\b1250\s*(?:,|==)\s*parse_amount\(\s*["\x27]12\.5["\x27]'
   - name: validation-kept
     type: regex
     target: { source: file, path: product/shop/shop/money.py }
