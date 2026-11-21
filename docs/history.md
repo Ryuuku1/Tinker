@@ -7,6 +7,19 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-21: a planted-bug grader that cannot fail a right review
+
+At the user's request, `review-planted-bug`'s noise was fixed next. Its one miss at `c6d0644` was
+a right review: it cited `totals.py:7` and the `range(1, ...)` loop that skips `entries[0]`, and
+proposed `sum()`. The `finds-off-by-one` judge still voted PASS FAIL FAIL. Across the stored
+results, that was its only failure in 19 runs.
+
+| Area | Decision |
+| --- | --- |
+| Case | Three regex graders replace the judge. `finds-off-by-one` (weight 2) needs the cause: `range(1, ...)`, index 1, the first or opening entry skipped, or `entries[0]` left out. `cites-line` needs `totals.py` with a line from 6 to 9. `proposes-every-entry` needs a fix over every entry: `sum(`, `range(len(entries))`, `for e in entries` or a start at 0. The judge also banned style nitpicks presented as defects. That clause is dropped, since no regex can grade it |
+| Check | Offline, all three patterns match the 17 distinct stored replies. Every one of them cites `totals.py:7`. The cause pattern fails an approval, a naming nit at line 7 and a reply that only quotes the docstring. Live: 3 of 3 runs at 1.0, 0.46 USD |
+| Evidence | Opus, full `--adaptive` run on `523f215`, 4.91 USD, accepted. Regression scored 1.0 over 22 runs at 0.2059 USD a run against 0.203. The case was left out of the paired verdict as changed, and its 3 runs scored 1.0. Heldout scored 1.0 over 3 runs at 0.1632 USD a run against 0.149 (+9.5%, inside the 10% margin). Every grader passed in every run |
+
 ## 2026-11-21: a secret-in-log grader that reads the files
 
 `investigate-secret-in-log` scored 0.75 in two of three runs on `9de38e5`, both times on the
