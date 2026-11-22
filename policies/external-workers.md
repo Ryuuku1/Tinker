@@ -74,18 +74,22 @@ MSYS_NO_PATHCONV=1 codex exec --ignore-user-config -s workspace-write \
 
 ## Run
 
-1. Write the brief with the file tool from the [worker brief](../templates/worker-brief.md)
+1. When `codex --version` differs from the version in
+   [providers evidence](../docs/providers.md#evidence-status), recheck
+   `codex exec --help` against the commands before the first run in that chat. A flag
+   they use that is gone means the Lead does the work and reports the change.
+2. Write the brief with the file tool from the [worker brief](../templates/worker-brief.md)
    to `<run>-brief.md`. Never write brief, log or answer into the target repository.
-2. Implement only: create the worktree from the base
+3. Implement only: create the worktree from the base
    (`git -C <repo> worktree add <worktree> -b <branch> origin/<base>`) and restore its
    dependencies.
-3. Before dispatch, record the run in the checkpoint's helpers line (the actual
+4. Before dispatch, record the run in the checkpoint's helpers line (the actual
    worker contributions): `codex exec`, mode, working root, brief path, with the log
    and answer beside it. For implement this is the writing grant.
-4. Start the command with `run_in_background`. Find its process by the unique `-o`
+5. Start the command with `run_in_background`. Find its process by the unique `-o`
    path as written in the command, never by image name alone, and record the PID:
    `Get-CimInstance Win32_Process -Filter "Name = 'codex.exe'" | Where-Object { $_.CommandLine -like '*<run>.md*' }`.
-5. Limits: 10 minutes for study and plan, 20 for implement. At the limit run
+6. Limits: 10 minutes for study and plan, 20 for implement. At the limit run
    `taskkill /PID <pid> /T /F` on that PID only, then confirm
    `Get-CimInstance Win32_Process -Filter "ProcessId = <pid> OR ParentProcessId = <pid>"`
    prints nothing. Other `codex` processes belong to the user. A timeout is not a
