@@ -7,6 +7,19 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-22: Codex as an external worker, on the user's words
+
+Decision: a Claude Code Lead may hand bounded study, plan or implement work to the Codex
+CLI and verify it, only when the user asks in plain words.
+
+| Area | Decision |
+| --- | --- |
+| Adopted | An instruction-only recipe: [external workers](../policies/external-workers.md), a [worker brief](../templates/worker-brief.md) and one trigger line in the delegation policy, the only route to it, since `AGENTS.md` stays as it is. The Lead already has a shell and the gate already lists `codex exec`, so instructions are enough: there is no process to keep alive, and timeouts are cleaned up with `taskkill` on the recorded PID |
+| Trigger | Three intents ("consult Codex", "use Codex too for these tasks", "parallelize with Codex") scoped to the named tasks. Never automatic, never by quota, never offered by the Lead; a usage-limit or model failure stops dispatch in that chat until the user says to retry |
+| Commands | `--ignore-user-config` and no `-m` on every run; explicit `-s`, approval policy, effort, `-C`, `--json`, `-o` and `--ephemeral`; no resume. Implement runs in a linked worktree the Lead creates; the worker never commits, and the Lead reruns the gate and reads the diff |
+| Not adopted | A headless launcher, an orchestration CLI and provider adapter code (the earlier decisions stand), a slash command or automatic trigger, `codex review`, `codex mcp-server`, `--output-schema`, `exec resume` and `exec fork`, a live eval case |
+| Evidence | Flags read from `codex exec --help` on 0.171.0; the Windows sandbox facts measured with `codex sandbox`. The default model under `--ignore-user-config`, the token overhead and the three `exec` smoke tests are Not verified until the Codex usage limit resets ([evidence](providers.md#evidence-status)) |
+
 ## 2026-11-21: a planted-bug grader that cannot fail a right review
 
 At the user's request, `review-planted-bug`'s noise was fixed next. Its one miss at `c6d0644` was
