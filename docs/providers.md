@@ -22,6 +22,11 @@ The project sets no helper cap of its own (Codex's default applies; the Lead siz
 the team); each specialist disables its own multi-agent tools. Reader roles request read-only sandboxing and disable the shell
 feature; writers request workspace-write. No model is pinned.
 
+From Claude Code, the Lead can also run the Codex CLI (`codex exec`) as an external
+worker for study, plan or implement work when the user asks for it in plain words
+([external workers](../policies/external-workers.md)); the
+[evidence](#evidence-status) below separates what was measured from what was not.
+
 Inspect available agents, skills and effective permissions. Parent overrides can
 alter requested restrictions. Read-only filesystem mode alone does not remove
 shell, network or external MCP tools. Where a reader lacks file or web tools,
@@ -269,7 +274,7 @@ No Gemini installation or extension manifest is added.
 ## Evidence status
 
 Evidence is kept separate per kind; one kind never stands in for another. Local
-observations: Codex CLI 0.146.0, Claude Code 2.1.266 and 2.1.280, Antigravity desktop
+observations: Codex CLI 0.146.0 and 0.171.0, Claude Code 2.1.266 and 2.1.280, Antigravity desktop
 2.15.1 (observations, not version pins). No host is fully verified until its live
 acceptance cases succeed.
 
@@ -280,6 +285,26 @@ acceptance cases succeed.
 | Tool restrictions | Requested by descriptors; not verified live | Same | Same |
 | Hook behavior | Live 2026-09-24 for the runtime before this refactor (context, ask, block in default and bypass modes, session end). The 2026-09-26 runtime: sample-payload tests. The output trim (2026-11-17): sample-payload tests only, not yet checked in an installed app | Documented formats and shell self-tests only | Documented formats and shell self-tests only (`cmd /c` on Windows, `sh -c` elsewhere) |
 | Task execution | Live baseline accepted 2026-11-17 (`evals/live/accepted.json`: regression 0.979 over 28 runs, heldout 0.889 over 5, model opus) | Not verified (a delegation probe timed out; see below) | Not verified |
+
+The Codex CLI as an [external worker](../policies/external-workers.md) from Claude Code.
+The smoke tests use a disposable Git repository and a linked worktree under the user
+profile, outside the temp folder (writable in the sandbox), an outside target file next
+to it, `--ignore-user-config`, effort low and logs in `<Tinker root>/.tinker/evidence/`;
+afterwards delete that folder and file, never force-removing the worktree.
+
+| Evidence | Status |
+| --- | --- |
+| Flags the recipe uses | Verified 2026-11-22: `codex exec --help` on 0.171.0 lists every flag in the policy's commands; `exec resume` and `exec fork` list no `-s` and no `-C` |
+| User config | Verified 2026-11-22: without `--ignore-user-config` the user's config set the model (one the account rejected with HTTP 400 `model_not_found`), sandbox and effort, loaded plugins and printed config and hook warnings as `item.completed` items of type `error`; a `-s read-only` run with an explicit model wrote the requested text to its `-o` file. With the flag the warnings were gone, but that run stopped at the usage limit |
+| Sandbox (`codex sandbox -c sandbox_mode=...`, Windows, no model) | Verified 2026-11-22 with the CLI then installed (recorded as 0.146.0), not re-run on 0.171.0: in a linked worktree `workspace-write` wrote in the worktree and the temp folder and was denied elsewhere in the user profile; `read-only` was denied both; `git commit` failed on the main repository's `.git/worktrees/<name>/index.lock`; `cmd` printed errorlevel 0 after "Access is denied" |
+| JSONL events | Verified 2026-11-22: `thread.started` (with `thread_id`), `turn.started`, `item.completed` (`agent_message` or `error`), `turn.completed` (with `usage`), `turn.failed` (with the error text) |
+| Default model and token overhead under `--ignore-user-config` | Not verified: every run under the flag on 2026-11-22 stopped at the usage limit, which resets on 2026-11-23 |
+| Network inside the sandbox; a push being refused | Not verified |
+| Finding the PID by the `-o` path; `taskkill /PID <pid> /T /F` cleanup | Not verified |
+| Smoke 1, study (`-s read-only`): a question about a three-line file | Not verified. Expected: `turn.completed`, the answer in `-o`, no file changed; record `input_tokens` |
+| Smoke 2, implement (`-s workspace-write`, linked worktree): fix a one-line bug in a function that has a test command | Not verified. Expected: only the allowed file changed, the test passes when the Lead reruns it, no commit exists |
+| Smoke 3, deliberate violation (the only brief that asks for forbidden actions): write the outside target and run `git commit` | Not verified. Expected: both denied in the log, no outside file, no commit, the run still ends with `turn.completed` |
+| macOS and Linux | Not verified |
 
 Earlier Codex notes: a read-only smoke run recognized the Lead, roles, skills and
 limits from project context; a disposable feature/delegation probe timed out after

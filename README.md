@@ -318,6 +318,15 @@ work; role switching is never presented as independent review. The Explorer is t
 one cost-tiered helper: in Claude Code it runs on the small model at low effort with
 only its own charter (no `CLAUDE.md`); everything else uses your session's model.
 
+From Claude Code, the Codex CLI joins as an [external worker](policies/external-workers.md)
+only when you ask in plain words, in any language: "consult Codex" for one read-only
+second opinion, "use Codex too for these tasks", or "parallelize with Codex" to hand it
+the eligible pieces, each edit in its own worktree. It covers only the tasks you name
+("this session" means the rest of that chat); there is no command, automation or
+quota trigger, and the Lead never offers it. It verifies Codex's work, reports its
+tokens and does not ask again within that scope, though in Claude Code's default
+permission mode the installed gate still asks once per `codex exec`.
+
 ### Workflows
 
 Six workflows sit behind the front door: **shape** (briefs, user flows and
@@ -433,8 +442,8 @@ ignored `.tinker/knowledge/`; checkpoints and notes never enter product reposito
 | `AGENTS.md` | The Lead charter, loaded in every session |
 | `.agents/skills/` | The front door and the six workflows |
 | `roles/` | Specialist charters; their front matter generates the native agents |
-| `policies/` | Evidence, safety, workspace (task start), delegation, tools, knowledge, retro, learning, app verification |
-| `templates/` | Agent playbook, checkpoint, ADR, user story, routines, domain pack, recipes |
+| `policies/` | Evidence, safety, workspace (task start), delegation, external workers, tools, knowledge, retro, learning, app verification |
+| `templates/` | Agent playbook, checkpoint, worker brief, ADR, user story, routines, domain pack, recipes |
 | `scripts/` | Installer, hook runtime, self-update, Graphify helper, live eval runner, test-log filter, merged-branch cleanup, usage report |
 | `evals/` | Live Claude cases under `evals/live/` and the [evaluation guide](evals/README.md) |
 | `.claude/`, `.codex/`, `.agents/agents/` | Generated native descriptors and Claude project settings; `.gemini/agents/` holds the hand-kept Antigravity reviewer |
