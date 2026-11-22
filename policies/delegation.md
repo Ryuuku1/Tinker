@@ -3,6 +3,9 @@
 The delegation rules are summarized in [AGENTS.md](../AGENTS.md). Track actual native
 worker identities, assignments, running/stopped state and returned evidence.
 
+**External workers.** When the user says to use, consult or parallelize with Codex,
+follow [external workers](external-workers.md).
+
 ## Team size
 
 Pick the number of helpers per task for the best result per cost; there is no
