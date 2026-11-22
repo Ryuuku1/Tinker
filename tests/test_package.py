@@ -318,6 +318,45 @@ class PackageTests(unittest.TestCase):
             self.assertRegex(origin, r'^https?://(localhost|127\.0\.0\.1):\*$')  # a live pass stays local
         self.assertFalse(Path(env['PLAYWRIGHT_MCP_OUTPUT_DIR']).is_absolute())
 
+    def test_external_workers_are_opt_in_sandboxed_and_reached_from_delegation(self):
+        policy_path, brief_path = ROOT / 'policies/external-workers.md', ROOT / 'templates/worker-brief.md'
+        policy = policy_path.read_text(encoding='utf-8')
+        flat = ' '.join(policy.split())
+        # AGENTS.md stays as it is, so this delegation line is the only route to the policy
+        delegation = ' '.join((ROOT / 'policies/delegation.md').read_text(encoding='utf-8').split())
+        self.assertIn('When the user says to use, consult or parallelize with Codex, follow '
+                      '[external workers](external-workers.md).', delegation)
+        self.assertIn('(../templates/worker-brief.md)', policy)
+        self.assertTrue(brief_path.is_file())
+        self.assertTrue(' '.join(brief_path.read_text(encoding='utf-8').split('\n---\n', 1)[1].split()).startswith(
+            'You are a worker: print no Triage line, write no retro or checkpoint, spawn no helpers, never run codex'))
+        for phrase in ('"consult Codex"', '"use Codex too for these tasks"', '"parallelize with Codex"',
+                       'never automatic', 'never by quota', "never on the Lead's own initiative"):
+            self.assertIn(phrase, flat)
+        readme = ' '.join((ROOT / 'README.md').read_text(encoding='utf-8').split())
+        self.assertIn('(policies/external-workers.md)', readme)
+        for phrase in ('"consult Codex"', '"use Codex too for these tasks"', '"parallelize with Codex"'):
+            self.assertIn(phrase, readme)
+        commands = [' '.join(block.replace('\\\n', ' ').split())
+                    for block in re.findall(r'```sh\n(.*?)```', policy, re.S) if 'codex exec' in block]
+        self.assertEqual([('-s read-only' in c, '-s workspace-write' in c) for c in commands],
+                         [(True, False), (False, True)])
+        for command in commands:
+            for flag in ('--ignore-user-config', '-c approval_policy=never', '-c model_reasoning_effort=medium',
+                         ' -C <', '--json', ' -o <', '--ephemeral', ' - <'):
+                self.assertIn(flag, command)
+            for flag in (' -m ', '--model', '--add-dir', '--dangerously', '--trust', '--worktree'):
+                self.assertNotIn(flag, command)
+        for flag in ('--add-dir', '--dangerously-bypass-approvals-and-sandbox', '--dangerously-bypass-hook-trust'):
+            self.assertRegex(flat, rf'Never pass [^.]*`{flag}`')
+
+    def test_external_worker_change_names_no_model_or_user_profile_path(self):
+        for name in ('policies/external-workers.md', 'templates/worker-brief.md', 'policies/delegation.md',
+                     'docs/providers.md', 'docs/architecture.md', 'docs/history.md', 'README.md'):
+            text = (ROOT / name).read_text(encoding='utf-8')
+            self.assertNotRegex(text, r'(?i)\bgpt[-_]', name)
+            self.assertNotRegex(text, r'(?i)\b[a-z]:[\\/]+users\b', name)
+
     def test_front_door_lists_its_forms_and_routes_through_the_lead(self):
         text = (ROOT / '.agents/skills/tinker/SKILL.md').read_text(encoding='utf-8')
         for form in ('`<task>`', 'No task', '`status`', '`reload [path ...]`', '`remember <fact>`', '`learn [focus]`',
