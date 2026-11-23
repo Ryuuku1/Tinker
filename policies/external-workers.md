@@ -81,10 +81,18 @@ MSYS_NO_PATHCONV=1 codex exec --ignore-user-config -s workspace-write \
 
 ## Run
 
-1. When `codex --version` differs from the version in
-   [providers evidence](../docs/providers.md#evidence-status), recheck
-   `codex exec --help` against the commands before the first run in that chat. A flag
-   they use that is gone means the Lead does the work and reports the change.
+1. When `codex --version` differs from the version the smoke tests in
+   [providers evidence](../docs/providers.md#evidence-status) ran on, before the first
+   run in that chat:
+   - recheck `codex exec --help` against the commands; a flag they use that is gone
+     means the Lead does the work and reports the change;
+   - otherwise run one check first, inside the scope the user opened: the study
+     command with effort low on a question about a small file in the target checkout
+     whose answer the Lead knows and checks (smoke 1 without the disposable
+     repository, as study is read-only). The steps below,
+     [success and failure](#success-and-failure) and
+     [before accepting](#before-accepting) apply to it, and its tokens are reported
+     like any run.
 2. Write the brief with the file tool from the [worker brief](../templates/worker-brief.md)
    to `<run>-brief.md`. Never write brief, log or answer into the target repository.
 3. Implement only: create the worktree from the base
