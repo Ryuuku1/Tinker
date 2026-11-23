@@ -46,14 +46,16 @@ task's checkpoint UUID). Study and plan differ only in the brief:
 
 ```sh
 MSYS_NO_PATHCONV=1 codex exec --ignore-user-config -s read-only \
-  -c approval_policy=never -c model_reasoning_effort=medium \
+  -c windows.sandbox=elevated -c approval_policy=never \
+  -c model_reasoning_effort=medium \
   -C <target checkout> --json -o <run>.md --ephemeral - \
   < <run>-brief.md > <run>.jsonl 2> <run>.err
 ```
 
 ```sh
 MSYS_NO_PATHCONV=1 codex exec --ignore-user-config -s workspace-write \
-  -c approval_policy=never -c model_reasoning_effort=medium \
+  -c windows.sandbox=elevated -c approval_policy=never \
+  -c model_reasoning_effort=medium \
   -C <worktree> --json -o <run>.md --ephemeral - \
   < <run>-brief.md > <run>.jsonl 2> <run>.err
 ```
@@ -62,6 +64,11 @@ MSYS_NO_PATHCONV=1 codex exec --ignore-user-config -s workspace-write \
   model the account rejects, high effort, plugins and hooks); auth still uses
   `CODEX_HOME`. No `-m`: the provider default applies, `-m <model>` only when the
   user's own request named one, and this package never names a model.
+- `-c windows.sandbox=elevated`: `--ignore-user-config` also drops the user's Windows
+  sandbox setting, and without one Codex on Windows rejected the worker's own read
+  ("blocked by policy"). Measured with `elevated`; the CLI also accepts `unelevated`
+  and `mxc` (not measured through `exec`) and refuses unknown values. Its effect on
+  macOS and Linux is not verified.
 - `-s`, `-c approval_policy=never` (nobody can answer an approval), the effort,
   `-C <absolute path>`, `--json` (the audit log), `-o <absolute file>` (the answer),
   `--ephemeral` and the stdin prompt (`-`) are always explicit. Higher effort only
@@ -105,8 +112,9 @@ and `<run>.md` is not empty. Never trust an exit code; `item.completed` items of
   again at <time>") or a model error: stop, report the text and reset time, and do the
   work in the Lead. Never retry in a loop; dispatch nothing more to Codex in that chat
   until the user says to retry.
-- A sandbox denial in the log means the brief asked for something outside its mode:
-  fix the brief, never widen the sandbox.
+- A command "rejected: blocked by policy" in `<run>.err` means the command lacked the
+  Windows sandbox setting: fix the command. Any other sandbox denial means the brief
+  asked for something outside its mode: fix the brief. Never widen the sandbox.
 - Feedback is a fresh `codex exec` whose brief inlines the previous `<run>.md` and
   the Lead's corrections; never `exec resume` or `exec fork`.
 
@@ -115,8 +123,8 @@ and `<run>.md` is not empty. Never trust an exit code; `item.completed` items of
 One writer per working tree ([delegation](delegation.md)). While Codex holds writing
 ownership of a worktree the Lead does not edit it, and takes it back only after
 confirming the process ended. The brief forbids commit, stage and push and never asks
-Codex to try; the sandbox blocked `git commit` in a linked worktree (measured with
-`codex sandbox`, not `exec`), and push is only forbidden, not blocked. Product gates often write caches outside the worktree: a worker that cannot run the
+Codex to try; the sandbox blocked `git add` and `git commit` in a linked worktree
+(measured through `exec`), and push is only forbidden, not blocked. Product gates often write caches outside the worktree: a worker that cannot run the
 gate reports the denial verbatim, which is not a failed run; only the Lead's rerun is
 evidence of green. The brief says no network; study and plan use local sources only,
 so research that needs the web stays with the [Researcher](../roles/researcher.md).
@@ -124,6 +132,9 @@ so research that needs the web stays with the [Researcher](../roles/researcher.m
 ## Before accepting
 
 - The success test passed and the process is gone.
+- The handoff's Outcome says done. The success test also passes a blocked run
+  (measured), so blocked or partial is not a result: read why, then redo once with a
+  fixed brief or command, or do the work in the Lead.
 - `git -C <worktree> rev-list --count <base>..HEAD` prints 0, and
   `git -C <worktree> status --porcelain` lists only files the brief allowed.
 - Read the whole diff (`git -C <worktree> add -A`, then
@@ -151,14 +162,19 @@ so research that needs the web stays with the [Researcher](../roles/researcher.m
 
 - Verified 2026-11-22, `codex exec --help` on 0.171.0: every flag above exists;
   `exec resume` and `exec fork` list no `-s` and no `-C`.
-- Verified 2026-11-22 on Windows with `codex sandbox` (no model; recorded on 0.146.0,
-  not re-run on 0.171.0): `workspace-write`
-  writes in the worktree and the temp folder but not elsewhere in the user profile;
-  `read-only` writes nowhere; `git commit` in a linked worktree fails on the main
-  repository's `.git/worktrees/<name>/index.lock`; `cmd` printed errorlevel 0 after
-  "Access is denied".
-- Verified 2026-11-22: a `-s read-only` run wrote its `-o` file; with
-  `--ignore-user-config` the plugin and config warnings were gone; the event names.
-- Not verified: network in the sandbox, push being blocked, the default model and
-  token overhead under `--ignore-user-config`, the PID recipe, macOS and Linux, and a
-  full run per mode ([evidence](../docs/providers.md#evidence-status)).
+- Verified 2026-11-23 on Windows, 0.171.0, through `exec` with the commands above
+  (effort low): a study run answered with `path:line` and changed nothing; an
+  implement run changed only its allowed file and the Lead's gate rerun passed, with
+  no commit; a deliberate-violation brief had its write outside the worktree denied
+  and `git add` and `git commit` fail on `.git/worktrees/<name>/index.lock`, and still
+  ended with `turn.completed`; the PID filter found only the run's process among other
+  `codex.exe` processes. The provider default model was accepted; input tokens ran
+  from about 42k to 112k per run, mostly cached.
+- Verified 2026-11-23: without `windows.sandbox`, the worker's read was rejected and
+  the run still passed the success test, its handoff saying blocked.
+- Verified 2026-11-22 with `codex sandbox` (no model; it loads the user config, here
+  the elevated Windows sandbox): `workspace-write` also writes in the temp folder;
+  `read-only` writes nowhere; `cmd` printed errorlevel 0 after "Access is denied".
+- Not verified: network in the sandbox, push being blocked, `taskkill` at a limit
+  (no run reached one), `unelevated` and `mxc` through `exec`, macOS and Linux
+  ([evidence](../docs/providers.md#evidence-status)).

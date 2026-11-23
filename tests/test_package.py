@@ -356,8 +356,8 @@ class PackageTests(unittest.TestCase):
         self.assertEqual([('-s read-only' in c, '-s workspace-write' in c) for c in commands],
                          [(True, False), (False, True)])
         for command in commands:
-            for flag in ('--ignore-user-config', '-c approval_policy=never', '-c model_reasoning_effort=medium',
-                         ' -C <', '--json', ' -o <', '--ephemeral', ' - <'):
+            for flag in ('--ignore-user-config', '-c windows.sandbox=elevated', '-c approval_policy=never',
+                         '-c model_reasoning_effort=medium', ' -C <', '--json', ' -o <', '--ephemeral', ' - <'):
                 self.assertIn(flag, command)
             for flag in (' -m ', '--model', '--add-dir', '--dangerously', '--trust', '--worktree'):
                 self.assertNotIn(flag, command)
