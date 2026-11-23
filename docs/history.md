@@ -7,6 +7,18 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-23: what every request carries
+
+Decision: cut the cost of each request by measuring the prompt cache and by wording that keeps
+the Lead's context small, with no new always-loaded text.
+
+| Area | Decision |
+| --- | --- |
+| Adopted | Cache lines in `usage_report.py` (share read from the cache, cost split, rebuilds after it expired, compactions, a new chat's first request per folder, the helpers' share), counted by request time with each response once across files; the workflow table keeps its file-change window and the output names both. Four handoff fields in the [checkpoint template](../templates/job.md) (the last request word for word, what failed and why, what to verify first, the previous chat with a search-never-read rule), and resuming treats the handoff as a starting point. One sentence in the [delegation policy](../policies/delegation.md) on why the Lead's context costs more than a helper's reading. A test keeps `model:` out of skill and command front matter |
+| Mechanism | Every request reads the whole cached prefix and history again; a cache write is paid on a new chat, after the cache expires and after a compaction. So what enters the Lead's context is paid on every later request, while a helper's reading stays in its own context. A model switch starts a cold cache |
+| Not adopted | A cache countdown or warmer, a different cache lifetime or compaction window, a fresh-chat-after-N rule, reordering the start text, a model-choice or batching charter line, a second measuring script, third-party tools |
+| Evidence | Provider-reported usage in local transcripts, read as totals only; a fixture test showed the file-change window counting requests made before it, and the cache lines matched an independent baseline within 2% on the same window. Prices and lifetimes: the provider's prompt-caching documentation |
+
 ## 2026-11-22: Codex as an external worker, on the user's words
 
 Decision: a Claude Code Lead may hand bounded study, plan or implement work to the Codex
