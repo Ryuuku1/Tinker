@@ -7,6 +7,17 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-23: the Codex smoke tests and the Windows sandbox key
+
+Decision: the external-worker commands also set `-c windows.sandbox=elevated`, and a
+blocked handoff is not a result.
+
+| Area | Decision |
+| --- | --- |
+| Adopted | The key in both commands, because `--ignore-user-config` also drops the user's Windows sandbox setting; a "Before accepting" check that the handoff's Outcome says done; the "blocked by policy" rejection told apart from a brief that asked too much. `git add` and `git commit` are now measured as blocked through `exec`, not only through `codex sandbox` |
+| Not adopted | Dropping `--ignore-user-config` to keep the user's sandbox setting (it would bring back the user's model, sandbox mode, effort and plugins); `unelevated` or `mxc` (accepted by the CLI, not run through `exec`) |
+| Evidence | Three smoke runs and one rerun on Windows, Codex CLI 0.171.0, effort low, in a disposable lab ([evidence status](providers.md#evidence-status)): without the key the study run's read was rejected and the run still passed the success test; with it, study, implement and the deliberate violation behaved as expected. Network, a refused push, `taskkill` at a limit, macOS and Linux remain not verified |
+
 ## 2026-11-23: what every request carries
 
 Decision: cut the cost of each request by measuring the prompt cache and by wording that keeps
