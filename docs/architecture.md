@@ -37,7 +37,7 @@ Codex CLI is instructions the Lead follows with its own shell, not a launcher.
 | `scripts/graphify_project.py` | Clean-commit Graphify graphs | On a graph request, or at task start when a playbook says `Graph: auto` |
 | `scripts/filter_test_log.py` | Command line for the runtime's test-log filter: keeps failures and totals of a noisy log, states what it trimmed | By the Lead, on noisy output |
 | `scripts/reload.py` | Fetches, removes worktrees and branches proven merged, fast-forwards the default branch | By the user, or `/tinker reload` (the gate asks unless `--dry-run`) |
-| `scripts/usage_report.py` | Tokens and estimated cost per workflow from Claude Code and Codex session logs | By the user and `status` |
+| `scripts/usage_report.py` | Tokens and estimated cost per workflow from Claude Code and Codex session logs, plus prompt-cache lines by request time | By the user and `status` |
 | `scripts/eval_live.py` | Live Claude Code eval runner and gate | By the user, or `/tinker eval` and `learn` |
 | `evals/` | Live Claude Code cases in `evals/live/` and the evaluation guide | Through `eval_live.py` |
 

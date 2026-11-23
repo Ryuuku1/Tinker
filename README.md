@@ -248,7 +248,7 @@ survives pulls.
 
 ```bash
 python scripts/reload.py --dry-run [path ...]   # what a cleanup would remove; drop --dry-run to do it
-python scripts/usage_report.py --days 7         # tokens and estimated cost per workflow
+python scripts/usage_report.py --days 7         # tokens and estimated cost per workflow, and the cache lines
 ```
 
 `reload.py` fetches, removes only worktrees and branches proven merged (an ancestor of
@@ -257,7 +257,10 @@ request), keeps anything dirty, locked or in use, and fast-forwards the default 
 The installed gate asks before it runs without `--dry-run`, except in Claude Code's
 bypass mode. `usage_report.py` reads
 Claude Code and Codex session logs; Claude rows are priced at list prices, Codex rows
-show tokens only, and Antigravity is not measured.
+show tokens only, and Antigravity is not measured. Below the table, a few cache lines count
+only requests made in the window: the share read from the prompt cache, the cost split,
+rebuilds after it expired, compactions, a new chat's first request per folder and the
+helpers' share; `--cache-detail` adds the rest.
 
 ## Use it
 

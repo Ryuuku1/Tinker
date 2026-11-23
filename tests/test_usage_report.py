@@ -5,6 +5,7 @@ import os
 import sys
 import tempfile
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import unittest
 
@@ -13,11 +14,33 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import usage_report  # noqa: E402
 
 
-def assistant(message_id, request_id, model="claude-sonnet-4", content=None, **usage):
+def assistant(message_id, request_id, model="claude-sonnet-4", content=None, timestamp=None, **usage):
     usage.setdefault("input_tokens", 10)
     usage.setdefault("output_tokens", 5)
     message = {"id": message_id, "model": model, "usage": usage, "content": content or [{"type": "text", "text": "ok"}]}
-    return {"type": "assistant", "requestId": request_id, "message": message}
+    entry = {"type": "assistant", "requestId": request_id, "message": message}
+    if timestamp:
+        entry["timestamp"] = timestamp
+    return entry
+
+
+BASE = datetime.now(timezone.utc) - timedelta(days=1)
+
+
+def at(minutes=0, days_ago=0):
+    """An ISO request time, minutes after a base one day ago (or days_ago days before it)."""
+    return (BASE + timedelta(minutes=minutes) - timedelta(days=days_ago)).isoformat().replace("+00:00", "Z")
+
+
+def calls(count):
+    return [{"type": "tool_use", "name": "Read", "input": {}} for _ in range(count)] or None
+
+
+def opus(message_id, minutes, read=0, written=0, tools=0, output=1_000):
+    return assistant(message_id, message_id, model="claude-opus-5-5", content=calls(tools), timestamp=at(minutes),
+                     input_tokens=0, output_tokens=output, cache_read_input_tokens=read,
+                     cache_creation_input_tokens=written, cache_creation={"ephemeral_1h_input_tokens": written,
+                                                                          "ephemeral_5m_input_tokens": 0})
 
 
 def skill_call(name):
@@ -105,6 +128,77 @@ class UsageReportTests(unittest.TestCase):
         row = report["hosts"][0]["workflows"][0]
         self.assertEqual((row["input"], row["est_usd"]), (10, 0.0))
         self.assertEqual(report["hosts"][0]["unpriced_models"], ["mystery-1"])
+
+    def test_the_workflow_table_counts_old_rows_of_a_recent_file_and_the_cache_lines_do_not(self):
+        # The table picks transcripts by file time and counts every row in them: a chat that ran before the window
+        # and continued inside it counts in full. The cache lines count requests by their own time.
+        self.write(self.project / "s1.jsonl", [assistant("m1", "r1", timestamp=at(days_ago=20)),
+                                               assistant("m2", "r2", timestamp=at())])
+        claude = usage_report.build_report(7, self.claude, self.codex)["hosts"][0]
+        self.assertEqual(claude["workflows"][0]["requests"], 2)
+        self.assertEqual(claude["cache"]["main"]["requests"], 1)
+
+    def main_chat_and_helper(self):
+        self.write(self.project / "s1.jsonl", [
+            opus("m1", 0, written=100_000, tools=1),             # first request, all of it written
+            opus("m2", 1, read=100_000, written=10_000, tools=2),
+            opus("m3", 180, written=110_000, tools=1),           # 3 h later: the cache expired, rebuilt
+            opus("m4", 181, read=20_000, written=30_000),        # context fell to 50k and stayed: a compaction
+            opus("m5", 183, read=50_000, written=1_000, tools=1)])
+        self.write(self.project / "s1" / "subagents" / "agent-a.jsonl", [
+            assistant("h1", "h1", model="claude-sonnet-5-5", timestamp=at(2), input_tokens=0, output_tokens=1_000,
+                      cache_creation_input_tokens=10_000, cache_creation={"ephemeral_5m_input_tokens": 10_000}),
+            assistant("h2", "h2", model="claude-haiku-5-5", timestamp=at(3), input_tokens=0, output_tokens=1_000)])
+
+    def test_cache_lines_for_main_chats_and_helpers(self):
+        self.main_chat_and_helper()
+        cache = usage_report.build_report(7, self.claude, self.codex)["hosts"][0]["cache"]
+        main, helpers = cache["main"], cache["helpers"]
+        self.assertEqual((main["chats"], main["requests"]), (1, 5))
+        self.assertAlmostEqual(main["est_usd"], 0.82 + 0.12 + 0.90 + 0.264 + 0.038)
+        self.assertAlmostEqual(main["hit_rate"], 170_000 / 421_000, places=4)
+        self.assertAlmostEqual(main["usd_split"]["read"], 0.034)
+        self.assertAlmostEqual(main["usd_split"]["write"], 2.008)
+        self.assertAlmostEqual(main["usd_split"]["output"], 0.1)
+        self.assertAlmostEqual(main["usd_per_request"], 2.142 / 5, places=4)
+        self.assertEqual(main["tool_calls_per_request"], 1.0)
+        self.assertEqual(main["tool_call_shares"], {"none": 0.2, "one": 0.6, "more": 0.2})
+        self.assertEqual(main["expired_rebuilds"]["count"], 1)
+        self.assertAlmostEqual(main["expired_rebuilds"]["est_usd"], 0.88)
+        self.assertEqual((main["compactions"]["count"], main["compactions"]["median_context_after"]), (1, 50_000))
+        self.assertAlmostEqual(main["compactions"]["est_usd"], 0.24)
+        self.assertEqual(main["first_request_by_folder"], [{"folder": "proj", "chats": 1, "median": 100_000,
+                                                           "p25": 100_000, "max": 100_000}])
+        self.assertEqual((helpers["threads"], helpers["requests"]), (1, 2))
+        self.assertAlmostEqual(helpers["est_usd"], 0.035 + 0.0005)
+        self.assertAlmostEqual(helpers["share_of_usd"], 0.0355 / (2.142 + 0.0355), places=4)
+        self.assertEqual(helpers["requests_by_family"], {"haiku": 1, "sonnet": 1})
+
+    def test_a_response_copied_into_a_resumed_chat_counts_once_and_is_no_first_request(self):
+        first = self.write(self.project / "a.jsonl", [opus("m1", 0, written=50_000), opus("m2", 1, read=50_000)])
+        past = time.time() - 60
+        os.utime(first, (past, past))
+        self.write(self.project / "b.jsonl", [opus("m1", 0, written=50_000), opus("m2", 1, read=50_000),
+                                              opus("m3", 2, read=50_000, written=5_000)])
+        main = usage_report.build_report(7, self.claude, self.codex)["hosts"][0]["cache"]["main"]
+        self.assertEqual((main["chats"], main["requests"]), (2, 3))
+        self.assertEqual(main["first_request_by_folder"][0]["chats"], 1)
+
+    def test_cache_lines_name_their_window_and_stay_short_unless_asked(self):
+        self.main_chat_and_helper()
+        def run(*extra):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                usage_report.main(["--claude-dir", str(self.claude), "--codex-dir", str(self.codex), *extra])
+            text = out.getvalue()
+            block = "Cache, main chats" + text.split("Cache, main chats")[1].split("\n\n")[0]
+            return text, block.strip("\n").splitlines()
+        text, block = run()
+        self.assertIn("by request time", block[0])
+        self.assertIn("transcripts changed in the last 7 days", text)
+        self.assertLessEqual(len(block), 6)
+        _, detail = run("--cache-detail")
+        self.assertGreater(len(detail), len(block))
 
     def test_days_window_uses_file_modification_time(self):
         old = self.write(self.project / "old.jsonl", [assistant("m1", "r1")])
