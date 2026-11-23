@@ -287,23 +287,25 @@ acceptance cases succeed.
 | Task execution | Live baseline accepted 2026-11-17 (`evals/live/accepted.json`: regression 0.979 over 28 runs, heldout 0.889 over 5, model opus) | Not verified (a delegation probe timed out; see below) | Not verified |
 
 The Codex CLI as an [external worker](../policies/external-workers.md) from Claude Code.
-The smoke tests use a disposable Git repository and a linked worktree under the user
-profile, outside the temp folder (writable in the sandbox), an outside target file next
-to it, `--ignore-user-config`, effort low and logs in `<Tinker root>/.tinker/evidence/`;
-afterwards delete that folder and file, never force-removing the worktree.
+The smoke tests use a disposable Git repository and a linked worktree per implement
+run under the user profile, outside the temp folder (writable in the sandbox), an
+outside target path next to them, the policy's commands with effort low and logs in
+`<Tinker root>/.tinker/evidence/`; afterwards delete that folder and file, never
+force-removing a worktree. They ran on 2026-11-23 on Windows with Codex CLI 0.171.0.
 
 | Evidence | Status |
 | --- | --- |
 | Flags the recipe uses | Verified 2026-11-22: `codex exec --help` on 0.171.0 lists every flag in the policy's commands; `exec resume` and `exec fork` list no `-s` and no `-C` |
 | User config | Verified 2026-11-22: without `--ignore-user-config` the user's config set the model (one the account rejected with HTTP 400 `model_not_found`), sandbox and effort, loaded plugins and printed config and hook warnings as `item.completed` items of type `error`; a `-s read-only` run with an explicit model wrote the requested text to its `-o` file. With the flag the warnings were gone, but that run stopped at the usage limit |
-| Sandbox (`codex sandbox -c sandbox_mode=...`, Windows, no model) | Verified 2026-11-22 with the CLI then installed (recorded as 0.146.0), not re-run on 0.171.0: in a linked worktree `workspace-write` wrote in the worktree and the temp folder and was denied elsewhere in the user profile; `read-only` was denied both; `git commit` failed on the main repository's `.git/worktrees/<name>/index.lock`; `cmd` printed errorlevel 0 after "Access is denied" |
+| Windows sandbox key | Verified 2026-11-23: `--ignore-user-config` also drops the user's `[windows] sandbox` setting. Without it the study run's read was rejected in `<run>.err` ("blocked by policy"), with no command item in the JSONL, and the run still passed the success test with a blocked handoff (input 41,746, 20,608 cached). The same brief with `-c windows.sandbox=elevated` ran the read. `codex sandbox` accepts `elevated`, `unelevated` and `mxc` and refuses unknown values; only `elevated` was run through `exec` |
+| Sandbox (`codex sandbox -c sandbox_mode=...`, Windows, no model) | Verified 2026-11-22 with the CLI then installed (recorded as 0.146.0), not re-run on 0.171.0; `codex sandbox` loads the user config, here the elevated Windows sandbox: in a linked worktree `workspace-write` wrote in the worktree and the temp folder and was denied elsewhere in the user profile; `read-only` was denied both; `git commit` failed on the main repository's `.git/worktrees/<name>/index.lock`; `cmd` printed errorlevel 0 after "Access is denied" |
 | JSONL events | Verified 2026-11-22: `thread.started` (with `thread_id`), `turn.started`, `item.completed` (`agent_message` or `error`), `turn.completed` (with `usage`), `turn.failed` (with the error text) |
-| Default model and token overhead under `--ignore-user-config` | Not verified: every run under the flag on 2026-11-22 stopped at the usage limit, which resets on 2026-11-23 |
+| Default model and token overhead under `--ignore-user-config` | Verified 2026-11-23: the provider default model was accepted (not named here). Input tokens at effort low: 41,685 for a question about a three-line file (20,608 cached), 85,919 for a one-line fix with its test (63,616 cached), 111,856 for the violation brief (90,880 cached). No saving against runs without the flag is claimed |
 | Network inside the sandbox; a push being refused | Not verified |
-| Finding the PID by the `-o` path; `taskkill /PID <pid> /T /F` cleanup | Not verified |
-| Smoke 1, study (`-s read-only`): a question about a three-line file | Not verified. Expected: `turn.completed`, the answer in `-o`, no file changed; record `input_tokens` |
-| Smoke 2, implement (`-s workspace-write`, linked worktree): fix a one-line bug in a function that has a test command | Not verified. Expected: only the allowed file changed, the test passes when the Lead reruns it, no commit exists |
-| Smoke 3, deliberate violation (the only brief that asks for forbidden actions): write the outside target and run `git commit` | Not verified. Expected: both denied in the log, no outside file, no commit, the run still ends with `turn.completed` |
+| Finding the PID by the `-o` path; `taskkill /PID <pid> /T /F` cleanup | PID verified 2026-11-23: the filter on the `-o` path found only the run's process among three `codex.exe` processes, and the confirm query printed nothing once the run ended. `taskkill` at a limit not verified: no run reached one |
+| Smoke 1, study (`-s read-only`): a question about a three-line file | Verified 2026-11-23 on the second run, with the Windows sandbox key: `turn.completed`, the right answer with `path:line` in `-o`, no file changed, input 41,685. The first run, without the key, is the blocked run in the Windows sandbox row |
+| Smoke 2, implement (`-s workspace-write`, linked worktree): fix a one-line bug in a function that has a test command | Verified 2026-11-23: only the allowed file changed (one line, no line-ending churn), no commit, the worker's test run and the Lead's rerun passed (1 test, OK) |
+| Smoke 3, deliberate violation (the only brief that asks for forbidden actions): write the outside target and run `git commit` | Verified 2026-11-23: the outside write was denied ("Access to the path ... is denied"), no outside file; `git add` and `git commit` failed on `.git/worktrees/<name>/index.lock`, no commit; PowerShell reported exit 1 for each denial; the run ended with `turn.completed` and an Outcome of partial |
 | macOS and Linux | Not verified |
 
 Earlier Codex notes: a read-only smoke run recognized the Lead, roles, skills and
