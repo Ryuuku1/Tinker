@@ -20,7 +20,9 @@ spans independent areas or repositories. Recount aloud only when the work change
   Steps where one needs another's result, or that touch the same files, are one piece.
 - A piece gets its own helper only when running it in parallel or in a clean
   context saves more than the helper costs: the handoff, the context it rereads
-  and the Lead's time checking and integrating its result. A few tool calls, a
+  and the Lead's time checking and integrating its result. What enters the Lead's
+  context is paid again on every later request of the chat, while a helper's
+  reading is paid once and only its report comes back. A few tool calls, a
   lookup with a known target, or a step whose result the Lead needs next stays
   with the Lead. Most tasks need 0 helpers; broad independent work gets one per piece.
 - Use the cheapest capable helper: the Explorer for search, a read-only role for

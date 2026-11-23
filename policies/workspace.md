@@ -91,8 +91,9 @@ reasoning. Do not create task reports in target product repositories. Installed
 hooks and `status` read only the front matter (task id, status, repository,
 worktree, host session) and never edit a checkpoint; presence is not a release.
 
-Before resuming, compare actual paths, revisions and relevant file state; stale
-checks/approvals scoped to a different action are not transferable. Clarify
+Before resuming, treat the handoff as a starting point: compare actual paths,
+revisions and relevant file state with it first and recheck what it says to verify;
+stale checks/approvals scoped to a different action are not transferable. Clarify
 ambiguous task identity. A cross-host handoff transfers facts, not provider session
 IDs or a promise of conversation migration. Stop or pause the old session and its
 helpers, mark the checkpoint released, then let the new host claim it after state

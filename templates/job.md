@@ -43,8 +43,14 @@ Keep `status` to active, paused, blocked or completed: installed hooks and
 
 ## Handoff
 
+- Last user request, word for word, and its status: done / partial / not started
+- Tried and failed, each with the reason:
+- Verify before trusting this handoff: the claims above a new chat rechecks first
+- Previous chat: its reference and transcript path. Search that transcript for a
+  named detail; never read it whole.
 - Remaining work and blockers:
 - Old host and helpers confirmed stopped/paused:
 - Last verified repository state and relevant file fingerprints:
-- On resume: compare actual state, invalidate stale tests/reviews/approvals, then
-  record the new owner. Never infer ownership from the newest file or its timestamp.
+- On resume: this section is a starting point, not proof. Compare actual state
+  with it first, invalidate stale tests/reviews/approvals, then record the new
+  owner. Never infer ownership from the newest file or its timestamp.

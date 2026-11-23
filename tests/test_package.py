@@ -195,6 +195,20 @@ class PackageTests(unittest.TestCase):
                          ['task_id', 'status', 'repository', 'worktree', 'host_session'])
         self.assertNotIn('- Status:', text)
 
+    def test_no_skill_or_command_pins_a_model(self):
+        files = own_skills() + list(ROOT.glob('commands/*.md')) + list(ROOT.glob('.claude/commands/*.md'))
+        self.assertEqual(len(own_skills()), 7)
+        for path in files:  # a model switch mid-chat drops the prompt cache; the user's model choice governs
+            header = re.match(r'\A---\n(.*?)\n---\n', path.read_text(encoding='utf-8'), re.S)
+            self.assertNotRegex(header.group(1) if header else '', r'(?m)^model\s*:', path)
+
+    def test_checkpoint_handoff_carries_what_a_fresh_chat_needs(self):
+        handoff = (ROOT / 'templates/job.md').read_text(encoding='utf-8').split('## Handoff', 1)[1]
+        for field in ('- Last user request, word for word, and its status:', '- Tried and failed, each with the reason:',
+                      '- Verify before trusting this handoff:', '- Previous chat:', 'never read it whole',
+                      'starting point'):
+            self.assertIn(field, handoff)
+
     def test_getting_started_and_evaluation_instructions_exist(self):
         for name in ("README.md", "docs/providers.md", "docs/extending.md", "evals/README.md"):
             self.assertTrue((ROOT / name).is_file(), name)
