@@ -95,7 +95,8 @@ pre-tool, stop and session end for all three hosts. A gated call passes four ste
    unreadable stays restricted, and the user approves in a new chat instead.
 4. **Decide and respond.** Restricted runs are denied with no grant path. Claude
    Code asks through its own prompt (exit 2 denies); Antigravity uses `force_ask` or
-   `deny`, and `{}` for no opinion. Codex parses but does not support `ask` (the hook
+   `deny`, and `allow` for no objection, which leaves the call to the user's own
+   permission policy (the Antigravity CLI reads `{}` as a deny). Codex parses but does not support `ask` (the hook
    fails and the tool runs), so Codex denies with a request id; the user types
    `approve <id>` in that chat. In Claude Code's `dontAsk` mode the same typed path
    is used because no prompt appears. In its `bypassPermissions` and `auto` modes the gate

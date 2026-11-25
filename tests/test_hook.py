@@ -551,9 +551,21 @@ class ProtocolTests(Fixture):
         self.assertEqual((code, json.loads(out)["decision"]), (0, "force_ask"))
         code, out, _ = self.hook("pre-tool", "antigravity", payload("echo x > ~/.tinker/config.json"))
         self.assertEqual((code, json.loads(out)["decision"]), (0, "deny"))
-        self.assertEqual(self.hook("pre-tool", "antigravity", payload("git status"))[:2], (0, "{}"))
+        code, out, _ = self.hook("pre-tool", "antigravity", payload("git status"))
+        self.assertEqual((code, json.loads(out)), (0, {"decision": "allow"}))
         code, out, _ = self.hook("pre-tool", "antigravity", raw=b"{not json")
         self.assertEqual((code, json.loads(out)["decision"]), (0, "deny"))
+
+    def test_antigravity_cli_runs_unlabelled_commands(self):
+        # The payload agy 1.5.17 sent for `echo probe`. It reads {} (no `decision`) as a deny with an empty
+        # reason, so a gate with no objection must say allow, which leaves the user's own permission policy in charge.
+        call = {"toolCall": {"name": "run_command", "args": {"CommandLine": "echo probe", "WaitMsBeforeAsync": 5000,
+                                                              "toolSummary": "Echo probe"}},
+                "conversationId": "c", "cwd": str(self.repo), "hookEventName": "PreToolUse", "stepIdx": 20,
+                "workspacePaths": [str(self.repo)], "modelName": "m", "transcriptPath": "", "artifactDirectoryPath": ""}
+        code, out, _ = self.hook("pre-tool", "antigravity", call)
+        self.assertEqual((code, json.loads(out)), (0, {"decision": "allow"}))
+        self.assertEqual(self.hook("stop", "antigravity", {"conversationId": "c"})[:2], (0, "{}"))  # not a tool decision
 
     def test_unreadable_input_fails_closed(self):
         for raw in (b"{not json", b"", b"[]", b"\xff\xfe\x00"):
@@ -1053,7 +1065,7 @@ class PayloadContractTests(Fixture):
         code, out, err = self.hook("pre-tool", host, payload)
         if host == "antigravity":
             decision = json.loads(out)
-            return f"{decision['decision']}: {decision['reason']}" if decision else None
+            return None if decision == {"decision": "allow"} else f"{decision['decision']}: {decision['reason']}"
         if code == 0 and out:
             decision = json.loads(out)["hookSpecificOutput"]
             return f"{decision['permissionDecision']}: {decision['permissionDecisionReason']}"

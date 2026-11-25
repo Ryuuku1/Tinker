@@ -1385,8 +1385,8 @@ def session_context(host, call):
 # ---------------------------------------------------------------- hook output
 
 class Output:
-    def __init__(self, host):
-        self.host, self.lock, self.done, self.denied = host, threading.Lock(), False, False
+    def __init__(self, host, event=""):
+        self.host, self.event, self.lock, self.done, self.denied = host, event, threading.Lock(), False, False
 
     def _write(self, stdout=None, stderr=None):
         with self.lock:
@@ -1412,10 +1412,9 @@ class Output:
 
     def noop(self):
         if self.host == "antigravity":
-            # ponytail: {} means "no opinion" (as another Tinker edition's plugin does). Antigravity documents `decision` as
-            # required and does not say how it reads {}; `allow` would skip the user's own review, and `ask`
-            # would prompt for calls the user's settings run freely. Unverified until a live check.
-            self._write({})
+            # A tool decision needs `decision`: agy 1.5.17 reads {} as a deny with an empty reason. `allow` hands the
+            # call to the next hook and the user's own permission policy (an outside write stayed refused in a probe).
+            self._write({"decision": "allow"} if self.event == "pre-tool" else {})
         else:
             self._write()
         return 0
@@ -1685,7 +1684,7 @@ def event_post_tool(host, payload, out):
 
 
 def run_hook(event, host):
-    out = Output(host)
+    out = Output(host, event)
     if event == "pre-tool":
         return event_pre_tool(host, out)
     try:
