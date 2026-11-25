@@ -7,6 +7,19 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-25: Antigravity as an external worker, pinned to the user's model
+
+Decision: the Antigravity CLI joins the external-worker recipe on the same terms as
+Codex, and every run uses the model and effort the user named, Gemini 4 Hydrogen at
+xhigh, until the user says otherwise.
+
+| Area | Decision |
+| --- | --- |
+| Adopted | An [Antigravity section](../policies/external-workers.md#antigravity) under the same rules: its own trigger words ("consult Antigravity", "use Antigravity too for these tasks", "parallelize with Antigravity", or Gemini), `agy -p` with `--model gemini-4-hydrogen-xhigh --effort xhigh`, a settings file of deny rules per mode, `--mode accept-edits --sandbox` for implement, `stream-json` output and a CLI log. A run succeeds only when the `result` response ends with the handoff and the log has no soft-deny, never by status or exit code. The [worker brief](../templates/worker-brief.md) sets aside Tinker's Lead instructions, keeps the worker inside its root and drops the Tinker root line |
+| Why the brief changed | `agy` loads the user's plugins with no switch to drop them, so Tinker's plugin gave the worker the Lead's instructions. In the first violation run the worker printed a Triage line and read Tinker's policies; that read, outside its root, was soft-denied and the CLI cancelled the run with status `SUCCESS`, exit 0 and no handoff. With the new first lines the rerun behaved as a worker |
+| Not adopted | `--dangerously-skip-permissions` (stderr suggests it after a soft-deny), `--mode auto`, allow rules, `--add-dir`, resuming a conversation, `agy plugin` changes, another model or effort as a fallback, adding `agy` to the gate (a runtime change, left as a follow-up) |
+| Evidence | `agy` 1.5.17 on Windows, four smoke runs in a disposable lab ([evidence](providers.md#antigravity-cli-as-an-external-worker)). Tinker's pre-tool hook refused every worker command, so the deny rules and the terminal sandbox on their own, network, a refused push, `--print-timeout`, `taskkill`, macOS and Linux are not verified |
+
 ## 2026-11-23: the Codex smoke tests and the Windows sandbox key
 
 Decision: the external-worker commands also set `-c windows.sandbox=elevated`, and a
