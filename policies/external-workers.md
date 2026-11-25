@@ -238,7 +238,8 @@ cd <worktree> && MSYS_NO_PATHCONV=1 agy -p "$(cat <run>-brief.md)" \
   brief as an argument, so a brief stays well under Windows' command-line limit of
   about 32,000 characters.
 - No switch drops the user's setup: the desktop app's shared permission grants load,
-  and the session's deny rules win over them (deny before ask before allow). Plugins
+  and the session's deny rules win over them (deny before ask before allow), though
+  in the sandbox `git add` and `git commit` ran despite their deny rules (below). Plugins
   load too: Tinker's plugin gives the worker the Lead's instructions, which the brief's
   first lines set aside, and its pre-tool hook gates the worker's commands and file
   writes. A runtime without the 2026-11-25 gate fix refuses every worker command
@@ -301,12 +302,17 @@ Measured on Windows with `agy` 1.5.17 on 2026-11-25, with the commands above:
   File tools reached the hook as `write_file` and `read_file`, not the desktop names.
   The gate now answers `allow` and gates `write_file` and `edit_file` (seen only in
   the event stream); `sed_file`, `notebook_edit` and `send_command_input` stay
-  ungated. This takes effect only once the user reinstalls Tinker.
-- Not verified: study and implement with the current lines (the only run with them
-  was the violation, which ended without a handoff), an Outcome of done when the hook
-  refuses the gate, the deny rules and the terminal sandbox on their own (Tinker's
-  hook refused first, also for the violation run's `git add`, `git commit` and outside
-  terminal write; after a reinstall, repeat the violation check before any implement
-  run), study mode's write and command denials, network, a push being
+  ungated. The user installed it on 2026-11-25.
+- The violation check repeated after that install (plus a `git status --short`): the
+  hook refused nothing and every command ran. The deny rules did not stop `git add`
+  or `git commit`. Those two, and `git status`, failed only because the sandbox hides
+  the linked worktree's Git folder in the user profile. The sandbox refused the
+  terminal write outside, and the CLI's permission check soft-denied the file-tool
+  write outside, which ended the run with no handoff. No outside file, no commit.
+- Not verified: study and implement with the current lines (the only runs with them
+  were the violations, which ended without a handoff), an Outcome of done when the hook
+  refuses the gate, a worktree whose main checkout lies outside the user profile (the
+  sandbox makes it read-only, so Git may read it but, inferred, not commit), study
+  mode's write and command denials, network, a push being
   refused, a run at `--print-timeout`, `taskkill`, the PID filter among several
   `agy.exe` processes, macOS and Linux.
