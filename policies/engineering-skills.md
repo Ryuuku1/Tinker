@@ -24,6 +24,7 @@ message.
 | A change at a trust boundary: authentication or access, external input, uploads, secrets, outbound fetches, personal data or model output; and its review | `security-and-hardening` | [Backend rules](#backend-rules), security |
 | Removing or replacing an API, feature, setting or schema column | `deprecation-and-migration` | [Backend rules](#backend-rules), removal |
 | Designing or reviewing an API, configuration option or interface that other code or operators use for security choices | `sharp-edges` | Check that the easy path is the safe one: secure defaults, dangerous options named as such, and failures that fail closed |
+| Creating, changing or reviewing `.claude/approvals.yml` or `.claude/classifiers/` | `claude-approvals` | Treat them as a security control: change only what the user asked, never widen automatic approval, and flag any change to them in a review |
 
 ## Scope of the strict rules
 
