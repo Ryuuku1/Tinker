@@ -102,11 +102,12 @@ request passing by pushing fixes for failing checks, conflicts and review feedba
 its branch; it never approves or merges. Claude Approvals (beta) approves routine
 changes or requires a person by a policy file on the default branch,
 `.claude/approvals.yml`, with custom classifiers in `.claude/classifiers/`. An admin
-turns them on per repository; they need a Team or Enterprise plan and a GitHub
-repository, are not offered with ZDR, HIPAA or CMEK, and are billed on tokens. In the
-app and the CLI, `/ship` (push, pull request, review, then feedback and failing
-checks) and `/steward` (an existing pull request) count as regular usage, and only a
-line the user types starts them. Tinker adds three rules: the task start tells a user
+turns Code Review and PR Steward on per repository. The service needs a Team or
+Enterprise plan and a GitHub repository, is not offered with ZDR, HIPAA or CMEK, and
+is billed on tokens. In the app and the CLI, `/ship` pushes, opens the pull request,
+reviews it and works on feedback and failing checks, as regular Claude Code usage;
+`/steward` watches an existing pull request. Only a line the user types starts either.
+Tinker adds three rules: the task start tells a user
 who wants a pull request about a listed `/ship` and fetches a pushed branch's own head
 before editing it, and approvals files route to `claude-approvals`, with a flag in
 every review. Whether the repository-wide parts
