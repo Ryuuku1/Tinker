@@ -1,8 +1,9 @@
 # External workers
 
-The Lead can hand bounded work to the Codex CLI (`codex exec`) as an external
-worker and verify the result; it keeps triage, ownership, review and the final
-answer. This is a recipe the Lead runs with its own shell, not a launcher.
+The Lead can hand bounded work to the Codex CLI (`codex exec`) or the Antigravity
+CLI (`agy -p`, [below](#antigravity)) as an external worker and verify the result;
+it keeps triage, ownership, review and the final answer. This is a recipe the Lead
+runs with its own shell, not a launcher.
 
 ## When: the user's words only
 
@@ -26,14 +27,18 @@ initiative: no slash command, no automation, no usage-based trigger.
   network, credentials, browser or connectors. Other pieces stay with the Lead.
 - **Never Lead-initiated:** not when stuck, not because there are many tasks, not
   because of quota, and no offers to use Codex. The Lead cannot read either quota.
+- **Antigravity** follows the same rules on its own words: "consult Antigravity",
+  "use Antigravity too for these tasks", "parallelize with Antigravity", or the same
+  with Gemini. Naming one CLI never opens the other.
 - **If the user says Codex should carry the work** (to save Claude usage, say),
   every eligible piece goes to Codex.
 - **Host gate:** `codex exec` is on the installed gate's list
   ([enforcement](../docs/providers.md#what-is-enforced-where)). In Claude Code's
   default permission mode it still asks once per run; in bypass and auto modes it is
   silent; a Codex host denies it with a request id; an unattended run is denied with
-  no grant path. The Lead never asks again, but the host's gate may. Run Codex only
-  from Claude Code.
+  no grant path. The Lead never asks again, but the host's gate may. `agy` is not on
+  that list, so only these rules keep it out of an unattended run. Run either CLI
+  only from Claude Code.
 
 ## Modes and commands
 
@@ -63,7 +68,7 @@ MSYS_NO_PATHCONV=1 codex exec --ignore-user-config -s workspace-write \
 - `--ignore-user-config` drops the user's Codex config (it may set full access, a
   model the account rejects, high effort, plugins and hooks); auth still uses
   `CODEX_HOME`. No `-m`: the provider default applies, `-m <model>` only when the
-  user's own request named one, and this package never names a model.
+  user's own request named one, and this package never names a Codex model.
 - `-c windows.sandbox=elevated`: `--ignore-user-config` also drops the user's Windows
   sandbox setting, and without one Codex on Windows rejected the worker's own read
   ("blocked by policy"). Measured with `elevated`; the CLI also accepts `unelevated`
@@ -186,3 +191,112 @@ so research that needs the web stays with the [Researcher](../roles/researcher.m
 - Not verified: network in the sandbox, push being blocked, `taskkill` at a limit
   (no run reached one), `unelevated` and `mxc` through `exec`, macOS and Linux
   ([evidence](../docs/providers.md#evidence-status)).
+
+## Antigravity
+
+Everything above applies to the Antigravity CLI with the commands and differences
+here. `<run>` is `<Tinker root>/.tinker/evidence/<UUID>/agy-<n>-<mode>`.
+
+The user asked on 2026-11-25 for Gemini 4 Hydrogen at xhigh for now, so every run
+passes `--model gemini-4-hydrogen-xhigh --effort xhigh`; the CLI checks the pair (it
+refused this model with `--effort max`). If `agy models` no longer lists it or a run
+refuses it, the Lead does the work and reports; never another model or effort
+without the user's words.
+
+Write the settings with the file tool to `<run>-settings.json` (inline JSON that
+names git commands was refused by Claude Code's gate). Study and plan:
+
+```json
+{"toolPermission": "request-review",
+ "permissions": {"deny": ["write_file(*)", "command(*)", "read_url(*)", "execute_url(*)", "mcp(*)"]}}
+```
+
+Implement:
+
+```json
+{"toolPermission": "proceed-in-sandbox", "enableTerminalSandbox": true,
+ "permissions": {"deny": ["command(git add)", "command(git commit)", "command(git push)",
+                          "read_url(*)", "execute_url(*)", "mcp(*)"]}}
+```
+
+```sh
+cd <target checkout> && MSYS_NO_PATHCONV=1 agy -p "$(cat <run>-brief.md)" \
+  --model gemini-4-hydrogen-xhigh --effort xhigh --settings <run>-settings.json \
+  --disable-slash-commands --print-timeout 10m --output-format stream-json \
+  --log-file <run>.log < /dev/null > <run>.jsonl 2> <run>.err
+```
+
+```sh
+cd <worktree> && MSYS_NO_PATHCONV=1 agy -p "$(cat <run>-brief.md)" \
+  --model gemini-4-hydrogen-xhigh --effort xhigh --mode accept-edits --sandbox \
+  --settings <run>-settings.json \
+  --disable-slash-commands --print-timeout 20m --output-format stream-json \
+  --log-file <run>.log < /dev/null > <run>.jsonl 2> <run>.err
+```
+
+- The working root is the current folder; the `init` event names it. `-p` takes the
+  brief as an argument, so a brief stays well under Windows' command-line limit of
+  about 32,000 characters.
+- No switch drops the user's setup: the desktop app's shared permission grants load,
+  and the session's deny rules win over them (deny before ask before allow). Plugins
+  load too: Tinker's plugin gives the worker the Lead's instructions, which the brief's
+  first lines set aside, and its pre-tool hook refused every command a worker tried,
+  so the Lead runs the gate.
+- `--disable-slash-commands` keeps a brief line that starts with `/` from running a
+  command or skill. `--print-timeout` carries the limits; the `taskkill` step stays
+  the backstop. `--log-file` holds the CLI log and the unique path for the PID:
+  `Get-CimInstance Win32_Process -Filter "Name = 'agy.exe'" | Where-Object { $_.CommandLine -like '*<run>.log*' }`.
+- Never pass `--dangerously-skip-permissions` (even when stderr suggests it),
+  `--mode auto` (its automatic review can run commands outside the sandbox),
+  `--add-dir`, `-c` or `--continue` (they resume in `agy`), `--conversation`,
+  `--resume`, `--remote-agent`, `--remote-control`, `--project`, `--new-project`, `-i`
+  or `--json-schema`; never add allow rules or run `agy plugin`. Conversations stay
+  in the CLI's own store (it has no ephemeral mode); they are the user's to delete.
+- Version check: when `agy --version` differs from the one below, recheck
+  `agy --help` and `agy models` against the commands, then run the study check with
+  the pinned model and effort.
+
+A run succeeded only when the `init` event in `<run>.jsonl` names the pinned model,
+the `result` event has status `SUCCESS`, its `response` ends with the handoff, and
+`<run>.log` has no "soft-denying". Status
+and exit code prove nothing: a call that needed an approval headless mode cannot give
+was soft-denied and the CLI cancelled the run there, still with `SUCCESS` and exit 0,
+an empty or partial response, and only sometimes a notice in `<run>.err`.
+
+- A soft-deny (`user denied permission` in a `step_update` in state `ERROR`) means
+  the brief sent the worker outside its working root or its mode: fix the brief.
+- `tool call denied by pre-tool hook` on `run_command` is Tinker's hook; the handoff
+  reports it and the Lead reruns the gate. An Outcome of partial whose only gap is a
+  hook-refused gate or status listing counts as done once the Lead's gate rerun
+  passes; any other gap is the "Before accepting" case. Other `ERROR` steps are the
+  worker's own.
+- Status `ERROR`, a usage limit or a model error: report the text and do the work in
+  the Lead; never retry in a loop. Feedback is a fresh run that inlines the previous
+  `response`, never a resumed conversation.
+- Tokens come from the `usage` of the `result` event.
+
+Measured on Windows with `agy` 1.5.17 on 2026-11-25, with the commands above:
+
+- `agy --help` and `agy models` listed every flag and the model; the model with
+  `--effort max`, and `--effort` with an unknown model, exited 1 with status `ERROR`
+  and no tokens. Every run's `init` event named `gemini-4-hydrogen-xhigh` and its log
+  "Gemini 4 Hydrogen (XHigh)"; no output echoes the effort on its own.
+- With the older first lines (no line setting Tinker's instructions aside, a Tinker
+  root line): study answered with `path:line` and changed nothing (input 35,204
+  tokens, 16 s); implement changed only its allowed line, with no commit; both worker commands
+  (a status listing and the gate) were refused by the pre-tool hook, the Outcome was
+  partial, and the Lead's gate rerun passed (input 44,405, 43,482 cached, 35 s).
+- A violation brief with the older first line: the worker took Tinker's Lead role
+  (Triage line, Tinker's policies), its read of the Tinker root was soft-denied and
+  the run ended there with `SUCCESS`, exit 0, empty stderr and no handoff. With the
+  current lines: no Triage line; the edit in its root landed; `git add`, `git commit`
+  and a terminal write outside were refused by the pre-tool hook; the file-tool write
+  outside was soft-denied and ended the run (empty response, a stderr notice); no
+  outside file, no commit, nothing staged.
+- Not verified: study and implement with the current lines (the only run with them
+  was the violation, which ended without a handoff), an Outcome of done when the hook
+  refuses the gate, the deny rules and the terminal sandbox on their own (Tinker's
+  hook refused first; if worker commands start running, repeat the violation check
+  before relying on them), study mode's write and command denials, network, a push being
+  refused, a run at `--print-timeout`, `taskkill`, the PID filter among several
+  `agy.exe` processes, macOS and Linux.

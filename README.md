@@ -328,7 +328,10 @@ the eligible pieces, each edit in its own worktree. It covers only the tasks you
 ("this session" means the rest of that chat); there is no command, automation or
 quota trigger, and the Lead never offers it. It verifies Codex's work, reports its
 tokens and does not ask again within that scope, though in Claude Code's default
-permission mode the installed gate still asks once per `codex exec`.
+permission mode the installed gate still asks once per `codex exec`. The Antigravity
+CLI joins the same way on "consult Antigravity", "use Antigravity too for these
+tasks" or "parallelize with Antigravity" (or Gemini), pinned for now to Gemini 4
+Hydrogen at xhigh; the installed gate does not ask for `agy`.
 
 ### Workflows
 

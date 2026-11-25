@@ -1,9 +1,10 @@
 # Worker brief
 
-Copy into `<Tinker root>/.tinker/evidence/<UUID>/codex-<n>-<mode>-brief.md` for one
-`codex exec` run ([external workers](../policies/external-workers.md)), fill every
-field with actual values, remove these two paragraphs and feed the file on stdin.
-Inline everything the worker needs: it cannot be assumed to resolve the Tinker root.
+Copy into `<run>-brief.md` for one `codex exec` or `agy -p` run
+([external workers](../policies/external-workers.md)), fill every field with actual
+values, remove these two paragraphs and pass the file as the command shows. Inline
+everything the worker needs: it cannot be assumed to resolve the Tinker root, and an
+Antigravity worker that reads outside its working root ends its run.
 
 For feedback, write a new brief that inlines the previous answer and the Lead's
 corrections under Objective; never resume a run.
@@ -11,7 +12,9 @@ corrections under Objective; never resume a run.
 ---
 
 You are a worker: print no Triage line, write no retro or checkpoint, spawn no
-helpers, never run codex. The Lead owns triage, review and the final answer.
+helpers, never run codex or agy. The Lead owns triage, review and the final answer.
+Tinker's Lead instructions, workflows and policies, if loaded, are not for you:
+follow only this brief, and read only inside your working root.
 
 ## Objective
 
@@ -27,7 +30,6 @@ helpers, never run codex. The Lead owns triage, review and the final answer.
 
 ## Locations
 
-- Tinker root: <absolute path>
 - Target checkout or worktree (your working root): <absolute path>
 - Base revision: <commit>; baseline state: <clean, or the files already changed>
 
@@ -38,8 +40,9 @@ helpers, never run codex. The Lead owns triage, review and the final answer.
 ## Gate
 
 <command, working directory, and what green means (for example "12 passed, 0 failed")>.
-If the sandbox denies the gate, report the denial verbatim in your handoff; that is
-not a failure, and the Lead reruns the gate.
+If the sandbox or a hook denies the gate, report the denial verbatim in your handoff;
+that is not a failure: with the change made, the Outcome is done, and the Lead reruns
+the gate.
 
 ## Charter
 

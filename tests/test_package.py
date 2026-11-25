@@ -338,7 +338,7 @@ class PackageTests(unittest.TestCase):
         flat = ' '.join(policy.split())
         # AGENTS.md stays as it is, so this delegation line is the only route to the policy
         delegation = ' '.join((ROOT / 'policies/delegation.md').read_text(encoding='utf-8').split())
-        self.assertIn('When the user says to use, consult or parallelize with Codex, follow '
+        self.assertIn('When the user says to use, consult or parallelize with Codex or Antigravity, follow '
                       '[external workers](external-workers.md).', delegation)
         self.assertIn('(../templates/worker-brief.md)', policy)
         self.assertTrue(brief_path.is_file())
@@ -362,6 +362,37 @@ class PackageTests(unittest.TestCase):
             for flag in (' -m ', '--model', '--add-dir', '--dangerously', '--trust', '--worktree'):
                 self.assertNotIn(flag, command)
         for flag in ('--add-dir', '--dangerously-bypass-approvals-and-sandbox', '--dangerously-bypass-hook-trust'):
+            self.assertRegex(flat, rf'Never pass [^.]*`{flag}`')
+
+    def test_antigravity_worker_is_opt_in_pinned_and_never_skips_permissions(self):
+        policy = (ROOT / 'policies/external-workers.md').read_text(encoding='utf-8')
+        flat = ' '.join(policy.split())
+        readme = ' '.join((ROOT / 'README.md').read_text(encoding='utf-8').split())
+        for phrase in ('"consult Antigravity"', '"use Antigravity too for these tasks"', '"parallelize with Antigravity"'):
+            self.assertIn(phrase, flat)
+            self.assertIn(phrase, readme)
+        self.assertIn('Naming one CLI never opens the other.', flat)
+        self.assertIn('never another model or effort without the user\'s words', flat)
+        commands = [' '.join(block.replace('\\\n', ' ').split())
+                    for block in re.findall(r'```sh\n(.*?)```', policy, re.S) if 'agy -p' in block]
+        self.assertEqual(['--mode accept-edits --sandbox' in c for c in commands], [False, True])
+        for command in commands:
+            for flag in ('--model gemini-4-hydrogen-xhigh --effort xhigh', '--settings <run>-settings.json',
+                         '--disable-slash-commands', '--print-timeout', '--output-format stream-json',
+                         '--log-file <run>.log', '< /dev/null'):
+                self.assertIn(flag, command)
+            for flag in ('--dangerously', '--mode auto', '--add-dir', ' -c ', '--continue', '--conversation',
+                         '--resume', '--remote', '--project', ' -i '):
+                self.assertNotIn(flag, command)
+        settings = [json.loads(block) for block in re.findall(r'```json\n(.*?)```', policy.split('## Antigravity', 1)[1], re.S)]
+        self.assertEqual([s['toolPermission'] for s in settings], ['request-review', 'proceed-in-sandbox'])
+        for s in settings:
+            self.assertEqual(set(s['permissions']), {'deny'})  # never an allow rule
+            self.assertTrue({'read_url(*)', 'execute_url(*)', 'mcp(*)'} <= set(s['permissions']['deny']))
+        self.assertTrue({'write_file(*)', 'command(*)'} <= set(settings[0]['permissions']['deny']))
+        self.assertTrue({'command(git add)', 'command(git commit)', 'command(git push)'}
+                        <= set(settings[1]['permissions']['deny']))
+        for flag in ('--dangerously-skip-permissions', '--add-dir', '--continue', '--resume'):
             self.assertRegex(flat, rf'Never pass [^.]*`{flag}`')
 
     def test_external_worker_change_names_no_model_or_user_profile_path(self):
