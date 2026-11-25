@@ -1,4 +1,4 @@
-"""Live behavioral evals for the Claude Code host: run the cases in evals/live through `claude plugin eval`, then gate.
+"""Live behavioral evals: run the cases in evals/live through `claude plugin eval` (or Codex or agy), then gate.
 
 run   Snapshots this checkout once (tracked and untracked files, never ignored ones such as .tinker/) into its own
       <temp>/tinker_eval_<runId>/tinker, renders the Claude plugin bundle from that copy into .../home/.tinker/plugin
@@ -22,6 +22,10 @@ gate  Compares a result with evals/live/accepted.json per set (regression, heldo
       cannot fail it while a broad slide still does; otherwise it compares set means. New or changed cases are
       listed, not gated. Exit 0 pass, 1 fail, 2 invalid. --accept records the result as the new baseline, with
       each case's means and case.yaml hash, the judge and the measured tree's fingerprint.
+
+--host codex|agy runs the same cases through `codex exec` or `agy -p` instead, one at a time, and grades them locally
+(scripts/eval_hosts.py says how); its result records the host, and the gate compares it only with that host's own
+baseline, evals/live/accepted-<host>.json, never with accepted.json. --adaptive and with-without stay claude-only.
 
 Eval runs cannot sandbox shell tools on Windows, so cases get Read/Grep/Glob, Write/Edit, Skill and Agent only.
 Scaffolds are bash: they need bash (Git Bash on Windows) and git on PATH.
@@ -284,12 +288,13 @@ def baseline_topup(args, root, claude, env, doc, run_dir, accepted, costly=()):
 
 def tree_fingerprint(tree):
     """A short SHA-256 of the files under tree, paths and contents with CRLF read as LF, leaving out the baseline
-    file, results and Python's bytecode caches (rendering a bundle writes them into the tree), so a committed tree
+    files, results and Python's bytecode caches (rendering a bundle writes them into the tree), so a committed tree
     can be matched with the snapshot a result was measured on."""
-    tree, skip = Path(tree), (LIVE / "accepted.json").as_posix()
+    tree, skip = Path(tree), re.escape(LIVE.as_posix()) + r"/accepted(-\w+)?\.json"
     digest = hashlib.sha256()
     for rel in sorted(p.relative_to(tree).as_posix() for p in tree.rglob("*") if p.is_file()):
-        if rel == skip or rel.startswith((LIVE / "results").as_posix() + "/") or "__pycache__" in rel.split("/"):
+        if (re.fullmatch(skip, rel) or rel.startswith((LIVE / "results").as_posix() + "/")
+                or "__pycache__" in rel.split("/")):
             continue
         digest.update(rel.encode("utf-8") + b"\0" + (tree / rel).read_bytes().replace(b"\r\n", b"\n") + b"\0")
     return digest.hexdigest()[:16]
@@ -376,7 +381,7 @@ def render_bundle(tree, home):
     source, evals = tree / LIVE, bundle / BUNDLE_EVALS
     for path in sorted(source.rglob("*")):
         rel = path.relative_to(source)
-        if not path.is_file() or rel.parts[0] == "results" or rel.as_posix() == "accepted.json":
+        if not path.is_file() or rel.parts[0] == "results" or re.fullmatch(r"accepted(-\w+)?\.json", rel.as_posix()):
             continue
         target = evals / rel
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -403,8 +408,15 @@ def scaffold_env():
     return env
 
 
-def accepted_file(args, root):
-    return Path(args.accepted) if args.accepted else Path(root) / LIVE / "accepted.json"
+def accepted_file(args, root, host="claude"):
+    """--accepted, else the host's own baseline: accepted.json for claude, accepted-<host>.json for another host."""
+    name = "accepted.json" if host == "claude" else f"accepted-{host}.json"
+    return Path(args.accepted) if args.accepted else Path(root) / LIVE / name
+
+
+def host_of(record):
+    """The host a result or baseline was measured on; one without a host is a claude one."""
+    return str(record.get("host") or "claude")
 
 
 def read_accepted(args, root):
@@ -441,6 +453,11 @@ def eval_command(claude, args):
 
 
 def run(args, root, temp=None):
+    if args.host != "claude":
+        import eval_hosts  # noqa: PLC0415 (only another host needs it)
+        return eval_hosts.run_host(args, root, temp, sys.modules[__name__])
+    if args.effort:
+        raise EvalError("--effort is for --host codex or agy; claude plugin eval takes none.")
     claude = shutil.which("claude")
     if not claude:
         raise EvalError("claude is not on PATH.")
@@ -615,7 +632,6 @@ def gate(args, root):
     if not result_path.is_file():  # Path("") is the current folder: an empty --result reads as a permission error
         print(f"INVALID: --result {args.result!r} is not a result file; pass the path `run` printed after Result:.")
         return 2
-    accepted_path = accepted_file(args, root)
     try:
         result = json.loads(result_path.read_text(encoding="utf-8-sig"))
         summary, errored = summarize(result, root)
@@ -623,13 +639,25 @@ def gate(args, root):
     except (OSError, ValueError, EvalError) as error:
         print(f"INVALID: {error}")
         return 2
+    host = host_of(result)
+    accepted_path = accepted_file(args, root, host)
+    if host != "claude" and accepted_path.resolve() == (Path(root) / LIVE / "accepted.json").resolve():
+        print(f"INVALID: a {host} result is never compared with or accepted into the claude baseline "
+              f"{accepted_path}; drop --accepted to use accepted-{host}.json.")
+        return 2
     accepted = json.loads(accepted_path.read_text(encoding="utf-8-sig")) if accepted_path.is_file() else None
+    if accepted and host_of(accepted) != host:
+        print(f"INVALID: the result was measured on {host} and the baseline {accepted_path} on "
+              f"{host_of(accepted)}; hosts are never compared, so neither a verdict nor --accept applies.")
+        return 2
     model, adaptive = (result.get("suite") or {}).get("modelOverride"), bool(result.get("adaptive"))
     judge = judge_of(result)
     new_model = bool(accepted) and str(accepted.get("model")) != str(model)
     new_judge = bool(accepted) and not new_model and judge_of(accepted) != judge  # another grader scores differently
     new_mode = bool(accepted) and bool(accepted.get("adaptive")) != adaptive  # re-runs lift a flaky case's score
-    fresh = new_model or new_judge or new_mode
+    setup = result.get("userSetup") or {}  # what a codex or agy run loaded beside the snapshot (eval_hosts.USER_SETUP)
+    new_setup = bool(accepted) and host != "claude" and (accepted.get("userSetup") or {}) != setup
+    fresh = new_model or new_judge or new_mode or new_setup
     passed = not errored and not fresh and bool(summary)
     compare, pooled = (pooled_baseline(accepted, result.get("baselineTopUp")) if accepted and not fresh
                        else (accepted, []))
@@ -679,8 +707,19 @@ def gate(args, root):
     if new_mode:
         print(f"Adaptive mode changed ({'on' if accepted.get('adaptive') else 'off'} -> {'on' if adaptive else 'off'}): "
               "this result cannot pass the gate; --accept makes it the new baseline.")
+    if new_setup:
+        changed = sorted(k for k in set(setup) | set(accepted.get("userSetup") or {})
+                         if setup.get(k) != (accepted.get("userSetup") or {}).get(k))
+        print(f"The user's own {host} setup changed since the baseline ({', '.join(changed)}): this result cannot "
+              "pass the gate; --accept makes it the new baseline.")
     if not accepted:
         print(f"No baseline at {accepted_path}: review the result, then --accept records the first one.")
+    if setup:
+        print(f"Not isolated: this {host} run also loaded {len(setup)} plugins, skills or instruction files of the "
+              "user's own setup (userSetup in the result); it measures the snapshot with them, not alone.")
+    if host != "claude":
+        print(f"{host} reports no cost: every cost is 0, so the cost verdict cannot fail; compare the tokens in the "
+              "result instead.")
     for name, pair in paired.items():
         print(f"Paired {name} ({pair['n']} cases): score change {pair['scoreDelta']:+.3f} (95% upper bound "
               f"{pair['scoreUpper']:+.3f}), cost change {pair['costDelta']:+.4f} USD/run (95% lower bound "
@@ -708,6 +747,8 @@ def gate(args, root):
                   "commit": commit.stdout.strip() if commit.returncode == 0 else "", "tree": result.get("tree"),
                   "model": model, "judgeModel": judge, "adaptive": adaptive, "sets": sets,
                   "cases": dict(sorted(cases.items()))}
+        if host != "claude":
+            record = {"host": host, "hostVersion": result.get("hostVersion"), "userSetup": setup, **record}
         accepted_path.parent.mkdir(parents=True, exist_ok=True)
         accepted_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8", newline="\n")
         print(f"Accepted as the new baseline: {accepted_path}")
@@ -724,9 +765,14 @@ def parser():
     r.add_argument("--case", help="case folder name glob")
     r.add_argument("--tag", nargs="+", action="extend", help="only cases with one of these tags")
     r.add_argument("--runs", type=int, help="runs per case (default: the case's runs:, else 1)")
-    r.add_argument("--model", default="opus")
+    r.add_argument("--host", choices=("claude", "codex", "agy"), default="claude",
+                   help="the agent host (default claude: claude plugin eval)")
+    r.add_argument("--model", help="default opus on claude, the provider default on codex (no -m), "
+                                   "gemini-4-hydrogen-xhigh on agy")
+    r.add_argument("--effort", help="reasoning effort, codex or agy only (default: codex's own, xhigh on agy)")
+    r.add_argument("--timeout", type=int, default=900, help="seconds per run, codex or agy only (default 900)")
     r.add_argument("--judge-model", default=JUDGE_MODEL, help=f"grader model, an exact id (default {JUDGE_MODEL})")
-    r.add_argument("-j", "--jobs", type=int, default=4, help="agent runs at once (1-8)")
+    r.add_argument("-j", "--jobs", type=int, default=4, help="agent runs at once (1-8; claude only)")
     r.add_argument("--ablation", choices=("none", "with-without"), default="none")
     r.add_argument("--adaptive", action="store_true",
                    help=f"run each case that falls short here or in the baseline {RERUNS} more times and merge those "
@@ -741,7 +787,8 @@ def parser():
     g = sub.add_parser("gate", help="compare a result with the accepted baseline")
     g.add_argument("--result", required=True)
     g.add_argument("--accept", action="store_true", help="record this result as the new baseline")
-    g.add_argument("--accepted", help=f"baseline file (default {LIVE.as_posix()}/accepted.json)")
+    g.add_argument("--accepted", help=f"baseline file (default {LIVE.as_posix()}/accepted.json, "
+                                      "accepted-<host>.json for a codex or agy result)")
     g.add_argument("--score-tolerance", type=float, default=0.02)
     g.add_argument("--cost-tolerance", type=float, default=COST_TOLERANCE)
     g.add_argument("--min-paired", type=int, default=MIN_PAIRED,
@@ -751,6 +798,10 @@ def parser():
 
 def main(argv=None, root=ROOT, temp=None):
     args = parser().parse_args(argv)
+    if args.command == "run" and not args.model and args.host != "codex":
+        args.model = "opus" if args.host == "claude" else "gemini-4-hydrogen-xhigh"
+    if args.command == "run" and args.host == "agy" and not args.effort:
+        args.effort = "xhigh"
     try:
         return run(args, root, temp) if args.command == "run" else gate(args, root)
     except EvalError as error:

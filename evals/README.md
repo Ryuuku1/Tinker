@@ -8,7 +8,10 @@ Two different claims:
 2. Live Claude Code evals: the cases in [live](live/) run real Claude Code sessions
    through `claude plugin eval` and grade themselves; `scripts/eval_live.py gate`
    compares a result with the accepted baseline. The learn pass depends on this gate.
-   They measure Claude Code only: Codex and Antigravity behavior is not verified.
+   `--host codex|agy` runs the same cases on Codex or Antigravity, graded locally and
+   gated only against that host's own baseline
+   ([below](#live-evals-on-codex-and-antigravity)); the Claude Code baseline measures
+   Claude Code only.
 
 Each case belongs to one set. Develop against `regression` cases. The `heldout` cases
 are for acceptance only; never edit one to make a change pass.
@@ -141,3 +144,92 @@ unavailable. Behavior that needs a shell (running gates, fetching, rebasing) is 
 by what the agent plans and reports, not by executing it. The package tests in
 `tests/test_eval_live.py` use a fake `claude` and build every scaffold; they never run
 a model.
+
+## Live evals on Codex and Antigravity
+
+The same cases run headless on another host, one run at a time:
+
+```text
+python scripts/eval_live.py run --host codex [--case GLOB] [--tag TAG ...] [--runs N]
+                                [--model M] [--effort E] [--timeout S] [--judge-model ID]
+python scripts/eval_live.py run --host agy   [--case GLOB] [--tag TAG ...] [--runs N]
+                                [--timeout S] [--judge-model ID]
+python scripts/eval_live.py gate --result evals/live/results/<runId>.json [--accept]
+```
+
+[`scripts/eval_hosts.py`](../scripts/eval_hosts.py) is the runner. It takes the same
+snapshot and the same `setup.sh` workspace as the Claude Code path. Then it runs
+`codex exec` or `agy -p` with the case's prompt in that workspace, which holds the
+charter's `AGENTS.md` and `.agents/`. The full Codex command is
+`codex exec --ignore-user-config --skip-git-repo-check -s workspace-write
+-c approval_policy=never --json -o answer.txt --ephemeral`, plus
+`-c windows.sandbox=elevated` on Windows. It passes `-m` and
+`-c model_reasoning_effort` only when given; with no `--model` the result records
+`provider-default`. The agy command is
+`agy -p --output-format stream-json --mode accept-edits --disable-slash-commands
+--log-file agy.log`, pinned to `--model gemini-4-hydrogen-xhigh --effort xhigh`
+(Gemini 4 Hydrogen, XHigh). With slash commands off, a prompt's `/tinker:tinker` stays
+text and does not expand the installed plugin. `--timeout` (900 s) kills a run and its
+children.
+
+Each run keeps these files in `<temp>/tinker_eval_<runId>/runs/<case>-<n>/`: the
+prompt, the raw event stream, `stderr.txt`, the answer, the workspace, and
+`changes.json` (the files it created or changed). The result JSON records the host, its
+CLI version, the model and the effort. It also keeps each run's tokens, because neither
+host reports cost. `--adaptive` and `--ablation with-without` stay claude-only.
+
+A run counts only when it finished:
+
+- **Codex:** `turn.completed` with no `turn.failed`, and a non-empty `-o` answer.
+- **agy:** a `result` event with status `SUCCESS` and a non-empty answer, and no
+  `denied_actions`. A print-mode run that stops on a permission request still reports
+  `SUCCESS`.
+
+Anything else, a timeout, or a grader that cannot decide is an error, and the gate
+reads the result as INVALID.
+
+Grading is local, after the run:
+
+| Grader | Codex | agy |
+| --- | --- | --- |
+| `regex`, `file_exists` | the answer (its last message), the trace or a workspace file | same |
+| `tool_used` Write / Edit | the file diff: a new file is a Write, a changed or deleted one an Edit | same |
+| `tool_used` Read | n/a (it reads through its shell) | `read_file` / `view_file` events |
+| `tool_used` Agent | n/a | `invoke_subagent` events |
+| `tool_used` Skill | n/a | n/a |
+| `llm` | the pinned `--judge-model` through `claude -p`, three votes, majority | same |
+
+- **n/a graders:** an n/a grader is left out of the score, never counted as a pass or
+  as 0 calls. A case whose every grader is n/a is an error.
+- **The judge:** the `llm` judge is the same model as Claude Code's, but with this
+  script's prompt, so it is not the same judge.
+- **Codex restrictions:** Codex restricts tools by sandbox mode, not by a tool list.
+  A case's allowed tools do not bind it: it has a shell, and it can read the graders in
+  the snapshot's `evals/`.
+
+The gate compares a result only with the same host's baseline,
+`evals/live/accepted-<host>.json`. It refuses `accepted.json` and any baseline from
+another host. Since every cost is 0, the cost verdict cannot fail; the gate says so, and
+the tokens are what to compare. The first baseline on each host is the user's call,
+like the Claude one.
+
+Neither host runs isolated. No switch drops the user's own setup without moving the CLI's
+home, which holds its sign-in, so a run measures the snapshot together with that setup:
+
+- **agy:** its plugins, including an installed Tinker, whose instructions sit beside the
+  snapshot's and whose pre-tool hook refused every `run_command` in the smoke runs. Also
+  its skills, its global `GEMINI.md`, `~/.agents/skills` and the desktop app's shared
+  permission grants.
+- **Codex:** `--ignore-user-config` drops only `config.toml`. Its home's `AGENTS.md` and
+  `skills` and `~/.agents/skills` still load.
+
+Each result records what was present as `userSetup`, one content hash per entry. The
+permission grants are not recorded. The run and the gate say the run was not isolated.
+A result whose `userSetup` differs from its baseline's cannot pass, as with another
+model. Which entries a host actually read is not verified.
+
+Not comparable across hosts: scores, turns (Codex counts completed items, agy finished
+answer steps), the prompt's `/tinker:tinker` command (plain text outside Claude Code),
+and the user's setup.
+`tests/test_eval_hosts.py` covers parsing, grading, the judge and the gate with recorded
+runs in `tests/fixtures/eval_hosts/` and a fake judge, with no model calls.

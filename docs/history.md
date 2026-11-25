@@ -7,6 +7,17 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-25: live evals on Codex and Antigravity
+
+Decision: `eval_live.py run --host codex|agy` runs the live cases headless on another host and
+grades them locally, and the gate keeps one baseline per host.
+
+| Area | Decision |
+| --- | --- |
+| Adopted | [`scripts/eval_hosts.py`](../scripts/eval_hosts.py) behind `--host` (default `claude`, whose path is unchanged). It uses the same snapshot and `setup.sh` workspace, then `codex exec --json` or `agy -p --output-format stream-json`. agy is pinned to `gemini-4-hydrogen-xhigh` at effort `xhigh`; Codex keeps the provider's default model unless `--model` is given. Grading: `regex` and `file_exists` locally; `tool_used` from host events or a before/after file diff, and n/a, out of the score, where the host shows no event; `llm` by the pinned judge through `claude -p`, three votes. A run that did not finish, including an agy run stopped on a permission request that still says `SUCCESS`, is an error. The result records the host and its version. Neither CLI can drop the user's own setup without moving its sign-in home: agy loads its plugins (an installed Tinker too), skills and `GEMINI.md`, and Codex its home's `AGENTS.md` and skills. So the result records what was present with content hashes as `userSetup`, the gate refuses to pass a result whose setup differs from its baseline's, and agy runs with `--disable-slash-commands` so a `/tinker:` prompt does not expand the installed plugin. The gate reads `accepted-<host>.json` and refuses cross-host comparison; accepting stays the user's call |
+| Not adopted | Comparing or pooling hosts; `--adaptive` and with-without on the new hosts; a Codex tool allow-list (it has sandbox modes, not per-tool limits); scoring an unobservable tool as 0 calls or as a pass; a cost figure (neither host reports one, so tokens are kept instead) |
+| Evidence | Recorded-run tests, no model calls: [`tests/test_eval_hosts.py`](../tests/test_eval_hosts.py) with scrubbed Codex and agy runs. Smoke runs on Windows, one each: Codex simple-question 1.0 and front-door-question 1.0, judge 3/3. agy simple-question 0.83: it delegated to an explorer after its shell was denied. agy triage-small-task stopped on a permission request, an error under the final rule. Not verified: an agy file edit, the Skill mapping, whether `--mode accept-edits` applies (its `init` said `request-review`), which `userSetup` entries each host actually read, the agy command with `--disable-slash-commands` and `--log-file` (added after the smoke runs), macOS and Linux |
+
 ## 2026-11-23: the Codex smoke tests and the Windows sandbox key
 
 Decision: the external-worker commands also set `-c windows.sandbox=elevated`, and a
