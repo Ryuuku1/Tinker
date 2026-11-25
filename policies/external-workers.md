@@ -219,6 +219,16 @@ Implement:
                           "read_url(*)", "execute_url(*)", "mcp(*)"]}}
 ```
 
+The deny rules state intent but guard nothing: in `agy` 1.5.17 `command(git add)` and
+`command(git commit)` fired in no run, with or without the sandbox. The guard is the
+sandbox in a linked worktree: it hid the main checkout's Git folder in the user
+profile (measured) and, per the CLI's docs, makes one elsewhere read-only. So
+implement runs only in a linked worktree, and since the guard is unproven outside the
+user profile, the Lead checks after every implement run, before its own `add -A`,
+that `git -C <worktree> rev-list --count <base>..HEAD` prints 0 and
+`git -C <worktree> diff --cached --quiet` exits 0. A commit or a staged change fails
+the run: report it and do the work in the Lead.
+
 ```sh
 cd <target checkout> && MSYS_NO_PATHCONV=1 agy -p "$(cat <run>-brief.md)" \
   --model gemini-4-hydrogen-xhigh --effort xhigh --settings <run>-settings.json \
@@ -238,8 +248,8 @@ cd <worktree> && MSYS_NO_PATHCONV=1 agy -p "$(cat <run>-brief.md)" \
   brief as an argument, so a brief stays well under Windows' command-line limit of
   about 32,000 characters.
 - No switch drops the user's setup: the desktop app's shared permission grants load,
-  and the session's deny rules win over them (deny before ask before allow), though
-  in the sandbox `git add` and `git commit` ran despite their deny rules (below). Plugins
+  and the session's deny rules are meant to win over them (deny before ask before
+  allow), though no `command(...)` deny rule fired in any run (above). Plugins
   load too: Tinker's plugin gives the worker the Lead's instructions, which the brief's
   first lines set aside, and its pre-tool hook gates the worker's commands and file
   writes. A runtime without the 2026-11-25 gate fix refuses every worker command
@@ -309,10 +319,14 @@ Measured on Windows with `agy` 1.5.17 on 2026-11-25, with the commands above:
   the linked worktree's Git folder in the user profile. The sandbox refused the
   terminal write outside, and the CLI's permission check soft-denied the file-tool
   write outside, which ended the run with no handoff. No outside file, no commit.
+- A probe of the same deny rules without the sandbox (`always-proceed`, a main
+  checkout, the log listing the rules): `git add` and `git commit` ran and the commit
+  landed.
 - Not verified: study and implement with the current lines (the only runs with them
   were the violations, which ended without a handoff), an Outcome of done when the hook
   refuses the gate, a worktree whose main checkout lies outside the user profile (the
-  sandbox makes it read-only, so Git may read it but, inferred, not commit), study
+  sandbox makes it read-only, so Git may read it but, inferred, not commit), why the
+  `command(...)` deny rules do not fire, study
   mode's write and command denials, network, a push being
   refused, a run at `--print-timeout`, `taskkill`, the PID filter among several
   `agy.exe` processes, macOS and Linux.
