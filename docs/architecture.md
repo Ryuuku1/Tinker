@@ -40,6 +40,7 @@ launcher.
 | `scripts/reload.py` | Fetches, removes worktrees and branches proven merged, fast-forwards the default branch | By the user, or `/tinker reload` (the gate asks unless `--dry-run`) |
 | `scripts/usage_report.py` | Tokens and estimated cost per workflow from Claude Code and Codex session logs, plus prompt-cache lines by request time | By the user and `status` |
 | `scripts/eval_live.py` | Live Claude Code eval runner and gate | By the user, or `/tinker eval` and `learn` |
+| `scripts/eval_hosts.py` | The same live cases on Codex or Antigravity, graded locally, one baseline per host | Through `eval_live.py run --host codex\|agy` |
 | `evals/` | Live Claude Code cases in `evals/live/` and the evaluation guide | Through `eval_live.py` |
 
 ## Request flow

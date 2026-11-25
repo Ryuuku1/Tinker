@@ -1,0 +1,3 @@
+`apply_discount` raises `ValueError("price_cents must not be negative")` if the input price is below zero. [pricing.py](/C:/run/work/product/shop/shop/pricing.py:6)
+
+It rounds the discounted price to the nearest cent, with half-cent ties rounding up. It uses integer arithmetic: `(price_cents * (100 - percent) + 50) // 100`. For example, 10% off 15 cents gives 13.5 cents, which rounds to 14 cents. [pricing.py](/C:/run/work/product/shop/shop/pricing.py:8)
