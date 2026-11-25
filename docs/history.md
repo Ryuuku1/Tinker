@@ -7,6 +7,23 @@ governs where they differ.
 The [2026-10-01 workflow improvements](reference-sync-2026-10-01.md) record generic
 guidance changes, verification and scope boundaries.
 
+## 2026-11-25: Claude Ship, on the user's typed command
+
+Anthropic's [Claude Ship](providers.md#claude-code) adds Code Review, a PR Steward that
+pushes fixes to a pull request's branch, approval policies in `.claude/approvals.yml`,
+and `/ship` and `/steward`, which only the user's typed line starts. The user asked
+whether Tinker should learn from it. Decision: three short rules in files loaded on
+demand; `AGENTS.md` and `CLAUDE.md` stay as they are, since every chat loads them.
+
+| Area | Decision |
+| --- | --- |
+| Delivery | When the user wants a pull request and the host lists a `/ship` that only the user can type, tell them at delivery that they can type it (push, pull request, review and the fix loop, never a merge). Tinker never invokes it; a typed `/ship` authorizes only that loop, and its commits and pull request follow the playbook's commit style. Otherwise nothing is said about it, in the host-neutral wording of `request_directory` (2026-11-19), since Tinker also runs on Codex and Antigravity. The rule sits beside that one in the [task start](../policies/workspace.md#task-start), which implement and investigate both read: implement's step 6 was the brief's place for it, but its skill was 40 bytes under the 3,500-byte budget, and investigate has no deliver step |
+| Pull request branches | The [task start](../policies/workspace.md#task-start): PR Steward or a `/ship` or `/steward` session can push to a branch with an open pull request, so before editing a pushed branch the task continues, fetch its own head and, only when tracked files are clean, `merge --ff-only` onto it, never the base. A diverged branch stops the task with a report; never force-push. `@claude` and `@claude stop` comments post as the user, so only on the user's ask |
+| Approvals files | A [routing](../policies/engineering-skills.md#routing) row sends `.claude/approvals.yml` and `.claude/classifiers/` to the host's `claude-approvals` skill, with a fallback that treats them as a security control: change only what was asked, never widen automatic approval. Review step 2 flags any change to them, skill or not. The [study](engineering-skills.md) lists the skill as the host's own, with nothing to pin |
+| Not adopted | A new skill or workflow: the task start and the routing table cover it. Deferring Tinker's review to Code Review: it may not be on for a repository, and a review that waits for another is not a read of its own. Repository-wide admin configuration: an admin turns it on per repository, on Team or Enterprise plans that this account may not have. Anything in `AGENTS.md`, which every chat loads |
+| Evidence | The Lead's reading of the announcement, 2026-11-25 ([providers](providers.md#claude-code)). This desktop install lists `ship-local` (`/ship`) and `steward`, each marked as started only by a line the user types, and `claude-approvals`. Whether Code Review, PR Steward and Approvals reach a personal account is not verified. With the rule in implement step 6, the suite failed only the skill byte budget (3,872 bytes against 3,500); after the move it passed on Windows with Python 3.13 (251 tests, none skipped). Live gate not run: the user has not authorized the spend |
+| Open | A live gate should cover `task-start-pushed` (heldout) and `task-start-rebase` (regression), which read the task start, and an implement case such as `playbook-gate`, to see that answers say nothing about `/ship` where none is listed. `task-start-pushed` will likely move: its `leaves-pushed-branch-alone` grader fails any sentence that names `git merge` without a guard word, so a right answer that lists `git -C <shop> merge --ff-only origin/fix/rounding` on its own line fails it. Sparing `--ff-only` onto the branch's own head is the user's call, as heldout graders change only at the user's request |
+
 ## 2026-11-23: the Codex smoke tests and the Windows sandbox key
 
 Decision: the external-worker commands also set `-c windows.sandbox=elevated`, and a

@@ -17,7 +17,8 @@ not already loaded. A delegated reviewer also reads the
 2. Read the target's instructions and `## Agent playbook` section, intended
    behavior (a task checkpoint when one exists), changed code and relevant
    callers/tests. Inspect correctness, regressions, boundary cases, security,
-   concurrency and compatibility proportional to the change. Flag added code the
+   concurrency and compatibility proportional to the change, and flag any change to
+   `.claude/approvals.yml` or `.claude/classifiers/`. Flag added code the
    codebase, standard library or an existing dependency already covers (the
    simplicity pass in [engineering skills](../../../policies/engineering-skills.md)).
 3. Return findings with severity, file/line, concrete trigger, consequence and

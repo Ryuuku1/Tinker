@@ -95,6 +95,23 @@ without `--plugin-dir .`: a same-named plugin directory may replace the installe
 one for that session, and it carries no hooks. The native plugin validator's
 warning about root CLAUDE.md is expected: this file loads as project context.
 
+[Claude Ship](https://claude.com/resources/articles/introducing-claude-ship), read
+2026-11-25, has three parts. Code Review (generally available) posts verified findings
+to a pull request at a Quick, Standard or Deep level. PR Steward (beta) keeps a pull
+request passing by pushing fixes for failing checks, conflicts and review feedback to
+its branch; it never approves or merges. Claude Approvals (beta) approves routine
+changes or requires a person by a policy file on the default branch,
+`.claude/approvals.yml`, with custom classifiers in `.claude/classifiers/`. An admin
+turns them on per repository; they need a Team or Enterprise plan and a GitHub
+repository, are not offered with ZDR, HIPAA or CMEK, and are billed on tokens. In the
+app and the CLI, `/ship` (push, pull request, review, then feedback and failing
+checks) and `/steward` (an existing pull request) count as regular usage, and only a
+line the user types starts them. Tinker adds three rules: the task start tells a user
+who wants a pull request about a listed `/ship` and fetches a pushed branch's own head
+before editing it, and approvals files route to `claude-approvals`, with a flag in
+every review. Whether the repository-wide parts
+reach a personal account is not verified.
+
 Sources: [imports](https://code.claude.com/docs/en/memory),
 [agent allowlists](https://code.claude.com/docs/en/sub-agents),
 [plugin paths](https://code.claude.com/docs/en/plugins-reference),

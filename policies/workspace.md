@@ -31,10 +31,17 @@ of its commits is pushed (`git -C <checkout> rev-list --count HEAD --not --remot
 equals `git -C <checkout> rev-list --count origin/<base>..HEAD`). On a conflict, run
 `git -C <checkout> rebase --abort` and report it. Otherwise never stash, rebase or
 force-push: leave the branch and report how far behind it is
-(`git -C <checkout> rev-list --count HEAD..origin/<base>`). Never move the primary
-checkout for a task whose branch lives in a worktree. A repository without a remote
-or base is reported, not guessed. When the playbook says `Graph: auto`, refresh the
-graph after this step per [Graphify](../.agents/skills/tinker-graphify/SKILL.md).
+(`git -C <checkout> rev-list --count HEAD..origin/<base>`). A branch with an open
+pull request can also receive commits from PR Steward or a `/ship` or `/steward`
+session, so before editing a pushed branch this task continues, also fetch its own
+head: `git -C <checkout> fetch origin <branch>`. Only when its tracked files are
+clean, catch up with `git -C <checkout> merge --ff-only origin/<branch>`, never with
+the base; if the branch has diverged, stop and report, and never force-push.
+`@claude` and `@claude stop` pull request comments post as the user, so post them
+only when the user asks. Never move the primary checkout for a task whose branch
+lives in a worktree. A repository without a remote or base is reported, not
+guessed. When the playbook says `Graph: auto`, refresh the graph after this step
+per [Graphify](../.agents/skills/tinker-graphify/SKILL.md).
 
 If `mcp__ccd_directory__request_directory` is among your tools (deferred ones
 included), add each checkout you work in that is outside this chat's folders (the
@@ -42,6 +49,12 @@ target, its worktree, another repository the task changes) with it, so the app s
 its diffs and links its pull requests; this never makes it a later task's target.
 Otherwise say nothing about it. Use absolute paths or `git -C`: a `cd` into an added
 folder persists.
+
+When the user wants a pull request and the host lists a `/ship` that only the user can
+type, tell them at delivery that they can type it: it pushes, opens the pull request,
+reviews it and works on feedback and failing checks, and never merges. Never invoke it
+yourself. A typed `/ship` authorizes only that loop, and its commits and pull request
+follow the playbook's commit style. Otherwise say nothing about it.
 
 Existing edits belong to the user unless this task demonstrably created them.
 Never reset, stash, revert or overwrite unrelated changes. When an edited area
