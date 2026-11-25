@@ -494,6 +494,16 @@ class ToolPayloadTests(Fixture):
                 "toolCall": {"name": "run_command", "args": {"CommandLine": "Remove-Item -Recurse dist"}}}
         self.assertEqual(self.call("antigravity", base), ({"file.deleteRecursive"}, []))
 
+    def test_antigravity_cli_file_tools_are_gated(self):
+        # agy 1.5.17 names its file tools write_file and edit_file, with the target in `Path`.
+        for tool in ("write_file", "edit_file"):
+            with self.subTest(tool=tool):
+                own = {"conversationId": "c", "workspacePaths": [str(self.repo)],
+                       "toolCall": {"name": tool, "args": {"Path": str(self.home / ".tinker" / "config.json"), "Content": "x"}}}
+                self.assertTrue(self.call("antigravity", own)[1])
+                ordinary = dict(own, toolCall={"name": tool, "args": {"Path": str(self.repo / "src" / "a.py"), "Content": "x"}})
+                self.assertEqual(self.call("antigravity", ordinary), (set(), []))
+
     def test_scheduler_calls_need_the_marker(self):
         claude = {"session_id": "s", "cwd": str(self.repo), "tool_name": "mcp__scheduled-tasks__create_scheduled_task",
                   "tool_input": {"taskId": "t", "prompt": "git push --force origin main", "cronExpression": "0 7 * * *"}}
@@ -1090,6 +1100,7 @@ class PayloadContractTests(Fixture):
             ("codex", self.payload("apply_patch", {"command": "*** Begin Patch\n*** End Patch\n"})),
             ("antigravity", self.antigravity("run_command", {})),
             ("antigravity", self.antigravity("write_to_file", {"CodeContent": "x"})),
+            ("antigravity", self.antigravity("write_file", {"Content": "x"})),
         ]
         expected = {"claude": "ask", "codex": "deny", "antigravity": "force_ask"}
         for host, payload in cases:
@@ -1111,6 +1122,7 @@ class PayloadContractTests(Fixture):
             ("codex", self.payload("Bash", {"command": ["git", "status"]})),
             ("codex", self.payload("automation_update", {"id": "a1", "status": "PAUSED"})),
             ("antigravity", self.antigravity("write_to_file", {"TargetFile": path, "CodeContent": "x"})),
+            ("antigravity", self.antigravity("write_file", {"Path": path, "Content": "x"})),
         ]
         for host, payload in cases:
             with self.subTest(host=host, payload=payload):

@@ -236,7 +236,7 @@ class RenderTests(InstallCase):
                      "mcp__scheduled-tasks__list_scheduled_tasks"):
             self.assertFalse(re.search(pre["matcher"], name), name)
         gated = install_apps.antigravity_hooks("/usr/bin/python3", runtime)["tinker"]["PreToolUse"][0]["matcher"]
-        for name in ("run_command", "write_to_file", "schedule"):
+        for name in ("run_command", "write_to_file", "write_file", "edit_file", "schedule"):
             self.assertTrue(re.search(gated, name), name)
         self.assertFalse(re.search(gated, "list_schedules"))
         self.assertEqual(pre["hooks"][0]["args"][:2], ["-I", "-S"])

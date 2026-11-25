@@ -55,8 +55,10 @@ CLAUDE_MATCHER = ("^(Bash|PowerShell|Monitor|Write|Edit|MultiEdit|NotebookEdit"
                   r"|mcp__(plugin_[\w.-]+_)?scheduled-tasks__(create|update)_scheduled_task)$")
 CODEX_MATCHER = "^(Bash|apply_patch|automation_update)$"  # automation_update is not a documented hook tool name
 # Antigravity's anchoring is undocumented, so the names stay unanchored: an extra match asks, a missed one is silent.
-# `schedule` alone is anchored so tools such as a schedule listing never reach the gate.
-ANTIGRAVITY_MATCHER = "run_command|code_action|write_to_file|replace_file_content|multi_replace_file_content|^schedule$"
+# `schedule` alone is anchored so tools such as a schedule listing never reach the gate. The CLI (agy 1.5.17) names
+# its file tools write_file and edit_file.
+ANTIGRAVITY_MATCHER = ("run_command|code_action|write_to_file|replace_file_content|multi_replace_file_content"
+                       "|write_file|edit_file|^schedule$")
 ABOUT = "Tinker software team: Lead charter, four specialists, workflows, approvals and presence."
 AUTHOR = {"name": "Tinker"}
 TOOLS = {

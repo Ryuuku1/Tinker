@@ -967,7 +967,8 @@ TOOL_KINDS = {
                "MultiEdit": "file", "NotebookEdit": "file"},
     "codex": {"Bash": "command", "apply_patch": "patch", "automation_update": "schedule"},
     "antigravity": {"run_command": "command", "write_to_file": "file", "replace_file_content": "file",
-                    "multi_replace_file_content": "file", "code_action": "file", "schedule": "schedule"},
+                    "multi_replace_file_content": "file", "code_action": "file", "schedule": "schedule",
+                    "write_file": "file", "edit_file": "file"},  # the last two: the agy CLI's names
 }
 # Claude names MCP tools mcp__<server>__<tool>, or mcp__plugin_<plugin>_<server>__<tool> from a plugin.
 CLAUDE_SCHEDULER = re.compile(r"^mcp__(?:plugin_[\w.-]+_)?scheduled-tasks__(create|update)_scheduled_task$")
