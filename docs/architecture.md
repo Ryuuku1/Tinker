@@ -20,14 +20,15 @@ the team; native host capabilities carry execution and permissions; a few small
 standard-library scripts cover what instructions cannot; a live Claude Code runner
 judges behavior. There is no daemon, model router, orchestration CLI, provider launcher,
 database, scheduler service or simulated execution. The external-worker recipe for the
-Codex CLI is instructions the Lead follows with its own shell, not a launcher.
+Codex and Antigravity CLIs is instructions the Lead follows with its own shell, not a
+launcher.
 
 | Part | What it is | Loaded or run |
 | --- | --- | --- |
 | `AGENTS.md` | The Lead: routing, delegation budget, boundaries | Every session (native import or rule) |
 | `roles/` | Four specialist charters (Engineer, Reviewer, Researcher and the cheap search-only Explorer); front matter generates native descriptors | Only the selected charter |
 | `.agents/skills/` | Seven skills: the `tinker` front door (also status, schedules and lesson reviews) and the shape, implement, investigate, review, artifacts and Graphify workflows | Only the selected workflow |
-| `policies/` | Evidence, delegation, external workers (the Codex CLI on the user's request), safety, workspace (including task start), tools, knowledge, retro, learning (the gated learn pass), application verification (including browser live passes) | When the step needs them |
+| `policies/` | Evidence, delegation, external workers (the Codex and Antigravity CLIs on the user's request), safety, workspace (including task start), tools, knowledge, retro, learning (the gated learn pass), application verification (including browser live passes) | When the step needs them |
 | `templates/` | Agent playbook section, checkpoint, worker brief, knowledge candidate, domain pack, verification recipe, routine prompts, user story, ADR | When producing that artifact |
 | `profiles/` | Opt-in stack conventions, subordinate to the product repository | Only for matching work |
 | `.claude/`, `.codex/`, `.agents/agents/` (`.gemini/agents/` is a hand-kept reviewer) | Generated native descriptors: discovery and requested tools; `.claude/settings.json` adds destructive-Git deny rules and the Playwright configuration | By each host |

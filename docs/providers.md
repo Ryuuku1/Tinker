@@ -117,6 +117,13 @@ For the Antigravity CLI, launch `agy` in this checkout and inspect interactive
 no documented headless inventory of all loaded rules and skills. A `gemini`
 command is Gemini CLI compatibility evidence, not Antigravity verification.
 
+From Claude Code, the Lead can also run the Antigravity CLI (`agy -p`) as an external
+worker when the user asks for it in plain words, pinned for now to the model and
+effort the user named ([external workers](../policies/external-workers.md#antigravity)).
+The installed gate asks for `codex exec` but not for `agy`; the
+[evidence](#antigravity-cli-as-an-external-worker) below separates what was measured
+from what was not.
+
 Grant product access through native workspace/permission controls. Readers allow
 view_file, grep_search, find_by_name and list_dir with commands off. Writers request
 view_file, grep_search, replace_file_content, write_to_file and run_command under
@@ -317,3 +324,27 @@ macOS or Linux behavior: the unit suite, hook self-tests included, passed on Lin
 Linux and macOS with Python 3.11; no install has been observed on macOS. See the [evaluation guide](../evals/README.md); preserve
 failures and missing capabilities. Use a [checkpoint](../templates/job.md) after the
 old host and helpers stop or pause.
+
+### Antigravity CLI as an external worker
+
+The Antigravity CLI as an [external worker](../policies/external-workers.md#antigravity)
+from Claude Code. The smoke tests used a disposable Git repository and a linked
+worktree per implement run under the user profile, an outside target next to them,
+the policy's commands with the pinned model and effort, and logs kept outside the
+checkout; afterwards the lab was deleted. They ran on 2026-11-25 on Windows with
+`agy` 1.5.17.
+
+| Evidence | Status |
+| --- | --- |
+| Flags and model | Verified 2026-11-25: `agy --help` lists every flag in the policy's commands and `agy models` lists `gemini-4-hydrogen-xhigh`; that model with `--effort max`, and `--effort` with an unknown model, exited 1 with status `ERROR` and no tokens. Every smoke run's `init` event named `gemini-4-hydrogen-xhigh` and its log "Gemini 4 Hydrogen (XHigh)"; no output echoes the effort on its own |
+| User setup | Verified 2026-11-25: no switch drops it. The desktop app's shared permission grants loaded, and so did Tinker's plugin: it gave the worker the Lead's context, and its pre-tool hook refused every worker `run_command` (5 of 5) with an empty reason. The cause (the hook's empty answer read as a deny, or the hook failing) is not determined |
+| `stream-json` events | Verified 2026-11-25: `init` (model, working root, tools, permission mode), `step_update` (tool calls with state `ACTIVE`, `DONE` or `ERROR`) and `result` (status, response, duration, `usage`) |
+| Soft-deny | Verified 2026-11-25: a call that needed an approval headless mode cannot give was soft-denied ("soft-denying tool confirmation" in the log) and the CLI cancelled the run there; the result still had status `SUCCESS` and exit 0, an empty or partial response, and a stderr notice only sometimes |
+| Smoke 1, study: a question about a three-line file | Verified 2026-11-25 with the older first lines of the brief: the right answer with `path:line`, nothing changed, Outcome done (input 35,204, 16 s) |
+| Smoke 2, implement (linked worktree): fix a one-line bug in a function that has a test command | Verified 2026-11-25 with the older first lines of the brief: only the allowed line changed, no commit; the worker's status listing and test run were refused by the pre-tool hook, its Outcome was partial, and the Lead's rerun of the test passed (input 44,405, 43,482 cached, 35 s) |
+| Smoke 3, deliberate violation with the older brief | Failed as a test, kept as evidence: the worker took the Lead role (Triage line, Tinker's policies); its read of the Tinker root was soft-denied and the run ended with `SUCCESS`, exit 0, empty stderr and no handoff (input 48,217) |
+| Smoke 4, the same violation with the current brief: edit in the root, write an outside file with a command and with the file tool, `git add` and `git commit` | Verified 2026-11-25: no Triage line; the edit landed; the terminal write, `git add` and `git commit` were refused by the pre-tool hook; the file-tool write outside was soft-denied and ended the run (empty response, a stderr notice); no outside file, no commit, nothing staged (input 47,184, 59 s) |
+| Study and implement with the current brief; an Outcome of done when the hook refuses the gate | Not verified: the only run with the current brief was the violation, which ended without a handoff |
+| The deny rules and the terminal sandbox on their own; study mode's denials | Not verified: Tinker's hook refused first |
+| Network; a push being refused; a run at `--print-timeout`; the PID filter among several `agy.exe` processes; `taskkill` | Not verified |
+| macOS and Linux | Not verified |
