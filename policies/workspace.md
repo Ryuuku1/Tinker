@@ -103,6 +103,9 @@ Multiple jobs use separate handoffs. Ordinary questions require no checkpoint.
 No auto-cleanup:
 delete only an explicitly selected owned artifact after checking it is inactive,
 inside the authorized root and no longer needed. Never follow links during deletion.
+Sessions are never cleaned up: archive, end or delete a session (this one, a side
+session or any other) only when the user names it in that request; finished and idle
+sessions stay open.
 
 ## Slices
 
