@@ -36,7 +36,8 @@ pull request can also receive commits from PR Steward or a `/ship` or `/steward`
 session, so before editing a pushed branch this task continues, also fetch its own
 head: `git -C <checkout> fetch origin <branch>`. Only when its tracked files are
 clean, catch up with `git -C <checkout> merge --ff-only origin/<branch>`, never with
-the base; if the branch has diverged, stop and report, and never force-push.
+the base. When they are not clean and the branch is behind its head, or when it has
+diverged (the merge refuses), stop and report; never force-push.
 `@claude` and `@claude stop` pull request comments post as the user, so post them
 only when the user asks. Never move the primary checkout for a task whose branch
 lives in a worktree. A repository without a remote or base is reported, not

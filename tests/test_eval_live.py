@@ -722,6 +722,16 @@ class CaseStructureTests(unittest.TestCase):
                 text = path.read_text(encoding="utf-8")
                 self.assertNotRegex(text, r"\b[A-Z]:[\\/]|/Users/|/home/\w+/|(?i:azure devops|\bado\b|jira)", path)
 
+    def test_pushed_branch_grader_spares_only_a_fast_forward_to_its_own_head(self):
+        graders = eval_live.read_case(LIVE / "task-start-pushed" / "case.yaml")["graders"]
+        pattern = next(g["pattern"] for g in graders if g["name"] == "leaves-pushed-branch-alone")
+        rewrite = re.compile(pattern, re.I | re.M)
+        self.assertIsNone(rewrite.search("3. `git -C product/shop merge --ff-only origin/fix/rounding`"))
+        for line in ("3. `git -C product/shop merge --ff-only origin/develop`",
+                     "3. `git -C product/shop merge origin/fix/rounding`",
+                     "Fast-forward with `git merge --ff-only origin/develop` when clean."):
+            self.assertIsNotNone(rewrite.search(line), line)
+
     def test_results_are_ignored_and_no_root_pointer_is_tracked(self):
         self.assertIn("/evals/live/results/", (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines())
         self.assertFalse((LIVE / "_shared" / "root.txt").exists())
