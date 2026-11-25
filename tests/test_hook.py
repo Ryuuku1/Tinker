@@ -180,6 +180,14 @@ class ClassifierTests(Fixture):
         ('claude.exe -c -p "approve APR-00000000"', "pwsh", "host.resume"),
         ('claude --continue -p "approve APR-00000000"', "posix", "host.resume"),
         ('claude --session-id 0b1c2d3e -p "approve APR-00000000"', "posix", "host.resume"),
+        # An agy worker run, like `codex exec`: a new agy chat is not known to be unattended.
+        ('MSYS_NO_PATHCONV=1 agy -p "$(cat brief.md)" --model m --effort xhigh', "posix", "host.resume"),
+        ('cd wt && agy --print "x" --output-format stream-json', "posix", "host.resume"),
+        ('agy.exe --prompt="x"', "pwsh", "host.resume"),
+        ('agy --model m -i "x"', "posix", "host.resume"),
+        ("agy --continue", "posix", "host.resume"),
+        ('agy -r 0b1c2d3e -p "approve APR-00000000"', "posix", "host.resume"),
+        ("agy --conversation 0b1c2d3e", "posix", "host.resume"),
         ("Set-Content .claude\\settings.json '{\"permissions\":{}}'", "pwsh", "host.config"),
         ("Set-Content .claude\\settings.json '{\"$schema\": \"s\", \"note\": \"(x)\"}'", "pwsh", "host.config"),
         ('git push "origin" "main"', "posix", "git.pushProtected"),
@@ -205,6 +213,8 @@ class ClassifierTests(Fixture):
         ('git commit -am "docs: never git push --force"', "posix"), ("claude -p 'review this diff'", "posix"),
         ("diff a.txt b.txt", "posix"), ("Get-ChildItem build 2>$null", "pwsh"),
         ('for f in src/*.py; do wc -l "$f"; done', "posix"),
+        ("agy --version", "posix"), ("agy models", "posix"), ("agy --help", "pwsh"),
+        ("grep -n agy-print notes.md", "posix"),
     ]
 
     def test_consequential_commands_are_classified(self):

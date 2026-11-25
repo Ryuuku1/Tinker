@@ -32,12 +32,12 @@ initiative: no slash command, no automation, no usage-based trigger.
   with Gemini. Naming one CLI never opens the other.
 - **If the user says Codex should carry the work** (to save Claude usage, say),
   every eligible piece goes to Codex.
-- **Host gate:** `codex exec` is on the installed gate's list
+- **Host gate:** `codex exec` and an `agy` run (`-p`, `-i`, or resuming a
+  conversation) are on the installed gate's list
   ([enforcement](../docs/providers.md#what-is-enforced-where)). In Claude Code's
-  default permission mode it still asks once per run; in bypass and auto modes it is
+  default permission mode each still asks once per run; in bypass and auto modes it is
   silent; a Codex host denies it with a request id; an unattended run is denied with
-  no grant path. The Lead never asks again, but the host's gate may. `agy` is not on
-  that list, so only these rules keep it out of an unattended run. Run either CLI
+  no grant path. The Lead never asks again, but the host's gate may. Run either CLI
   only from Claude Code.
 
 ## Modes and commands

@@ -505,8 +505,11 @@ RULES = [
                           r"|\b(?:sh|bash|zsh)\b.*(?:\$\(|<\()\s*(?:curl|wget)\b")),
     ("shell.encoded", _rx(r"\b(?:pwsh|powershell)(?:\.exe)?\b.*\s-(?:e|ec|en|enc\w*)(?=[\s:]|$)")),
     # A resumed chat keeps its id, so an `approve <id>` sent through it would approve this chat's own request.
+    # A worker run (`codex exec`, `agy -p`) starts a chat that is not known to be unattended.
     ("host.resume", _rx(r"\bcodex(?:\.exe|\.cmd)?\s.*(?:\bexec\b|\bresume\b|\s--last\b)"
-                        r"|\bclaude(?:\.exe|\.cmd)?\s(?:.*\s)?(?:-r|--resume|-c|--continue|--session-id)(?=[\s=]|$)")),
+                        r"|\bclaude(?:\.exe|\.cmd)?\s(?:.*\s)?(?:-r|--resume|-c|--continue|--session-id)(?=[\s=]|$)"
+                        r"|\bagy(?:\.exe|\.cmd)?\s(?:.*\s)?(?:-[pirc]|--(?:print|prompt|prompt-interactive|continue"
+                        r"|resume|conversation))(?=[\s=]|$)")),
 ]
 UNATTENDED_RULES = [("git.push", _rx(r"\bgit\b.*\bpush\b")), ("git.commit", _rx(r"\bgit\b.*\bcommit\b"))]
 # Literal messages only; -am, -sm and the like end in -m (git's flags that take no value come before it).

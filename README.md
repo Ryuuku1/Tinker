@@ -331,7 +331,7 @@ tokens and does not ask again within that scope, though in Claude Code's default
 permission mode the installed gate still asks once per `codex exec`. The Antigravity
 CLI joins the same way on "consult Antigravity", "use Antigravity too for these
 tasks" or "parallelize with Antigravity" (or Gemini), pinned for now to Gemini 4
-Hydrogen at xhigh; the installed gate does not ask for `agy`.
+Hydrogen at xhigh; the installed gate asks once per `agy -p` run the same way.
 
 ### Workflows
 

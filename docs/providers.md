@@ -120,7 +120,7 @@ command is Gemini CLI compatibility evidence, not Antigravity verification.
 From Claude Code, the Lead can also run the Antigravity CLI (`agy -p`) as an external
 worker when the user asks for it in plain words, pinned for now to the model and
 effort the user named ([external workers](../policies/external-workers.md#antigravity)).
-The installed gate asks for `codex exec` but not for `agy`; the
+The installed gate asks for an `agy` run as it does for `codex exec`; the
 [evidence](#antigravity-cli-as-an-external-worker) below separates what was measured
 from what was not.
 
@@ -149,7 +149,7 @@ structured tool input: a guard against mistakes and naive injection, not a sandb
 
 | Action | With the installed hooks | Otherwise |
 | --- | --- | --- |
-| Force or protected-branch push, branch deletion, discarding work, recursive deletion, `gh`/`az` remote changes, publishing, credential changes, remote or encoded scripts, `codex exec`/`resume` | Claude and Antigravity ask; Codex denies with a request id for a typed, single-use approval of that exact operation | Instructions: explicit authorization |
+| Force or protected-branch push, branch deletion, discarding work, recursive deletion, `gh`/`az` remote changes, publishing, credential changes, remote or encoded scripts, `codex exec`/`resume`, an `agy` run (`-p`, `-i`, `--continue`, `--resume`) | Claude and Antigravity ask; Codex denies with a request id for a typed, single-use approval of that exact operation | Instructions: explicit authorization |
 | The same in an unattended (scheduled) run, plus any commit or push | Denied; no grant path | Instructions |
 | Writing host hook settings | Asked; refused when it could disable Tinker | Instructions |
 | Changing Tinker's runtime, state, plugin or installer | Always refused | Instructions |
