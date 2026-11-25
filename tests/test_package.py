@@ -395,7 +395,7 @@ class PackageTests(unittest.TestCase):
         for flag in ('--dangerously-skip-permissions', '--add-dir', '--continue', '--resume'):
             self.assertRegex(flat, rf'Never pass [^.]*`{flag}`')
 
-    def test_external_worker_change_names_no_model_or_user_profile_path(self):
+    def test_external_worker_docs_name_no_gpt_model_or_user_profile_path(self):
         for name in ('policies/external-workers.md', 'templates/worker-brief.md', 'policies/delegation.md',
                      'docs/providers.md', 'docs/architecture.md', 'docs/history.md', 'README.md'):
             text = (ROOT / name).read_text(encoding='utf-8')

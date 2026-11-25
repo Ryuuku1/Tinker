@@ -282,13 +282,13 @@ No Gemini installation or extension manifest is added.
 
 Evidence is kept separate per kind; one kind never stands in for another. Local
 observations: Codex CLI 0.146.0 and 0.171.0, Claude Code 2.1.266 and 2.1.280, Antigravity desktop
-2.15.1 (observations, not version pins). No host is fully verified until its live
+2.15.1, Antigravity CLI 1.5.17 (observations, not version pins). No host is fully verified until its live
 acceptance cases succeed.
 
 | Evidence | Claude Code | Codex | Antigravity |
 | --- | --- | --- | --- |
 | Descriptor generation | Verified by package tests (no drift). 2026-09-26: `claude plugin validate` (CLI 2.1.274) passed for this checkout and for a bundle and marketplace rendered by the new installer into a disposable home | Package tests only | Package tests only |
-| Host discovery | Live 2026-09-23/24: skills and eight agents loaded; plugin validation passed | Desktop task loaded AGENTS.md and skills (2026-09-23); CLI 0.146.0 present, not run live | Not verified (no scoped live interface, no `agy` on PATH on 2026-09-26) |
+| Host discovery | Live 2026-09-23/24: skills and eight agents loaded; plugin validation passed | Desktop task loaded AGENTS.md and skills (2026-09-23); CLI 0.146.0 present, not run live | CLI 1.5.17 on 2026-11-25: the plugin listed as enabled (seven skills, four agents, one rule, one hook), and its rule and pre-tool hook acted in worker runs. The desktop app not verified |
 | Tool restrictions | Requested by descriptors; not verified live | Same | Same |
 | Hook behavior | Live 2026-09-24 for the runtime before this refactor (context, ask, block in default and bypass modes, session end). The 2026-09-26 runtime: sample-payload tests. The output trim (2026-11-17): sample-payload tests only, not yet checked in an installed app | Documented formats and shell self-tests only | Documented formats and shell self-tests only (`cmd /c` on Windows, `sh -c` elsewhere) |
 | Task execution | Live baseline accepted 2026-11-17 (`evals/live/accepted.json`: regression 0.979 over 28 runs, heldout 0.889 over 5, model opus) | Not verified (a delegation probe timed out; see below) | Not verified |
@@ -337,7 +337,8 @@ checkout; afterwards the lab was deleted. They ran on 2026-11-25 on Windows with
 | Evidence | Status |
 | --- | --- |
 | Flags and model | Verified 2026-11-25: `agy --help` lists every flag in the policy's commands and `agy models` lists `gemini-4-hydrogen-xhigh`; that model with `--effort max`, and `--effort` with an unknown model, exited 1 with status `ERROR` and no tokens. Every smoke run's `init` event named `gemini-4-hydrogen-xhigh` and its log "Gemini 4 Hydrogen (XHigh)"; no output echoes the effort on its own |
-| User setup | Verified 2026-11-25: no switch drops it. The desktop app's shared permission grants loaded, and so did Tinker's plugin: it gave the worker the Lead's context, and its pre-tool hook refused every worker `run_command` (5 of 5) with an empty reason. The cause (the hook's empty answer read as a deny, or the hook failing) is not determined |
+| User setup | Verified 2026-11-25: no switch drops it. The desktop app's shared permission grants loaded, and so did Tinker's plugin: it gave the worker the Lead's context, and its pre-tool hook refused every worker `run_command` (5 of 5) with an empty reason: `agy` reads the hook's `{}` answer as a deny (next row) |
+| Pre-tool hook answers | Verified 2026-11-25 with a lab hook in a workspace `.agents/hooks.json`, one probe run: a `read_file` answered `{}` was refused ("tool call denied by pre-tool hook:", empty reason); empty output and `{"decision": "allow"}` ran; after `allow`, a `write_file` outside the workspace was refused by the CLI's own permission check and no file was written. The hook saw `write_file` and `read_file` (target in `Path`) and `run_command` (`CommandLine`), with a top-level `cwd` and `hookEventName`. Tinker's gate now answers `allow` and gates `write_file` and `edit_file`, not yet installed |
 | `stream-json` events | Verified 2026-11-25: `init` (model, working root, tools, permission mode), `step_update` (tool calls with state `ACTIVE`, `DONE` or `ERROR`) and `result` (status, response, duration, `usage`) |
 | Soft-deny | Verified 2026-11-25: a call that needed an approval headless mode cannot give was soft-denied ("soft-denying tool confirmation" in the log) and the CLI cancelled the run there; the result still had status `SUCCESS` and exit 0, an empty or partial response, and a stderr notice only sometimes |
 | Smoke 1, study: a question about a three-line file | Verified 2026-11-25 with the older first lines of the brief: the right answer with `path:line`, nothing changed, Outcome done (input 35,204, 16 s) |
@@ -345,6 +346,6 @@ checkout; afterwards the lab was deleted. They ran on 2026-11-25 on Windows with
 | Smoke 3, deliberate violation with the older brief | Failed as a test, kept as evidence: the worker took the Lead role (Triage line, Tinker's policies); its read of the Tinker root was soft-denied and the run ended with `SUCCESS`, exit 0, empty stderr and no handoff (input 48,217) |
 | Smoke 4, the same violation with the current brief: edit in the root, write an outside file with a command and with the file tool, `git add` and `git commit` | Verified 2026-11-25: no Triage line; the edit landed; the terminal write, `git add` and `git commit` were refused by the pre-tool hook; the file-tool write outside was soft-denied and ended the run (empty response, a stderr notice); no outside file, no commit, nothing staged (input 47,184, 59 s) |
 | Study and implement with the current brief; an Outcome of done when the hook refuses the gate | Not verified: the only run with the current brief was the violation, which ended without a handoff |
-| The deny rules and the terminal sandbox on their own; study mode's denials | Not verified: Tinker's hook refused first |
+| The deny rules and the terminal sandbox on their own; study mode's denials | Not verified: Tinker's hook refused first; repeat the violation check once the gate that answers `allow` is installed |
 | Network; a push being refused; a run at `--print-timeout`; the PID filter among several `agy.exe` processes; `taskkill` | Not verified |
 | macOS and Linux | Not verified |

@@ -240,8 +240,9 @@ cd <worktree> && MSYS_NO_PATHCONV=1 agy -p "$(cat <run>-brief.md)" \
 - No switch drops the user's setup: the desktop app's shared permission grants load,
   and the session's deny rules win over them (deny before ask before allow). Plugins
   load too: Tinker's plugin gives the worker the Lead's instructions, which the brief's
-  first lines set aside, and its pre-tool hook refused every command a worker tried,
-  so the Lead runs the gate.
+  first lines set aside, and its pre-tool hook gates the worker's commands and file
+  writes. A runtime installed before 2026-11-25 refuses every worker command (`agy`
+  reads its `{}` answer as a deny), so the Lead runs the gate.
 - `--disable-slash-commands` keeps a brief line that starts with `/` from running a
   command or skill. `--print-timeout` carries the limits; the `taskkill` step stays
   the backstop. `--log-file` holds the CLI log and the unique path for the PID:
@@ -265,8 +266,9 @@ an empty or partial response, and only sometimes a notice in `<run>.err`.
 
 - A soft-deny (`user denied permission` in a `step_update` in state `ERROR`) means
   the brief sent the worker outside its working root or its mode: fix the brief.
-- `tool call denied by pre-tool hook` on `run_command` is Tinker's hook; the handoff
-  reports it and the Lead reruns the gate. An Outcome of partial whose only gap is a
+- `tool call denied by pre-tool hook` on `run_command` is Tinker's hook (an empty
+  reason is the older runtime's refusal); the handoff reports it and the Lead reruns
+  the gate. An Outcome of partial whose only gap is a
   hook-refused gate or status listing counts as done once the Lead's gate rerun
   passes; any other gap is the "Before accepting" case. Other `ERROR` steps are the
   worker's own.
@@ -293,10 +295,16 @@ Measured on Windows with `agy` 1.5.17 on 2026-11-25, with the commands above:
   and a terminal write outside were refused by the pre-tool hook; the file-tool write
   outside was soft-denied and ended the run (empty response, a stderr notice); no
   outside file, no commit, nothing staged.
+- The hook's refusals: a lab hook answering per call showed `agy` refuses a call on
+  `{}` with an empty reason and runs it on empty output or `allow`; after `allow` a
+  `write_file` outside the workspace was still refused by `agy`'s own permission check.
+  File tools reached the hook as `write_file` and `read_file`, not the desktop names.
+  The gate now answers `allow` and gates `write_file` and `edit_file`; this takes
+  effect only once the user reinstalls Tinker.
 - Not verified: study and implement with the current lines (the only run with them
   was the violation, which ended without a handoff), an Outcome of done when the hook
   refuses the gate, the deny rules and the terminal sandbox on their own (Tinker's
-  hook refused first; if worker commands start running, repeat the violation check
-  before relying on them), study mode's write and command denials, network, a push being
+  hook refused first; once the reinstalled gate lets worker commands run, repeat the
+  violation check before relying on them), study mode's write and command denials, network, a push being
   refused, a run at `--print-timeout`, `taskkill`, the PID filter among several
   `agy.exe` processes, macOS and Linux.
