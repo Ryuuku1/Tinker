@@ -367,7 +367,6 @@ class HostRunTests(TempCase):
         self.assertEqual(command[command.index("--model") + 1], "gemini-4-hydrogen-xhigh")
         self.assertEqual(command[command.index("--effort") + 1], "xhigh")
         self.assertEqual(command[command.index("--mode") + 1], "accept-edits")
-        self.assertIn("--disable-slash-commands", command)
         self.assertEqual(command[command.index("--log-file") + 1], str(folder / "agy.log"))
         self.assertNotIn("--dangerously-skip-permissions", command)
         self.assertIsNone(stdin)

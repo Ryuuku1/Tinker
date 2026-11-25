@@ -166,11 +166,12 @@ charter's `AGENTS.md` and `.agents/`. The full Codex command is
 `-c windows.sandbox=elevated` on Windows. It passes `-m` and
 `-c model_reasoning_effort` only when given; with no `--model` the result records
 `provider-default`. The agy command is
-`agy -p --output-format stream-json --mode accept-edits --disable-slash-commands
---log-file agy.log`, pinned to `--model gemini-4-hydrogen-xhigh --effort xhigh`
-(Gemini 4 Hydrogen, XHigh). With slash commands off, a prompt's `/tinker:tinker` stays
-text and does not expand the installed plugin. `--timeout` (900 s) kills a run and its
-children.
+`agy -p --output-format stream-json --mode accept-edits --log-file agy.log`, pinned to
+`--model gemini-4-hydrogen-xhigh --effort xhigh` (Gemini 4 Hydrogen, XHigh). It omits
+`--disable-slash-commands`, which per the CLI's help also turns off skill expansion
+for every case. So front-door-question's `/tinker:tinker` may expand the installed
+plugin rather than the snapshot's skill (not verified). `--timeout` (900 s) kills a run
+and its children.
 
 Each run keeps these files in `<temp>/tinker_eval_<runId>/runs/<case>-<n>/`: the
 prompt, the raw event stream, `stderr.txt`, the answer, the workspace, and

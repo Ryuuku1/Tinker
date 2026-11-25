@@ -373,7 +373,7 @@ def host_command(host, exe, args, work, prompt, folder):
         return command + ["-C", str(work), "--json", "-o", str(folder / "answer.txt"), "--ephemeral", "-"], prompt
     return [exe, "-p", prompt, "--output-format", "stream-json", "--model", args.model, "--effort", args.effort,
             "--mode", "accept-edits", "--print-timeout", f"{args.timeout}s",
-            "--disable-slash-commands",  # a prompt's /tinker:... would expand the installed plugin, not the snapshot
+            # no --disable-slash-commands: it also turns off skill expansion (agy --help), for every case
             "--log-file", str(folder / "agy.log")], None
 
 
