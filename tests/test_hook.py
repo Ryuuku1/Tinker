@@ -505,7 +505,7 @@ class ToolPayloadTests(Fixture):
         self.assertEqual(self.call("antigravity", base), ({"file.deleteRecursive"}, []))
 
     def test_antigravity_cli_file_tools_are_gated(self):
-        # agy 1.5.17 names its file tools write_file and edit_file, with the target in `Path`.
+        # agy 1.5.17: write_file seen at a hook, edit_file only in its event stream; both carry the target in `Path`.
         for tool in ("write_file", "edit_file"):
             with self.subTest(tool=tool):
                 own = {"conversationId": "c", "workspacePaths": [str(self.repo)],

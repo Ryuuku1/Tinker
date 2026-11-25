@@ -241,8 +241,8 @@ cd <worktree> && MSYS_NO_PATHCONV=1 agy -p "$(cat <run>-brief.md)" \
   and the session's deny rules win over them (deny before ask before allow). Plugins
   load too: Tinker's plugin gives the worker the Lead's instructions, which the brief's
   first lines set aside, and its pre-tool hook gates the worker's commands and file
-  writes. A runtime installed before 2026-11-25 refuses every worker command (`agy`
-  reads its `{}` answer as a deny), so the Lead runs the gate.
+  writes. A runtime without the 2026-11-25 gate fix refuses every worker command
+  (`agy` reads its `{}` answer as a deny), so the Lead runs the gate.
 - `--disable-slash-commands` keeps a brief line that starts with `/` from running a
   command or skill. `--print-timeout` carries the limits; the `taskkill` step stays
   the backstop. `--log-file` holds the CLI log and the unique path for the PID:
@@ -299,12 +299,14 @@ Measured on Windows with `agy` 1.5.17 on 2026-11-25, with the commands above:
   `{}` with an empty reason and runs it on empty output or `allow`; after `allow` a
   `write_file` outside the workspace was still refused by `agy`'s own permission check.
   File tools reached the hook as `write_file` and `read_file`, not the desktop names.
-  The gate now answers `allow` and gates `write_file` and `edit_file`; this takes
-  effect only once the user reinstalls Tinker.
+  The gate now answers `allow` and gates `write_file` and `edit_file` (seen only in
+  the event stream); `sed_file`, `notebook_edit` and `send_command_input` stay
+  ungated. This takes effect only once the user reinstalls Tinker.
 - Not verified: study and implement with the current lines (the only run with them
   was the violation, which ended without a handoff), an Outcome of done when the hook
   refuses the gate, the deny rules and the terminal sandbox on their own (Tinker's
-  hook refused first; once the reinstalled gate lets worker commands run, repeat the
-  violation check before relying on them), study mode's write and command denials, network, a push being
+  hook refused first, also for the violation run's `git add`, `git commit` and outside
+  terminal write; after a reinstall, repeat the violation check before any implement
+  run), study mode's write and command denials, network, a push being
   refused, a run at `--print-timeout`, `taskkill`, the PID filter among several
   `agy.exe` processes, macOS and Linux.
